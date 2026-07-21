@@ -1,0 +1,104 @@
+/* ImageCropDialog - centred modal over a dimmed page (the house dialog shell),
+   with the square canvas stage and a zoom slider beneath it. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background: var(--color-overlay, rgb(0 0 0 / 0.45));
+}
+
+.dialog {
+  width: 100%;
+  max-width: 26rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.title {
+  font-size: 1.125rem;
+  color: var(--color-text);
+  letter-spacing: -0.012em;
+}
+
+.copy {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.stageWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 8rem;
+}
+
+/* The stage is drawn at a fixed internal resolution and scales down fluidly;
+   touch-action none so a touch drag repositions the image instead of
+   scrolling the page. */
+.stage {
+  inline-size: 100%;
+  max-inline-size: 22.5rem;
+  aspect-ratio: 1;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  touch-action: none;
+  cursor: grab;
+}
+
+.stage:active {
+  cursor: grabbing;
+}
+
+.stage:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* The slider row clears the 44px target even though the track is slim. */
+.slider {
+  inline-size: 100%;
+  min-block-size: var(--min-touch-target);
+  accent-color: var(--brand-primary);
+  cursor: pointer;
+}
+
+.slider:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.loading {
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}

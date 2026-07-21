@@ -1,0 +1,51 @@
+/* OrgCustomerDetail - super-admin drill-down into a customer's sites and
+   buildings. Tokens only; 44px minimum targets via the shared kit. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.emptyNote {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+}
+
+.siteList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.site {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.site:last-child {
+  border-block-end: none;
+}
+
+.siteHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.siteName {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.siteMeta {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}

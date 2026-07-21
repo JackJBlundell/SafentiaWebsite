@@ -1,0 +1,213 @@
+/* ActionsPanel - severity-ordered action-plan table with filters and the
+   admin add/edit form. Tokens only; 44px minimum targets throughout. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.headRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.heading {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.emptyNote {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+}
+
+.filters {
+  display: flex;
+  align-items: end;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.filterField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.filterLabel,
+.fieldLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.select,
+.input {
+  min-height: 44px;
+  padding: 0 var(--space-md);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.textarea {
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  resize: vertical;
+}
+
+.checkField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.checkField input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--brand-primary);
+}
+
+.severityChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.observation {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* LTP is a fact of the action at all times, not only when overdue. */
+.ltpBadge {
+  padding: 1px var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.overdue {
+  color: var(--status-error);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* The escalation beyond ordinary overdue: weight, never colour alone - the
+   badge text also changes to "Overdue · LTP". */
+.overdueLtp {
+  font-weight: 700;
+}
+
+.overdueBadge {
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--status-error-surface);
+  color: var(--status-error);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* "View location" keeps the 44px target via generous line-height inside the
+   observation cell; it is a real link, underlined, never colour alone. */
+.locationLink {
+  color: var(--brand-primary);
+  text-decoration: underline;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.locationUnavailable {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.rowActions {
+  display: inline-flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.formHeading {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  flex: 1;
+  min-width: 180px;
+}
+
+.fieldRow {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.formNote {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  max-width: 60ch;
+}
+
+.formActions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.inlineError {
+  font-size: 0.9375rem;
+  color: var(--status-error);
+}

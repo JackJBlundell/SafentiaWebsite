@@ -1,0 +1,108 @@
+/* TemplatesList - toolbar sizing, the merged table's cell details and the
+   new-template panel. The table itself is the shared DataTable. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.search {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .search {
+    width: 20rem;
+  }
+}
+
+.name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Marks the system-provided base templates (PAS 79, BS 9792) apart from the
+   organisation's own copies. A text label, never colour alone. */
+.baseBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Edit draft + Version history sit together on the row's end edge; the link
+   keeps a 44px target via its padding. */
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-md);
+  white-space: nowrap;
+}
+
+.versionsLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--brand-primary);
+  font-size: 0.875rem;
+  text-decoration: underline;
+}
+
+.versionsLink:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 1.125rem;
+  color: var(--color-text);
+}
+
+.noMatches {
+  margin: 0;
+  padding: var(--space-lg);
+  color: var(--color-text-muted);
+}
+
+/* Post-publish confirmation, mirroring ErrorNotice's shape in the success
+   palette; the dismiss clears the navigation state it rode in on. */
+.publishNotice {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  background: var(--status-success-surface);
+  color: var(--status-success);
+  font-size: 0.9375rem;
+}
+
+.publishNoticeDismiss {
+  border: none;
+  background: none;
+  padding: var(--space-sm);
+  min-height: var(--min-touch-target);
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.publishNoticeDismiss:focus-visible {
+  outline: 2px solid var(--status-success);
+  outline-offset: 2px;
+}

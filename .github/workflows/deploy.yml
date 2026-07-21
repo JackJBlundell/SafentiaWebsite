@@ -1,0 +1,93 @@
+# =============================================================================
+# Safentia deploy (finding 2078 AC1/AC2 - within what secrets allow today).
+#
+# Triggers:
+#   - workflow_dispatch: manual, explicit deploys (the primary path).
+#   - push to main: deploys automatically ONLY when the FIREBASE_TOKEN
+#     repository secret is configured; otherwise the job runs but every deploy
+#     step is skipped (green no-op), so enabling CD is purely a secrets change.
+#
+# Authentication: a FIREBASE_TOKEN repository secret (from `firebase login:ci`).
+# firebase-tools reads it from the environment. When Google Cloud Workload
+# Identity Federation is set up for the repo, swap the token for
+# google-github-actions/auth and drop the secret - the gate step below is the
+# only thing to change.
+#
+# ENVIRONMENTS: there is a SINGLE Firebase project today - `safentia-tech`, the
+# one alias in .firebaserc. Dev/prod separation awaits the second Firebase
+# project; when it exists, add its alias to .firebaserc and split this workflow
+# into a dev deploy (push to main) and a prod deploy (tag or manual approval).
+# Until then everything deploys to safentia-tech and no invented "prod" alias
+# appears here.
+# =============================================================================
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# Never run two deploys at once; let an in-flight deploy finish (no cancel) so
+# hosting/functions/rules stay mutually consistent.
+concurrency:
+  group: deploy-safentia-tech
+  cancel-in-progress: false
+
+env:
+  FIREBASE_TOOLS_VERSION: 13.35.1
+
+jobs:
+  deploy:
+    name: Build and deploy to safentia-tech
+    runs-on: ubuntu-latest
+    env:
+      # The secrets context is not available in `if:` conditions, so the token
+      # is surfaced as job env and a gate step turns its presence into an output.
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+    steps:
+      - name: Check deploy credentials are configured
+        id: gate
+        run: |
+          if [ -n "$FIREBASE_TOKEN" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "FIREBASE_TOKEN secret is not set - skipping deploy (no-op run)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.configured == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.configured == 'true'
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+
+      # --- Build the web console (SSG build + sitemap, per package.json) -----
+      - name: Install web dependencies
+        if: steps.gate.outputs.configured == 'true'
+        run: npm ci
+
+      - name: Build web (dist/)
+        if: steps.gate.outputs.configured == 'true'
+        run: npm run build
+
+      # --- Functions dependencies (firebase.json's predeploy runs the tsc
+      #     build itself, but it needs node_modules in place) ------------------
+      - name: Install functions dependencies
+        if: steps.gate.outputs.configured == 'true'
+        run: npm ci
+        working-directory: functions
+
+      # --- Deploy hosting + functions + RTDB rules + Storage rules together,
+      #     so code and the rules it depends on can never skew ----------------
+      - name: Deploy to Firebase (hosting, functions, database rules, storage rules)
+        if: steps.gate.outputs.configured == 'true'
+        run: >-
+          npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
+          deploy --only hosting,functions,database,storage
+          --project safentia-tech --non-interactive --force

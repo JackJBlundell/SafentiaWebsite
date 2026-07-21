@@ -1,0 +1,411 @@
+/* TemplateBuilder - the template editor's shared stylesheet: header card
+   fields, section cards, question rows (collapsed and expanded), the options
+   editor, the standardised-finding group and the aside stack. Tokens only. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+/* --- Fields ---------------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.fieldRow {
+  display: flex;
+  gap: var(--space-lg);
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.fieldRow > .field {
+  flex: 1 1 10rem;
+  width: auto;
+}
+
+.fieldNarrow {
+  flex: 0 1 8rem;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.input,
+.select {
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+}
+
+.textarea {
+  width: 100%;
+  min-height: calc(var(--min-touch-target) * 1.5);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.hint {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  font-size: 0.9375rem;
+  color: var(--color-text);
+}
+
+.checkbox {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--brand-primary);
+}
+
+.toggleRow {
+  display: flex;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+/* --- Save indicator ---------------------------------------------------------- */
+
+.saveIndicator {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* Quiet, persistent: a concurrent edit is a heads-up, not an alarm. */
+.conflictNotice {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+/* --- Section cards ----------------------------------------------------------- */
+
+.sectionBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.sectionControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.questionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* --- Question rows ------------------------------------------------------------ */
+
+.questionItem {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.questionSummary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.questionSummary:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+.questionText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.questionUntitled {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.typeChip {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  padding: calc(var(--space-xs) / 2) var(--space-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.requiredMark {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--brand-primary);
+  white-space: nowrap;
+}
+
+.chevron {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.questionEditor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-md) var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.questionControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.moveToField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.moveToField > .select {
+  width: auto;
+}
+
+/* --- Options editor ------------------------------------------------------------ */
+
+.optionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* --- Standardised finding group ------------------------------------------------ */
+
+.findingGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+.groupTitle {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.paragraphPreview {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border-left: 3px solid var(--color-border-strong);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.paragraphPreviewTitle {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+/* --- Inline confirm -------------------------------------------------------------- */
+
+.confirmGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.confirmPrompt {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+/* --- Aside ------------------------------------------------------------------------ */
+
+.asideStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.summaryTypes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.summaryTypes > li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.validationList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.validationJump {
+  display: block;
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.validationJump:hover {
+  border-color: var(--color-border-strong);
+}
+
+.validationJump:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+.allClear {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.publishBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.publishActions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.publishWarning {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border-strong);
+  border-left: 4px solid var(--brand-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* --- Start-draft panel -------------------------------------------------------------- */
+
+.startPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  align-items: flex-start;
+}
+
+.certificateActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}

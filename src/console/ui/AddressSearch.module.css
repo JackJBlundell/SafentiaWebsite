@@ -1,0 +1,70 @@
+/* AddressSearch - labelled combobox with an anchored suggestions listbox. */
+
+.root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.input {
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+.input:disabled {
+  color: var(--color-text-muted);
+  background: var(--color-surface-sunken);
+}
+
+.listbox {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin: var(--space-xs) 0 0;
+  padding: var(--space-xs);
+  list-style: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px var(--shadow-color);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.option,
+.optionActive {
+  display: flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.option:hover {
+  background: var(--color-surface-alt);
+}
+
+.optionActive {
+  background: var(--color-surface-sunken);
+}

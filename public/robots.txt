@@ -1,3 +1,8 @@
-# https://www.robotstxt.org/robotstxt.html
+# safentia.co.uk - marketing pages are crawlable. The console and auth
+# surfaces are excluded from search via noindex meta in their document heads,
+# NOT via Disallow here: a disallowed URL cannot be crawled, so its noindex
+# would never be read and the bare URL could still surface in results.
 User-agent: *
-Disallow:
+Allow: /
+
+Sitemap: https://safentia.co.uk/sitemap.xml

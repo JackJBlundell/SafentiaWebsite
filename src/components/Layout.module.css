@@ -1,0 +1,88 @@
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--container-gutter);
+}
+
+.prose {
+  max-width: var(--reading-measure);
+}
+
+.section {
+  padding-block: var(--section-base);
+}
+
+.tight {
+  padding-block: var(--section-tight);
+}
+
+.base {
+  padding-block: var(--section-base);
+}
+
+.loose {
+  padding-block: var(--section-loose);
+}
+
+/* Sections are generous on a desktop and must not be on a phone, where the same
+ * padding would push the next heading below three screenfuls of nothing. */
+@media (max-width: 767px) {
+  .tight {
+    padding-block: var(--space-huge);
+  }
+  .base,
+  .loose {
+    padding-block: var(--section-tight);
+  }
+}
+
+.default {
+  background: var(--color-background);
+}
+
+.alt {
+  background: var(--color-surface-alt);
+}
+
+/* The `ink` band is the one place the page goes dark in light mode. It is used
+ * sparingly (the hero, one call to action) to give the page a spine. Text tokens
+ * are inverted locally rather than hard-coded, so the band works in dark mode too,
+ * where it becomes the sunken surface rather than a second dark slab. */
+.ink {
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+}
+
+.ink :global(h1),
+.ink :global(h2),
+.ink :global(h3) {
+  color: var(--color-text-inverse);
+}
+
+/* Explicit dark toggle. Note the selector must NOT be
+ * `:root:not([data-theme='light'])` outside a media query: with no attribute set
+ * (the default), that matches in LIGHT mode too and would repaint the ink band. */
+:global(:root[data-theme='dark']) .ink {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+:global(:root[data-theme='dark']) .ink :global(h1),
+:global(:root[data-theme='dark']) .ink :global(h2),
+:global(:root[data-theme='dark']) .ink :global(h3) {
+  color: var(--color-text);
+}
+
+/* OS dark preference, unless the visitor pinned light. */
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme='light'])) .ink {
+    background: var(--color-surface-sunken);
+    color: var(--color-text);
+  }
+  :global(:root:not([data-theme='light'])) .ink :global(h1),
+  :global(:root:not([data-theme='light'])) .ink :global(h2),
+  :global(:root:not([data-theme='light'])) .ink :global(h3) {
+    color: var(--color-text);
+  }
+}

@@ -1,0 +1,73 @@
+.header {
+  margin-bottom: var(--space-xxxl);
+}
+
+.meta {
+  margin: 0 0 var(--space-md);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.dot {
+  margin-inline: var(--space-sm);
+}
+
+.title {
+  font-size: 2.25rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.paragraph {
+  margin: 0 0 var(--space-xl);
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+
+.heading {
+  margin: var(--space-xxxl) 0 var(--space-lg);
+  font-size: 1.375rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.list {
+  margin: 0 0 var(--space-xl);
+  padding-left: var(--space-xxl);
+}
+
+.listItem {
+  margin-bottom: var(--space-md);
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+
+.back {
+  margin: var(--space-huge) 0 0;
+  padding-top: var(--space-xl);
+  border-top: 1px solid var(--color-border);
+}
+
+/* Padded to clear the 44px minimum target as an inline link. */
+.backLink {
+  display: inline-block;
+  padding-block: var(--space-md);
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.backLink:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}

@@ -1,0 +1,66 @@
+.list {
+  list-style: none;
+  display: grid;
+  gap: var(--space-huge);
+}
+
+.step {
+  display: grid;
+  gap: var(--space-xxl);
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .list {
+    gap: var(--section-tight);
+  }
+
+  .step {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: var(--section-tight);
+  }
+
+  /* Alternate the visual's side so the page has a walking rhythm rather than a
+   * single heavy column. */
+  .step:nth-child(even) .text {
+    order: 2;
+  }
+
+  .step:nth-child(even) .visual {
+    order: 1;
+  }
+}
+
+.text {
+  display: grid;
+  gap: var(--space-md);
+  justify-items: start;
+}
+
+.number {
+  font-family: var(--font-family-mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--brand-primary);
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 35%, transparent);
+  border-radius: var(--radius-pill);
+}
+
+.title {
+  font-size: clamp(1.25rem, 1.1rem + 0.8vw, 1.625rem);
+}
+
+.body {
+  color: var(--color-text-secondary);
+  max-width: var(--reading-measure);
+}
+
+.body p + p {
+  margin-top: var(--space-md);
+}
+
+.visual {
+  min-width: 0;
+}

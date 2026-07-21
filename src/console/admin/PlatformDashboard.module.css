@@ -1,0 +1,127 @@
+/* PlatformDashboard - the super-admin platform landing. Tokens only; 44px
+   targets; light and dark are both first-class via the tokens the pieces wear. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Growth chart and revenue preview sit side by side on a wide screen and stack
+   below the desktop breakpoint. The chart is the wider of the two. */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+@media (min-width: 60rem) {
+  .grid {
+    grid-template-columns: 3fr 2fr;
+  }
+}
+
+/* The compact link to the full organisations table. */
+.tableLinkRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.tableLinkTitle {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.tableLinkHint {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+}
+
+.tableLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: var(--space-md);
+  color: var(--brand-primary);
+  font-weight: 600;
+}
+
+.footnote {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  max-width: 70ch;
+}
+
+/* Whole-tile stat links: the tile lifts and shows a focus ring on hover/focus
+   without shifting layout. Mirrors ConsoleHome's stat tiles so the org and
+   platform dashboards share one drill-through affordance. Motion is dropped
+   under prefers-reduced-motion. */
+.statLink {
+  position: relative;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-lg);
+  transition:
+    transform var(--motion-fast) var(--easing),
+    box-shadow var(--motion-fast) var(--easing);
+}
+
+.statLink:hover,
+.statLink:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px var(--shadow-color);
+}
+
+.statLink:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+/* The drill-through chevron: reserved space via absolute positioning, so its
+   appearance never reflows the tile. */
+.statChevron {
+  position: absolute;
+  top: var(--space-md);
+  inset-inline-end: var(--space-md);
+  display: inline-flex;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transform: translateX(-2px);
+  transition:
+    opacity var(--motion-fast) var(--easing),
+    transform var(--motion-fast) var(--easing);
+}
+
+.statChevron svg {
+  width: 16px;
+  height: 16px;
+}
+
+.statLink:hover .statChevron,
+.statLink:focus-visible .statChevron {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statLink,
+  .statChevron {
+    transition: none;
+  }
+
+  .statLink:hover,
+  .statLink:focus-visible {
+    transform: none;
+  }
+
+  .statChevron {
+    transform: none;
+  }
+}

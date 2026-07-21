@@ -1,0 +1,428 @@
+/* ConsoleShell - the signed-in chrome. One DOM in two presentations: a fixed
+ * left rail on desktop (nav vertical, session controls at its foot), the
+ * mobile top-bar pattern below the breakpoint. Every interactive control
+ * clears the 44px minimum target. */
+
+.root {
+  min-height: 100dvh;
+  background: var(--color-background);
+}
+
+.chrome {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-lg);
+  padding: var(--space-sm) var(--space-xl);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  margin-inline-start: auto;
+}
+
+/* Global search. On the mobile top bar it takes its own full-width row between
+   the brand+actions row and the scrolling nav, so it never cramps the touch
+   targets around it. */
+.searchRow {
+  order: 2;
+  flex-basis: 100%;
+  display: flex;
+  min-width: 0;
+}
+
+/* Mobile: the session controls stay inline in the top bar. display:contents
+   promotes the theme toggle and account menu into the .actions flex row, so the
+   grouping wrapper adds no layout of its own here. */
+.sessionRow {
+  display: contents;
+}
+
+.main {
+  width: 100%;
+  padding: var(--space-xxl) var(--space-xl) var(--space-huge);
+}
+
+/* Mobile: the nav takes its own full row under brand+actions, scrollable. */
+.nav {
+  display: flex;
+  gap: var(--space-xs);
+  overflow-x: auto;
+  order: 3;
+  flex-basis: 100%;
+  /* Keep the scrollbar from cramping the touch targets. */
+  padding-block-end: 2px;
+}
+
+/* --- Desktop: the rail --------------------------------------------------------- */
+@media (min-width: 1024px) {
+  .root {
+    display: grid;
+    grid-template-columns: 248px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .chrome {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0;
+    padding: var(--space-xl) var(--space-lg);
+    border-bottom: none;
+    border-inline-end: 1px solid var(--color-border);
+  }
+
+  .brandRow {
+    padding-inline: var(--space-md);
+    margin-block-end: var(--space-lg);
+  }
+
+  /* In the rail the search sits directly under the brand, above the nav, and
+     takes the rail's own width. */
+  .searchRow {
+    order: 0;
+    flex-basis: auto;
+    margin-block-end: var(--space-lg);
+  }
+
+  .nav {
+    flex-direction: column;
+    gap: 2px;
+    overflow-x: visible;
+    order: 0;
+    flex-basis: auto;
+    padding-block-end: 0;
+  }
+
+  .actions {
+    margin-block-start: auto;
+    margin-inline-start: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-sm);
+    padding-block-start: var(--space-lg);
+    border-top: 1px solid var(--color-border);
+  }
+
+  /* In the rail the org switcher takes the first row (stretched by .actions);
+     the account menu and theme toggle share the row beneath it. The account
+     menu sits on the left; the toggle (first in the DOM) is reordered to the
+     right and pinned there. */
+  .sessionRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .sessionRow > :first-child {
+    order: 1;
+    margin-inline-start: auto;
+  }
+
+  .main {
+    max-width: 1400px;
+    padding: var(--space-xxxl) var(--space-huge) var(--space-huge);
+  }
+}
+
+/* --- Account menu ----------------------------------------------------------- */
+
+.menuContainer {
+  position: relative;
+}
+
+.menuTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.menuTrigger:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.menuTrigger[aria-expanded='true'] {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.menuLabel {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  stroke: currentColor;
+}
+
+.menuPanel {
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  right: 0;
+  z-index: 20;
+  min-width: 12rem;
+  padding: var(--space-xs);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px var(--shadow-color);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+}
+
+.menuItem:hover {
+  background: var(--color-surface-alt);
+}
+
+/* In the rail the session controls sit at the FOOT of the viewport, so a
+ * downward panel opens off-screen. Flip it above the trigger and let it span
+ * the rail. Breakpoint mirrors the rail media query above. */
+@media (min-width: 1024px) {
+  .menuPanel {
+    top: auto;
+    bottom: calc(100% + var(--space-xs));
+    left: 0;
+    right: 0;
+    min-width: 0;
+  }
+}
+
+/* --- Not found -------------------------------------------------------------- */
+
+.notFound {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-lg);
+  max-width: 28rem;
+  padding: var(--space-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.notFoundHeading {
+  font-size: 1.125rem;
+  font-weight: 650;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.notFoundCopy {
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+/* --- Nav links (both presentations) ------------------------------------------- */
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 40px;
+  padding-inline: var(--space-md);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 0.9375rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    color var(--motion-fast) var(--easing),
+    background-color var(--motion-fast) var(--easing);
+}
+
+.navLink:hover {
+  color: var(--color-text);
+  background: var(--color-surface-alt);
+}
+
+.navLinkActive {
+  color: var(--brand-primary);
+  background: color-mix(in srgb, var(--brand-primary) 10%, transparent);
+  font-weight: 600;
+}
+
+.navIcon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The waiting-count pill on the Validation item. Colour is reinforcement only:
+   the count itself and the link's aria-label carry the meaning. In the desktop
+   rail the auto margin sets it against the far edge; in the mobile top bar the
+   link is content-sized, so it simply follows the label. */
+.navBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-inline-start: auto;
+  min-width: 1.375rem;
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+  color: var(--brand-primary);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* --- Platform environment toggle ---------------------------------------------- */
+
+/* The one live/test switch in the platform rail. Mirrors admin.module.css's
+   envToggle so the segmented control reads identically to the pages it drives.
+   In the desktop rail it sits below the nav links with a little breathing room;
+   in the mobile top bar it flows inline with the scrolling nav. */
+.envToggle {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-block-start: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.envButton,
+.envButtonActive {
+  min-height: var(--min-touch-target);
+  min-width: 66px;
+  padding: 0 var(--space-md);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+.envButtonActive {
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+}
+
+/* --- Connection banner -------------------------------------------------------- */
+
+/* Slim and non-blocking, above the routed page. Warning tone with the state in
+   words, so colour is never the sole carrier. */
+.connectionBanner {
+  display: flex;
+  align-items: center;
+  margin-block-end: var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
+  border: 1px solid var(--status-warning);
+  border-radius: var(--radius-md);
+  background: var(--status-warning-surface);
+  color: var(--status-warning);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* --- Organisation brand mark -------------------------------------------------- */
+.brandLink {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--radius-md);
+}
+
+.brandIdentity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.brandLogo {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--color-surface-alt);
+}
+
+.brandName {
+  font-weight: 700;
+  font-size: 1.0625rem;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poweredBy {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+/* Platform-mode brand tag. The wording ("Platform console") carries the meaning;
+   the accent colour is reinforcement only, so it is never the sole signal. */
+.platformTag {
+  align-self: flex-start;
+  padding: 1px var(--space-xs);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+  color: var(--brand-primary);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

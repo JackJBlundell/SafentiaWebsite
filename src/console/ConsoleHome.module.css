@@ -1,0 +1,147 @@
+/* ConsoleHome - the organisation dashboard: the risk/action stat band and the
+   reviews + releases cards in the main column, admin quick actions and the
+   recent-activity feed in the sticky aside. */
+
+.quickActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* The compliance-at-a-glance band (the risk bar and the stat tiles) now lives
+   in its own component, src/console/ui/ComplianceGlance, with its own styles;
+   this sheet keeps only the dashboard's own reviews, releases and activity
+   surfaces. */
+
+/* Quiet, single-line states (loading, empty, "and N more"). */
+.quietNote {
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+/* --- Upcoming reviews ------------------------------------------------------ */
+
+.reviewList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reviewRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding-block: var(--space-md);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.reviewRow:last-child {
+  border-block-end: none;
+  padding-block-end: 0;
+}
+
+.reviewRow:first-child {
+  padding-block-start: 0;
+}
+
+.reviewText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.reviewLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.reviewLink:hover {
+  color: var(--brand-primary);
+  text-decoration: underline;
+}
+
+.reviewDate {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+/* A lapsed review is stated in words ("Lapsed ...") and reinforced in tone;
+   the colour is never the sole carrier. */
+.reviewDateLapsed {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--status-error);
+}
+
+/* --- Activity / releases feeds --------------------------------------------- */
+
+.activityList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.activityRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding-block: var(--space-md);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.activityRow:last-child {
+  border-block-end: none;
+  padding-block-end: 0;
+}
+
+.activityRow:first-child {
+  padding-block-start: 0;
+}
+
+.activityText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.activityAction {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.activityTarget {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* A target that resolves to a real console route; underlined so the link is
+   never colour-alone. */
+.activityTargetLink {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+}
+
+.activityTargetLink:hover,
+.activityTargetLink:focus-visible {
+  color: var(--brand-primary);
+}
+
+.activityTime {
+  flex: none;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}

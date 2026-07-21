@@ -1,0 +1,47 @@
+/* ActivityRoutes - the activity area's sub-nav (audit trail / emails), shown to
+   admins only. Horizontal tabs above the full-width tables, matching the
+   settings sub-nav's tab presentation. */
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.content {
+  min-width: 0;
+}
+
+.subNav {
+  display: flex;
+  gap: var(--space-xs);
+  border-block-end: 1px solid var(--color-border);
+  padding-block-end: var(--space-sm);
+}
+
+.subNavLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.subNavLink:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.subNavLink:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+.subNavLinkActive {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}

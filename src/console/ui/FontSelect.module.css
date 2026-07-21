@@ -1,0 +1,101 @@
+/* FontSelect - a button-and-listbox font picker. The trigger reads as a form
+   input (same border/height as the house .input); the popup floats above the
+   form with each option previewing its own typeface. */
+
+.container {
+  position: relative;
+  width: 100%;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trigger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.triggerLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  flex: 0 0 auto;
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+  stroke: currentColor;
+}
+
+.list {
+  position: absolute;
+  z-index: 30;
+  inset-inline: 0;
+  top: calc(100% + var(--space-xs));
+  max-block-size: 20rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-xs);
+  list-style: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px var(--shadow-color);
+}
+
+.list:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: -2px;
+}
+
+/* Each option clears the 44px target: a name line plus its specimen. */
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-block-size: var(--min-touch-target);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.optionActive {
+  background: var(--color-surface-sunken);
+}
+
+.option[aria-selected='true'] .optionName {
+  color: var(--brand-primary);
+}
+
+.optionName {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.optionSpecimen {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}

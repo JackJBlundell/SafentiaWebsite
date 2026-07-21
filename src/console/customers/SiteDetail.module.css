@@ -1,0 +1,88 @@
+/* SiteDetail - the buildings list with RAG chips; the surface, header and
+   facts grid all come from the ui kit (Card, CardHeader, DescriptionList). */
+
+.emptyAction {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-block-start: var(--space-md);
+}
+
+/* Two controls in a card header (import beside add) stay on one line on a wide
+   screen and wrap rather than squeeze on a narrow one. */
+.headerActions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* The active-filter banner above the buildings list: what is shown, and the
+   way back to the full list. */
+.filterNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-block-end: var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+.rowList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  min-height: var(--min-touch-target);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.row:hover {
+  border-color: var(--color-border-strong);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+.rowMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.rowName {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.rowMeta {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* The overdue pair on a building row's open-actions line: the OverdueBadge's
+   alert glyph + count in error tone, spaced off the open count. Its accessible
+   name and hover title carry the full escalated wording. */
+.overdueNote {
+  margin-left: var(--space-sm);
+}

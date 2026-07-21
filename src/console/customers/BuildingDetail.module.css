@@ -1,0 +1,31 @@
+/* BuildingDetail - working panels in the main column; status, facts and
+   actions in the sticky aside. */
+
+.ragChipLarge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  font-size: 1.0625rem;
+  font-weight: 650;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.lastAssessed {
+  margin-block-start: var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+.noFacts {
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+/* The aside column is narrow, so the facts list stays single-column even where
+   the kit's DescriptionList would split into two. */
+.facts dl {
+  grid-template-columns: 1fr;
+}

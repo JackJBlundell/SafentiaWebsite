@@ -1,0 +1,126 @@
+.scroll {
+  min-width: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+/* --- Desktop: a real table ---------------------------------------------------- */
+@media (min-width: 768px) {
+  .head .th {
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    padding: var(--space-md) var(--space-xxl);
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+  }
+
+  .td {
+    padding: var(--space-lg) var(--space-xxl);
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  tr:last-child .td {
+    border-bottom: none;
+  }
+
+  .end {
+    text-align: right;
+  }
+
+  .rowLinked {
+    position: relative;
+    transition: background-color var(--motion-fast) var(--easing);
+  }
+
+  .rowLinked:hover {
+    background: var(--color-surface-alt);
+  }
+
+  /* Stretch the first-cell link over the whole row without swallowing the
+   * other cells' own interactive content (those sit above via z-index). */
+  .rowLink {
+    color: inherit;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .rowLink::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  .rowLinked .td > :not(.rowLink) {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+/* --- Mobile: labelled cards ----------------------------------------------------
+ * The same DOM re-laid: each row becomes a bordered block, each cell a
+ * label/value line built from its data-label. */
+@media (max-width: 767px) {
+  .table,
+  .head,
+  tbody,
+  .row,
+  .rowLinked,
+  .td {
+    display: block;
+  }
+
+  .head {
+    /* Headers are re-announced per cell via data-label; visually redundant. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .row,
+  .rowLinked {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md) var(--space-lg);
+    margin-block-end: var(--space-sm);
+    background: var(--color-surface);
+  }
+
+  .td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-lg);
+    padding: var(--space-xs) 0;
+  }
+
+  .td::before {
+    content: attr(data-label);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    flex: none;
+  }
+
+  .desktopOnly {
+    display: none;
+  }
+
+  .rowLink {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+  }
+}

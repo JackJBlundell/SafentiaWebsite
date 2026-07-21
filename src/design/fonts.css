@@ -1,0 +1,49 @@
+/* ==========================================================================
+ * fonts.css - Inter Variable, self-hosted, latin only.
+ *
+ * We declare the @font-face rules by hand instead of importing
+ * `@fontsource-variable/inter`, which ships seven subsets (latin, latin-ext,
+ * greek, greek-ext, cyrillic, cyrillic-ext, vietnamese).
+ *
+ * Why that matters: the build inlines critical CSS and emits a
+ * `<link rel="preload" as="font">` for every @font-face it finds. A preload
+ * IGNORES `unicode-range` - the browser fetches the file whether or not the page
+ * contains a single Greek character. Importing the full package therefore forced
+ * ~224KB of fonts on every visitor, of which a British-English compliance product
+ * uses 48KB. Declaring only the latin faces here cuts that to 133KB, and only the
+ * 48KB latin file is needed for ordinary copy.
+ *
+ * latin-ext is kept because organisation names, assessor names and building
+ * addresses legitimately carry accented Latin characters that plain `latin` does
+ * not cover.
+ *
+ * `font-display: swap` means text paints immediately in the fallback and reflows
+ * once Inter arrives, rather than sitting invisible. The fallback stack in
+ * tokens.css is metric-similar enough that the reflow is not jarring.
+ *
+ * The unicode-range values are copied verbatim from the package's own stylesheet.
+ * ========================================================================== */
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}

@@ -1,0 +1,189 @@
+/* OrganisationSettingsPage - the Organisation and Brand cards side by side on
+   desktop (via the kit CardGrid), with one shared save bar beneath. The kit
+   Card paints the surfaces; this file lays out the forms inside them. Inputs
+   clear the 44px target. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-xl);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-lg);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.input {
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.colourRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.colourRow .input {
+  flex: 1 1 auto;
+  width: auto;
+  max-width: 9rem;
+}
+
+.colourPicker {
+  inline-size: var(--min-touch-target);
+  block-size: var(--min-touch-target);
+  padding: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  cursor: pointer;
+}
+
+.colourPicker:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+/* Live swatch: the chosen colour with white text on it, so the admin sees at a
+   glance how legible their brand is as a fill. */
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: var(--min-touch-target);
+  min-block-size: var(--min-touch-target);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+/* Logo tile + actions: the current (or freshly cropped) logo beside the
+   Choose/Remove buttons; an empty-state tile when there is none. */
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.logoTile,
+.logoEmpty {
+  inline-size: 5.5rem;
+  block-size: 5.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+.logoTile {
+  object-fit: contain;
+  padding: var(--space-sm);
+}
+
+.logoEmpty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xs);
+  text-align: center;
+  border-style: dashed;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.logoActions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* The real file input: visually removed; the Choose logo button drives it. */
+.hiddenFileInput {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Live specimen for the chosen font, styled inline with resolveFontStack. */
+.fontPreview {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+.note {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.loading {
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+/* One shared save bar for both cards: notices stack above the button. */
+.saveBar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+}
+
+.success {
+  color: var(--status-success);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.inlineError {
+  color: var(--color-text);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.875rem;
+}

@@ -1,0 +1,71 @@
+/* Job detail styling: the assessment stage line, fact links, and the aside's
+   inline reschedule/cancel panels. Tokens only; controls clear 44px. */
+
+.stage {
+  font-size: 1.25rem;
+  font-weight: 650;
+  color: var(--color-text);
+  margin-bottom: var(--space-md);
+}
+
+.assessmentAction {
+  margin-top: var(--space-lg);
+}
+
+.factLink {
+  color: var(--brand-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.factLink:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* --- Aside actions and inline panels ---------------------------------------- */
+
+.asideActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.panelTitle {
+  font-size: 0.9375rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.panelActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.reason {
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  resize: vertical;
+}
+
+.reason:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}

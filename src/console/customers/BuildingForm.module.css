@@ -1,0 +1,6 @@
+/* BuildingForm - grouped fieldsets; primitives come from shared.module.css. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+}

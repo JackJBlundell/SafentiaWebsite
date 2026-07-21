@@ -1,0 +1,6 @@
+/* SiteForm - fieldset form; primitives come from shared.module.css. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+}

@@ -1,0 +1,30 @@
+.card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-md);
+  padding: var(--space-xxl);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--min-touch-target);
+  height: var(--min-touch-target);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--brand-primary) 10%, var(--color-surface));
+  color: var(--brand-primary);
+}
+
+.title {
+  font-size: 1.0625rem;
+  letter-spacing: -0.012em;
+}
+
+.body {
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}

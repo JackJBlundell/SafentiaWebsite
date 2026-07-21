@@ -1,0 +1,195 @@
+/* ==========================================================================
+ * AuthLayout - full-viewport centred card for the auth screens.
+ *
+ * min-height uses dvh with a vh fallback so mobile browser chrome collapsing
+ * never leaves the card mis-centred or the footer link unreachable.
+ * ========================================================================== */
+
+.viewport {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xxl) var(--space-lg);
+  background: var(--color-background);
+}
+
+/* The toggle sits in the viewport corner, clear of the card, and keeps its own
+ * 44px target from ThemeToggle.module.css. */
+.corner {
+  position: absolute;
+  top: var(--space-lg);
+  right: var(--space-lg);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xxl);
+  width: 100%;
+  max-width: 420px;
+}
+
+.card {
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xxxl);
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: var(--space-xxl);
+  }
+}
+
+/* A quiet exit, not a call to action - muted until pointed at, and tall enough
+ * to remain a comfortable touch target. */
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------------------
+ * Shared form vocabulary for the two auth screens. It lives in this module so
+ * the sign-in and reset forms cannot drift apart visually.
+ * -------------------------------------------------------------------------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 650;
+  letter-spacing: -0.014em;
+  color: var(--color-text);
+}
+
+.intro {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.input {
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: 1rem;
+  transition: border-color var(--motion-fast) var(--easing);
+}
+
+.input:hover:not(:disabled) {
+  border-color: var(--color-text-muted);
+}
+
+/* An explicit focus ring in the brand accent; never removed, only replaced with
+ * something more visible than the UA default. */
+.input:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+  border-color: var(--brand-primary);
+}
+
+.input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Announced errors (role="alert"): the fixed status language, never the brand. */
+.error {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  background: var(--status-error-surface);
+  color: var(--status-error);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* The reset screen's non-enumerating confirmation. */
+.confirmation {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  background: var(--status-success-surface);
+  color: var(--status-success);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* "or" between the password form and the Google button. */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+/* In-card text links (forgot password, back to sign in). Kept to a comfortable
+ * touch height without inflating the surrounding line box. */
+.inlineLink {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: var(--min-touch-target);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.inlineLink:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}

@@ -1,0 +1,115 @@
+.report {
+  display: grid;
+  gap: var(--space-xl);
+  padding: var(--space-xxl);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding-bottom: var(--space-lg);
+  border-bottom: 2px solid var(--brand-primary);
+}
+
+/* The customer's own mark goes here on the real report; the brand accent
+ * stands in for it. */
+.orgMark {
+  width: var(--space-xxxl);
+  height: var(--space-xxxl);
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--brand-primary);
+}
+
+.title {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  letter-spacing: -0.012em;
+  color: var(--color-text);
+}
+
+.subtitle {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.plan {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.planHeading {
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+}
+
+.planList {
+  list-style: none;
+  display: grid;
+}
+
+.planRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding-block: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.severity {
+  flex: none;
+  width: 64px;
+  text-align: center;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+}
+
+/* RAG surfaces: severity is risk meaning. */
+.high {
+  background: var(--rag-red-surface);
+  color: var(--rag-red);
+}
+
+.medium {
+  background: var(--rag-amber-surface);
+  color: var(--rag-amber);
+}
+
+.low {
+  background: var(--rag-green-surface);
+  color: var(--rag-green);
+}
+
+.planText {
+  color: var(--color-text-secondary);
+}
+
+.signoff {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-lg);
+  padding-top: var(--space-sm);
+}
+
+.signature {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.signatureRole {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.signatureLine {
+  border-bottom: 1px solid var(--color-border-strong);
+}

@@ -1,0 +1,31 @@
+/* ReportsPage - stat bands per section, then the monthly summary table. */
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--color-text);
+  margin: 0 0 var(--space-md);
+}
+
+/* The card is flush so the table can run edge to edge; the header and notes
+   restore the card's own inset for themselves. */
+.tableHeader {
+  padding: var(--space-lg) var(--space-lg) 0;
+}
+
+.tablePad {
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.tableNote {
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}

@@ -1,0 +1,162 @@
+/* BrandingPreview - the "Where your branding appears" section: two decorative
+   mocks (the report header/footer and a branded notification email) that show
+   where the org's name, colour and logo actually land. Console chrome here is
+   token-driven; the two mock surfaces paint themselves in their consumers' OWN
+   fixed palettes (the PDF's ink/hairline, the email's neutrals) plus the org's
+   brand colour, set inline in the component - those are the deliberate non-token
+   exceptions, because neither surface is theme-driven. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--space-xl);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+/* The visible, accessible caption for each mock (the mocks themselves are
+   aria-hidden decoration). */
+.caption {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.note {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* --- The report "page" ---------------------------------------------------
+   A PDF is ALWAYS white paper, in every console theme, so the surface colours
+   are fixed in the component (mirroring render.ts), never themed. The subtle
+   ring + shadow make it read as a sheet of paper on the console surface. */
+.paper {
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px var(--shadow-color);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  min-height: 12rem;
+  overflow: hidden;
+}
+
+.paperTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex: 1 1 auto;
+}
+
+.paperHead {
+  min-width: 0;
+}
+
+.paperLogo {
+  flex: 0 0 auto;
+  width: clamp(3rem, 22%, 5rem);
+  height: auto;
+  object-fit: contain;
+}
+
+/* The report footer strip: hairline rule, org name left, page number right,
+   exactly as render.ts paintFooter + finalise place them. */
+.paperFootRule {
+  margin-top: var(--space-lg);
+}
+
+.paperFoot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding-top: 0.35rem;
+}
+
+/* --- The email card ------------------------------------------------------
+   Email is rendered light-only on purpose (client dark-mode is unreliable), so
+   like the real template these surfaces are fixed, not themed. */
+.email {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+.emailAccentBar {
+  height: 4px;
+  font-size: 0;
+  line-height: 0;
+}
+
+.emailBody {
+  padding: var(--space-lg) var(--space-lg) 0 var(--space-lg);
+}
+
+.emailWordmark {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.emailHeading {
+  margin: 0.6rem 0 0.75rem 0;
+  font-size: 1.15rem;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.emailPara {
+  margin: 0 0 0.7rem 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.emailDetail {
+  margin: 0.4rem 0 0.9rem 0;
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.8rem;
+}
+
+.emailDetailLabel {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.emailDetailValue {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.emailCta {
+  display: inline-block;
+  margin: 0.2rem 0 1rem 0;
+  padding: 0.55rem 1.4rem;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.emailFoot {
+  margin-top: 0.4rem;
+  padding: var(--space-md) var(--space-lg);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}

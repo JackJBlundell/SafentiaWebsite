@@ -1,0 +1,18 @@
+/* A column that always fills the viewport, so a short page still pins its footer
+ * to the bottom rather than floating it mid-screen. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.main {
+  flex: 1;
+}
+
+/* The focus ring on the main landmark would be a full-width rectangle across the
+ * page after every navigation. Focus is moved there programmatically, never by
+ * the keyboard, so suppressing its ring costs no keyboard user anything. */
+.main:focus {
+  outline: none;
+}

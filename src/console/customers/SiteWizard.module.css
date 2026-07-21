@@ -1,0 +1,45 @@
+/* SiteWizard - stepper header and the quick-add building list. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.stepper {
+  padding-block-end: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  max-width: 640px;
+}
+
+.createdList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.createdRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  min-height: var(--min-touch-target);
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.createdName {
+  font-weight: 600;
+  color: var(--color-text);
+}

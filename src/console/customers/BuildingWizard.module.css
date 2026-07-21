@@ -1,0 +1,157 @@
+/* BuildingWizard - stepper header, plan drop area, contact picker, summary. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.stepper {
+  padding-block-end: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* --- Step 2: floor plan drop area ---------------------------------------- */
+
+.dropArea,
+.dropAreaActive {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  border: 2px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  text-align: center;
+}
+
+.dropAreaActive {
+  border-color: var(--brand-primary);
+  background: var(--color-surface-sunken);
+}
+
+.dropLabel {
+  display: block;
+  min-height: var(--min-touch-target);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.fileInput {
+  font: inherit;
+  align-self: center;
+}
+
+.progressWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.progress {
+  flex: 1;
+  height: 8px;
+}
+
+.progressLabel {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  min-width: 3.5ch;
+}
+
+.addedList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.addedRow {
+  display: flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-lg);
+  background: var(--status-success-surface);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+}
+
+/* --- Step 3: contact picker ------------------------------------------------ */
+
+.contactList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.contactRow,
+.contactRowSelected {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: var(--min-touch-target);
+  padding: var(--space-sm) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.contactRowSelected {
+  border-color: var(--brand-primary);
+  background: var(--color-surface-alt);
+}
+
+.contactRadio {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--brand-primary);
+}
+
+/* --- Finish ----------------------------------------------------------------- */
+
+.finish {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  max-width: 640px;
+  padding: var(--space-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.finishHeading {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--color-text);
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-sm) var(--space-lg);
+  margin: 0;
+}
+
+.summaryTerm {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.summaryValue {
+  margin: 0;
+  color: var(--color-text);
+}
+
+@media (max-width: 640px) {
+  .summary {
+    grid-template-columns: 1fr;
+  }
+}

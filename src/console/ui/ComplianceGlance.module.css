@@ -1,0 +1,238 @@
+/* ComplianceGlance - the "compliance at a glance" band: the RAG distribution
+   bar (or a single building's prominent RAG status) above the risk and
+   escalation tiles. Shared by the org dashboard and every detail page, so the
+   band's anatomy is decided once. */
+
+/* The band establishes a size container, so the tile grid below responds to
+   the band's OWN width (the dashboard's wide column, a detail page's narrower
+   main column) rather than the viewport - the same band reads tidily wherever
+   it is mounted. */
+.glance {
+  container-type: inline-size;
+}
+
+/* The tile grid: a fixed number of EQUAL columns (minmax(0, 1fr), so a long
+   label like "Life Protection overdue" wraps instead of widening its tile) that
+   FILLS the band's width. Six risk/escalation tiles divide evenly into 2, 3 or
+   6 columns, so a row is never left with odd empty tracks. Grid stretch plus the
+   tile wrappers below give every tile equal height. */
+.tiles {
+  display: grid;
+  gap: var(--space-lg);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@container (min-width: 520px) {
+  .tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 880px) {
+  .tiles {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+/* The single-building band has three action tiles: one column on a narrow band,
+   three across once there is room. */
+.tilesSingle {
+  display: grid;
+  gap: var(--space-lg);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container (min-width: 520px) {
+  .tilesSingle {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Every tile wrapper is itself a single-cell grid, so the StatCard within
+   stretches to the full height the row's tallest tile sets - equal heights
+   regardless of how many lines a label wraps to. */
+.tile {
+  display: grid;
+}
+
+/* A stat tile that drills through: the whole card is the link, with the usual
+   focus ring and no underline noise across the number. Hover/focus earn a
+   real affordance - a subtle lift plus a chevron cue that fades in without
+   shifting layout. Motion is dropped under prefers-reduced-motion. */
+.statLink {
+  position: relative;
+  display: grid;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-lg);
+  transition:
+    transform var(--motion-fast) var(--easing),
+    box-shadow var(--motion-fast) var(--easing);
+}
+
+.statLink:hover,
+.statLink:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px var(--shadow-color);
+}
+
+.statLink:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+/* The drill-through chevron: reserved space via absolute positioning, so its
+   appearance never reflows the tile. */
+.statChevron {
+  position: absolute;
+  top: var(--space-md);
+  inset-inline-end: var(--space-md);
+  display: inline-flex;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transform: translateX(-2px);
+  transition:
+    opacity var(--motion-fast) var(--easing),
+    transform var(--motion-fast) var(--easing);
+}
+
+.statChevron svg {
+  width: 16px;
+  height: 16px;
+}
+
+.statLink:hover .statChevron,
+.statLink:focus-visible .statChevron {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statLink,
+  .statChevron {
+    transition: none;
+  }
+
+  .statLink:hover,
+  .statLink:focus-visible {
+    transform: none;
+  }
+
+  .statChevron {
+    transform: none;
+  }
+}
+
+/* --- RAG distribution bar --------------------------------------------------- */
+
+/* The bar sits on its own quiet surface above the stat tiles, matching the
+   tiles' card anatomy. */
+.ragBarCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg) var(--space-xl);
+  margin-block-end: var(--space-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.ragBarTitle {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.ragBarBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Proportional segments via flex-grow; the 2px gap shows the card surface
+   between adjacent fills (the colour-vision-safe separator). */
+.ragBar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.ragSegment {
+  display: block;
+  min-width: 4px;
+}
+
+/* The fixed RAG safety language; pending is a neutral, deliberately not
+   green. Counts always ride beside these fills in the legend text. */
+.ragSegment-high {
+  background: var(--rag-red);
+}
+
+.ragSegment-medium {
+  background: var(--rag-amber);
+}
+
+.ragSegment-low {
+  background: var(--rag-green);
+}
+
+.ragSegment-pending {
+  background: var(--color-border-strong);
+}
+
+.ragLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-lg);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ragLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.ragSwatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  flex: none;
+}
+
+/* Legend text wears text tokens, never the segment colour. */
+.ragLegendText {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The single-building stand-in for the bar: the building's own RAG status as
+   one prominent chip (fixed safety colour plus label and icon, so colour is
+   never the sole carrier). */
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  align-self: flex-start;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-pill);
+  font-weight: 650;
+  font-size: 0.9375rem;
+}
+
+/* Quiet, single-line empty state (no buildings in scope yet). */
+.emptyNote {
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+  margin: 0;
+}

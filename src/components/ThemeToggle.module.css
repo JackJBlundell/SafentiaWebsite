@@ -1,0 +1,79 @@
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--min-touch-target);
+  height: var(--min-touch-target);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  transition:
+    background-color var(--motion-fast) var(--easing),
+    color var(--motion-fast) var(--easing);
+}
+
+.toggle:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* CSS-only tooltip for this icon-only control, replacing the native title
+ * (whose browser-placed bubble sat badly against the side rail). It reads the
+ * button's data-tooltip, shows on hover AND keyboard focus with no delay, and
+ * is purely visual - the accessible name stays on aria-label. Default: BELOW
+ * the trigger (the top-bar contexts: site header, auth screens, mobile shell). */
+.toggle::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  z-index: 20;
+}
+
+.toggle:hover::after,
+.toggle:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* In the console's desktop rail (the shell stamps data-tip-side on its session
+ * controls; the 1024px breakpoint is the rail's own) a below-tooltip would fall
+ * off the bottom of the viewport-height column, so it flips to the RIGHT of
+ * the trigger instead. */
+@media (min-width: 1024px) {
+  :global([data-tip-side='right']) .toggle::after {
+    top: 50%;
+    left: calc(100% + var(--space-sm));
+    transform: translateY(-50%);
+  }
+}
+
+/* Shapes declare how they are painted, so nudging a path cannot silently change
+ * its rendering (an attribute selector on the `d` value did exactly that). */
+.solid {
+  fill: currentColor;
+  stroke: none;
+}
+
+.stroked {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}

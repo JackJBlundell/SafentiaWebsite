@@ -1,0 +1,124 @@
+/* ContactsPanel - contact table cells, the inline editor, confirm boxes. */
+
+.nameCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.primaryBadge {
+  align-self: flex-start;
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--brand-primary);
+  color: var(--brand-primary);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.jobTitle {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.portalLive,
+.portalMuted {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.portalLive {
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.portalMuted {
+  color: var(--color-text-muted);
+  background: var(--color-surface-sunken);
+}
+
+.actionsCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-sm);
+}
+
+.actionButtons {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.confirmBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  max-width: 26rem;
+  text-align: left;
+}
+
+.confirmCopy {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.confirmButtons {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* The editor sits inside a flush Card, so it restores its own padding. */
+.editorWrap {
+  width: 100%;
+  padding: var(--space-lg) var(--space-xl) var(--space-xl);
+  border-top: 1px solid var(--color-border);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 40rem;
+}
+
+.editorTitle {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.editorActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}

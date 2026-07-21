@@ -1,0 +1,401 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "platform": {
+      ".read": "auth != null && root.child('platform/superAdmins').child(auth.uid).val() === true",
+      "superAdmins": {
+        ".write": false
+      },
+      "plans": {
+        ".write": false
+      },
+      "stats": {
+        ".write": false
+      },
+      "clientConfig": {
+        ".read": true,
+        ".write": false
+      },
+      "leads": {
+        ".write": false
+      }
+    },
+    "metadata": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+    "$env": {
+      ".validate": "$env === 'live' || $env === 'test'",
+      "organisations": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          "profile": {
+            ".read": "auth != null && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'"
+          }
+        }
+      },
+      "orgMembers": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && (root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true || root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('assessor').val() === true || root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('auditor').val() === true) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".indexOn": [
+            "status"
+          ],
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+            ".write": false
+          }
+        }
+      },
+      "userOrgs": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid && ((auth.token.testMode === true) === ($env === 'test'))",
+          ".write": false,
+          ".indexOn": [
+            ".value"
+          ]
+        }
+      },
+      "orgInvitations": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          ".indexOn": [
+            "status"
+          ]
+        }
+      },
+      "customers": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          ".indexOn": [
+            "status"
+          ],
+          "$customerId": {
+            ".read": "auth != null && auth.token.portalOrgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && auth.token.customerId === $customerId && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived'"
+          }
+        }
+      },
+      "customerMembers": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false
+        }
+      },
+      "customerUserIndex": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid && ((auth.token.testMode === true) === ($env === 'test'))",
+          ".write": false
+        }
+      },
+      "sites": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          "$customerId": {
+            ".indexOn": [
+              "name"
+            ],
+            ".read": "auth != null && auth.token.portalOrgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && auth.token.customerId === $customerId && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived'"
+          }
+        }
+      },
+      "buildings": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          "$siteId": {
+            ".indexOn": [
+              "customerId",
+              "riskLevel"
+            ],
+            ".read": "auth != null && auth.token.portalOrgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('sites').child($orgId).child(auth.token.customerId).child($siteId).exists() && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived'"
+          }
+        }
+      },
+      "buildingAccess": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          "$buildingId": {
+            ".indexOn": [
+              ".value"
+            ]
+          }
+        }
+      },
+      "floorPlans": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          "$buildingId": {
+            ".indexOn": [
+              "name"
+            ],
+            "$planId": {
+              ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('assessor').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && !data.exists() && newData.exists()",
+              ".validate": "newData.hasChildren(['name','imageUrl'])"
+            }
+          }
+        }
+      },
+      "templates": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          ".indexOn": [
+            "status"
+          ]
+        }
+      },
+      "jobs": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          ".indexOn": [
+            "assessorUid",
+            "status",
+            "buildingId",
+            "scheduledFor",
+            "templateId"
+          ]
+        }
+      },
+      "assessorJobs": {
+        "$orgId": {
+          "$assessorUid": {
+            ".read": "auth != null && auth.uid === $assessorUid && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+            ".write": false,
+            ".indexOn": [
+              ".value"
+            ]
+          }
+        }
+      },
+      "assessments": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".indexOn": [
+            "status",
+            "buildingId",
+            "jobId",
+            "conductedBy"
+          ],
+          "$assessmentId": {
+            ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('assessor').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && !data.exists() && newData.exists() && newData.child('conductedBy').val() === auth.uid && $assessmentId === 'job-' + newData.child('jobId').val() && root.child($env).child('jobs').child($orgId).child(newData.child('jobId').val()).child('assessorUid').val() === auth.uid && root.child($env).child('jobs').child($orgId).child(newData.child('jobId').val()).child('status').val() !== 'cancelled' && root.child($env).child('jobs').child($orgId).child(newData.child('jobId').val()).child('status').val() !== 'released' && newData.child('status').val() === 'inProgress'",
+            ".validate": "newData.hasChildren(['jobId','buildingId','customerId','templateSnapshot','conductedBy','conductedAt','status']) && newData.child('status').val() === 'inProgress' && newData.child('conductedBy').val() === auth.uid",
+            "narrative": {
+              ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('assessor').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && auth.uid === root.child($env).child('assessments').child($orgId).child($assessmentId).child('conductedBy').val() && root.child($env).child('assessments').child($orgId).child($assessmentId).child('status').val() !== 'released'"
+            },
+            "responsibleParty": {
+              ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('assessor').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && auth.uid === root.child($env).child('assessments').child($orgId).child($assessmentId).child('conductedBy').val() && root.child($env).child('assessments').child($orgId).child($assessmentId).child('status').val() !== 'released'"
+            },
+            "manualRiskLevel": {
+              ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('assessor').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && auth.uid === root.child($env).child('assessments').child($orgId).child($assessmentId).child('conductedBy').val() && root.child($env).child('assessments').child($orgId).child($assessmentId).child('status').val() !== 'released' && newData.child('byUid').val() === auth.uid",
+              ".validate": "newData.hasChildren(['level','byUid','at']) && (newData.child('level').val() === 'low' || newData.child('level').val() === 'medium' || newData.child('level').val() === 'high')"
+            }
+          }
+        }
+      },
+      "assessmentAnswers": {
+        "$orgId": {
+          "$assessmentId": {
+            ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+            ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('assessor').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && auth.uid === root.child($env).child('assessments').child($orgId).child($assessmentId).child('conductedBy').val() && root.child($env).child('assessments').child($orgId).child($assessmentId).child('status').val() !== 'released'",
+            "$questionId": {
+              ".indexOn": [
+                "updatedAt"
+              ],
+              "infoRequest": {
+                "byUid": {
+                  ".validate": "data.exists() && newData.val() === data.val()"
+                },
+                "message": {
+                  ".validate": "data.exists() && newData.val() === data.val()"
+                }
+              }
+            }
+          }
+        }
+      },
+      "actions": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          "$buildingId": {
+            ".indexOn": [
+              "severity",
+              "status",
+              "dueBy",
+              "lifeProtection"
+            ],
+            ".read": "auth != null && auth.token.portalOrgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('buildingCustomerIndex').child($orgId).child($buildingId).val() === auth.token.customerId && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived'"
+          }
+        }
+      },
+      "documents": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          "$buildingId": {
+            "$category": {
+              ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('assessor').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+              ".indexOn": [
+                "uploadedAt"
+              ]
+            }
+          }
+        }
+      },
+      "logBook": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          "$buildingId": {
+            ".indexOn": [
+              "type",
+              "at"
+            ],
+            "$entryId": {
+              ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('assessor').val() === true && !data.exists() && newData.exists() && newData.child('byUid').val() === auth.uid",
+              ".validate": "newData.hasChildren(['type','byUid','at']) && newData.child('byUid').val() === auth.uid && (newData.child('type').val() === 'fireIncident' || newData.child('type').val() === 'falseAlarm' || newData.child('type').val() === 'fireDoorRecord' || newData.child('type').val() === 'serviceConfirmed' || newData.child('type').val() === 'assessorAction' || newData.child('type').val() === 'fraCompleted')"
+            }
+          }
+        }
+      },
+      "reports": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          "$scope": {
+            "$scopeId": {
+              ".indexOn": [
+                "generatedAt"
+              ],
+              ".read": "auth != null && auth.token.portalOrgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && $scope === 'building' && root.child($env).child('buildingCustomerIndex').child($orgId).child($scopeId).val() === auth.token.customerId && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived'",
+              "$reportId": {
+                "acceptance": {
+                  ".write": false,
+                  ".validate": "newData.hasChildren(['name','byUid','at'])"
+                }
+              }
+            }
+          }
+        }
+      },
+      "notifications": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid && ((auth.token.testMode === true) === ($env === 'test'))",
+          ".indexOn": [
+            "readAt"
+          ],
+          "$notifId": {
+            ".write": "auth != null && auth.uid === $uid && ((auth.token.testMode === true) === ($env === 'test')) && data.exists() && newData.exists() && newData.child('type').val() === data.child('type').val()",
+            ".validate": "newData.hasChildren(['type','title','body']) && newData.child('title').val() === data.child('title').val() && newData.child('body').val() === data.child('body').val()"
+          },
+          "deviceTokens": {
+            ".write": "auth != null && auth.uid === $uid && ((auth.token.testMode === true) === ($env === 'test'))"
+          }
+        }
+      },
+      "notificationLedger": {
+        "$orgId": {
+          ".read": false,
+          ".write": false
+        }
+      },
+      "activity": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".indexOn": [
+            "at",
+            "actorUid"
+          ],
+          "$logId": {
+            ".write": false,
+            ".validate": "newData.hasChildren(['actorUid','action','target','at'])"
+          }
+        }
+      },
+      "invitations": {
+        ".indexOn": [
+          "token",
+          "email",
+          "status"
+        ],
+        "$inviteId": {
+          ".read": false,
+          ".write": false
+        }
+      },
+      "customerContacts": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          "$customerId": {
+            ".read": "auth != null && auth.token.portalOrgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && auth.token.customerId === $customerId && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived'"
+          }
+        }
+      },
+      "templateDrafts": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          "$templateId": {
+            ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'"
+          }
+        }
+      },
+      "templateVersions": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false
+        }
+      },
+      "standardParagraphs": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          "$paragraphId": {
+            ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+            ".validate": "newData.hasChildren(['reference','body','updatedAt'])",
+            "reference": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "title": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
+            "body": {
+              ".validate": "newData.isString() && newData.val().length <= 10000"
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      },
+      "buildingCustomerIndex": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          "$buildingId": {
+            ".read": "auth != null && auth.token.portalOrgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('buildingCustomerIndex').child($orgId).child($buildingId).val() === auth.token.customerId && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived'"
+          }
+        }
+      },
+      "emailLog": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          ".write": false,
+          ".indexOn": [
+            "sentAt"
+          ]
+        }
+      },
+      ".read": "auth != null && auth.token.superAdmin === true"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+/* ReleasesChart - single-series monthly bar chart. All colour comes from
+   tokens, so light and dark modes are both first-class: the bars wear the
+   informational hue, every piece of text wears ink tokens, never the data
+   colour. */
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.bar {
+  fill: var(--status-info);
+}
+
+.baseline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+/* Per-bar values: small, tabular, secondary ink. */
+.value {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  fill: var(--color-text-secondary);
+}
+
+/* Month axis: the quietest text on the chart. */
+.axis {
+  font-size: 11px;
+  fill: var(--color-text-muted);
+}

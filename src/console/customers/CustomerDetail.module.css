@@ -1,0 +1,75 @@
+/* CustomerDetail - the organisation profile: stat row, contacts, sites, aside. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+}
+
+.cellName {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Live count badges beside the organisation name (sites, buildings). Each
+   states its own noun, so the badge means something without its surface tint;
+   non-interactive, so no 44px target - just legible. */
+.countBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem var(--space-sm);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The active-filter banner above the buildings table: what is being shown, and
+   the way back to the full list. */
+.filterNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  padding: var(--space-md) var(--space-xl);
+  border-block-end: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  width: 100%;
+}
+
+.emptyAction {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* Two controls in a card header (import beside add) stay on one line on a wide
+   screen and wrap rather than squeeze on a narrow one. */
+.headerActions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* Next-review cell (story 2036 AC2): the lapsed state carries the word
+   "(lapsed)" as well as the error tone - never colour alone. */
+.reviewLapsed {
+  color: var(--status-error);
+  font-weight: 600;
+}
+
+.noReview {
+  color: var(--color-text-muted);
+}

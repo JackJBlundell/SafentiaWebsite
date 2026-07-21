@@ -1,0 +1,46 @@
+/* Shared staff badges: role chips and the status pill, rendered by both the
+   directory and a member's profile. Colour supports the status, never carries
+   it - each pill states its own word. */
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.roleChip {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.statusBadge {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.statusActive {
+  color: var(--status-success);
+  background: var(--status-success-surface);
+}
+
+.statusLocked {
+  color: var(--status-warning);
+  background: var(--status-warning-surface);
+}
+
+.statusArchived {
+  color: var(--color-text-muted);
+  background: var(--color-surface-sunken);
+}

@@ -1,0 +1,77 @@
+/* TemplateVersions - the frozen-version cards and their read-only inline
+   expansion. No edit affordances by design: published versions are immutable. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.section {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-alt);
+}
+
+/* The summary is the disclosure control: full-width, 44px target. */
+.sectionSummary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.sectionSummary:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.sectionCode {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.sectionTitle {
+  font-weight: 600;
+  flex: 1;
+}
+
+.sectionCount {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.questionList {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md) var(--space-md) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.question {
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.emptyVersion {
+  margin: var(--space-md) 0 0;
+  color: var(--color-text-muted);
+}

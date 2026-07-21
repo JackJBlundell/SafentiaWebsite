@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/logo192.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0E1217" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)" />
+    <!--
+      Theme boot. This runs before first paint and before React, so a visitor who
+      pinned dark mode never sees a white flash on a pre-rendered page. It reads
+      the same localStorage key and sets the same `data-theme` attribute the
+      ThemeProvider maintains afterwards. Kept inline and tiny on purpose: an
+      external file would be a render-blocking round trip for four lines.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('safentia.theme');
+          if (stored === 'light' || stored === 'dark') {
+            document.documentElement.setAttribute('data-theme', stored);
+          }
+        } catch (e) {
+          /* Storage blocked. The OS preference applies via the media query. */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

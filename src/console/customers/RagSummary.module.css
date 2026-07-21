@@ -1,0 +1,52 @@
+/* RagSummary - the compact one-line icon+number strip that sits inside
+   DataTable cells and list rows. Never wraps into stacks: the strip stays on
+   one line and the table cell handles any overflow. Each pair's glyph differs
+   per level, so colour is never the sole carrier. */
+
+.root {
+  display: inline-flex;
+}
+
+.strip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  white-space: nowrap;
+}
+
+.pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25em;
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.glyph {
+  font-weight: 700;
+  line-height: 1;
+}
+
+.count {
+  color: var(--color-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The overdue pair's count inherits the error colour from the pair. */
+.overdueCount {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+/* The honest zero in an Overdue column: quiet, but present. */
+.zero {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}

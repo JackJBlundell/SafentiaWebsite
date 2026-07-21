@@ -1,0 +1,103 @@
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xxl);
+  min-width: 0; /* grid children must be allowed to shrink, or tables overflow */
+}
+
+.flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.flush .header {
+  padding: var(--space-xl) var(--space-xxl) 0 var(--space-xxl);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-block-end: var(--space-lg);
+}
+
+.title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.006em;
+}
+
+.hint {
+  margin-block-start: var(--space-xs);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  max-width: 52ch;
+}
+
+.action {
+  flex: none;
+}
+
+/* --- Stat tiles -------------------------------------------------------------- */
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-xl) var(--space-xxl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+/* Icon + label sit on one line; the icon is quiet reinforcement in the muted
+   ink the label already wears. */
+.statLabelRow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.statIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.statIcon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.statLabel {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.statValue {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.statHint {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.stat-warning .statValue {
+  color: var(--status-warning);
+}
+
+.stat-danger .statValue {
+  color: var(--status-error);
+}

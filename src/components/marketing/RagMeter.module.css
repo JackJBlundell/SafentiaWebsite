@@ -1,0 +1,52 @@
+.root {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.bar {
+  display: flex;
+  height: var(--space-md);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--color-surface-sunken);
+}
+
+.green {
+  background: var(--rag-green);
+}
+
+.amber {
+  background: var(--rag-amber);
+}
+
+.red {
+  background: var(--rag-red);
+}
+
+.legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-lg);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.swatch {
+  width: var(--space-sm);
+  height: var(--space-sm);
+  border-radius: var(--radius-pill);
+  flex: none;
+}
+
+.caption {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}

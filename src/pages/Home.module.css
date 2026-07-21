@@ -1,0 +1,255 @@
+/* ==========================================================================
+ * Home. Layout only; all colour, spacing and type read from tokens.css.
+ * ========================================================================== */
+
+/* --- Hero ------------------------------------------------------------------ */
+
+.hero {
+  display: grid;
+  gap: var(--space-huge);
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: var(--section-tight);
+  }
+}
+
+.heroCopy {
+  display: grid;
+  gap: var(--space-xl);
+  justify-items: start;
+}
+
+/* displayHero metrics (tokens/typography.ts): fluid, confident on a desktop,
+ * safe at 320px. */
+.heroTitle {
+  font-size: clamp(2.5rem, 1.6rem + 4.5vw, 4.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.032em;
+}
+
+.heroLead {
+  font-size: clamp(1.0625rem, 1rem + 0.4vw, 1.25rem);
+  color: var(--color-text-secondary);
+  max-width: var(--reading-measure);
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.heroNote {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.heroVisual {
+  justify-self: center;
+}
+
+/* --- Shared section furniture ---------------------------------------------- */
+
+.sectionTitle {
+  font-size: clamp(1.625rem, 1.3rem + 1.6vw, 2.375rem);
+  letter-spacing: -0.024em;
+  margin-bottom: var(--space-xxxl);
+  max-width: var(--reading-measure);
+}
+
+/* --- Three-up strip --------------------------------------------------------- */
+
+.threeUp {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+@media (min-width: 768px) {
+  .threeUp {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* --- Alternating feature rows ------------------------------------------------ */
+
+.featureRows {
+  display: grid;
+  gap: var(--section-tight);
+}
+
+.featureRow {
+  display: grid;
+  gap: var(--space-xxl);
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .featureRow {
+    grid-template-columns: minmax(0, 6fr) minmax(0, 6fr);
+    gap: var(--section-tight);
+  }
+
+  /* Alternate sides: copy left, visual right, then swapped. */
+  .featureRow:nth-child(even) .featureCopy {
+    order: 2;
+  }
+
+  .featureRow:nth-child(even) .featureVisual {
+    order: 1;
+  }
+
+  /* The lifecycle row runs full width beneath its copy. */
+  .featureRow:has(.featureWide) {
+    grid-template-columns: 1fr;
+    gap: var(--space-xxxl);
+  }
+}
+
+.featureCopy {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.featureCopy p {
+  color: var(--color-text-secondary);
+  max-width: var(--reading-measure);
+}
+
+.featureTitle {
+  font-size: clamp(1.25rem, 1.1rem + 0.8vw, 1.625rem);
+  letter-spacing: -0.018em;
+}
+
+.featureVisual,
+.featureWide {
+  min-width: 0;
+}
+
+/* --- Floor-plan depiction ----------------------------------------------------- */
+
+.planCard {
+  display: grid;
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: 0 24px 48px -32px color-mix(in srgb, var(--shadow-color) 35%, transparent);
+}
+
+.planDrawing {
+  width: 100%;
+  height: auto;
+}
+
+.planWall {
+  fill: none;
+  stroke: var(--color-border-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.planDoor {
+  fill: none;
+  stroke: var(--color-text-muted);
+  stroke-width: 2;
+  stroke-dasharray: 3 4;
+  stroke-linecap: round;
+}
+
+/* Location pins take RAG colour because they mark risk on the plan. */
+.pinHigh circle,
+.pinMedium circle {
+  fill: var(--color-surface);
+  stroke-width: 3;
+}
+
+.pinHigh path,
+.pinMedium path {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.pinHigh circle,
+.pinHigh path {
+  stroke: var(--rag-red);
+}
+
+.pinMedium circle,
+.pinMedium path {
+  stroke: var(--rag-amber);
+}
+
+.planPhotos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.planPhoto {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+}
+
+/* --- Roles ------------------------------------------------------------------- */
+
+.rolesHead {
+  display: grid;
+  gap: 0;
+  margin-bottom: var(--space-xxxl);
+}
+
+.rolesHead .sectionTitle {
+  margin-bottom: var(--space-lg);
+}
+
+.rolesLead {
+  color: var(--color-text-secondary);
+  max-width: var(--reading-measure);
+}
+
+.rolesGrid {
+  list-style: none;
+  display: grid;
+  gap: var(--space-lg);
+}
+
+@media (min-width: 640px) {
+  .rolesGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .rolesGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.roleCard {
+  display: grid;
+  gap: var(--space-xs);
+  padding: var(--space-xl);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.roleName {
+  font-size: 0.9375rem;
+}
+
+.roleLine {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}

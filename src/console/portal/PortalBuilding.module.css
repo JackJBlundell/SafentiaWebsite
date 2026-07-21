@@ -1,0 +1,126 @@
+.stack {
+  display: grid;
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--space-md);
+  margin: var(--space-md) 0 0;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.factLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.factValue {
+  margin: 0;
+  color: var(--color-text);
+}
+
+.emptyLine {
+  margin: var(--space-md) 0 0;
+  color: var(--color-text-muted);
+}
+
+.reportList,
+.actionList {
+  list-style: none;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+}
+
+.reportRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  min-height: var(--min-touch-target);
+  padding: var(--space-sm) 0;
+}
+
+.reportRow + .reportRow {
+  border-top: 1px solid var(--color-border);
+}
+
+.reportIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.reportName {
+  font-weight: 600;
+}
+
+.reportDate {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.actionRow {
+  display: grid;
+  gap: var(--space-xs);
+  padding: var(--space-md) 0;
+}
+
+.actionRow + .actionRow {
+  border-top: 1px solid var(--color-border);
+}
+
+.actionMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.ltpMarker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.actionStatus {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.actionDue {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.actionQuestion {
+  margin: 0;
+  font-weight: 600;
+}
+
+.actionObservation {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+/* Who the remedial action is assigned to, when the assessor recorded one. */
+.actionResponsible {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}

@@ -1,0 +1,69 @@
+/* ValidationQueue - two flush Cards of DataTable rows, kit rhythm throughout. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.loading {
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+.buildingCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.buildingName {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* An assessment submitted against a since-cancelled job: still reviewable,
+   but the auditor needs the context. Text label with the warning surface -
+   colour supports the meaning, the words carry it. */
+.cancelledBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-sm);
+  color: var(--status-warning);
+  background: var(--status-warning-surface);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.time {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The section count in the card header: a quiet pill, not a stat shout. */
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Empty copy inside a flush Card, aligned with the header inset. */
+.sectionEmpty {
+  margin: 0;
+  padding: 0 var(--space-xxl) var(--space-xxl);
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}

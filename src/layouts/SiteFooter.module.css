@@ -1,0 +1,95 @@
+.footer {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+}
+
+.inner {
+  display: grid;
+  gap: var(--space-huge);
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding: var(--section-tight) var(--container-gutter);
+}
+
+.tagline {
+  margin-block-start: var(--space-lg);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+.address {
+  margin-block-start: var(--space-lg);
+  font-style: normal;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--color-text-muted);
+}
+
+.address a {
+  color: var(--color-text-secondary);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-xxl);
+}
+
+.columnHeading {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-block-end: var(--space-md);
+}
+
+.columnList {
+  list-style: none;
+  display: grid;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+}
+
+.columnLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: 0.9375rem;
+}
+
+.columnLink:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.baseline {
+  border-top: 1px solid var(--color-border);
+}
+
+.baselineInner {
+  display: grid;
+  gap: var(--space-md);
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding: var(--space-xxl) var(--container-gutter);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+/* The regulatory disclaimer mirrors clause 2.5 of the Agreement. It is small, but
+ * it must stay legible: muted text at this size still clears AA. */
+.note {
+  max-width: var(--reading-measure);
+}
+
+@media (min-width: 768px) {
+  .inner {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr);
+    gap: var(--section-tight);
+  }
+}

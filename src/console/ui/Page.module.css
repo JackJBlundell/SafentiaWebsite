@@ -1,0 +1,110 @@
+.header {
+  margin-block-end: var(--space-xxl);
+}
+
+.breadcrumbs {
+  margin-block-end: var(--space-sm);
+}
+
+.crumbList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.crumbLink {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.crumbLink:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.crumbSeparator {
+  color: var(--color-border-strong);
+}
+
+.headerRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  letter-spacing: -0.018em;
+}
+
+/* Title plus any inline badges (live counts) on one baseline-aligned row that
+   wraps cleanly when the name is long or the viewport is narrow. */
+.titleRow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+}
+
+.badges {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.lede {
+  margin-block-start: var(--space-xs);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  max-width: 60ch;
+}
+
+.action {
+  flex: none;
+}
+
+.empty {
+  padding: var(--space-huge) var(--space-xxl);
+  text-align: center;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.emptyTitle {
+  font-size: 1.0625rem;
+  margin-block-end: var(--space-sm);
+}
+
+.emptyBody {
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  max-width: 46ch;
+  margin-inline: auto;
+  margin-block-end: var(--space-lg);
+}
+
+.error {
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  background: var(--status-error-surface);
+  color: var(--status-error);
+  font-size: 0.9375rem;
+}

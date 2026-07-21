@@ -1,0 +1,98 @@
+/* GrowthChart - single-series monthly LINE chart. All colour comes from tokens,
+   so light and dark are both first-class: the line, area and markers wear the
+   informational hue, every piece of text wears ink tokens, never the data
+   colour. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.line {
+  fill: none;
+  stroke: var(--status-info);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.area {
+  fill: var(--status-info-surface);
+  stroke: none;
+}
+
+.marker {
+  fill: var(--status-info);
+  stroke: var(--color-surface);
+  stroke-width: 2;
+}
+
+.baseline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+/* Per-point values: small, tabular, secondary ink. */
+.value {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  fill: var(--color-text-secondary);
+}
+
+/* Month axis: the quietest text on the chart. */
+.axis {
+  font-size: 11px;
+  fill: var(--color-text-muted);
+}
+
+/* The accessible table view of the same numbers. */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.caption {
+  text-align: start;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-block-end: var(--space-sm);
+}
+
+.table th,
+.table td {
+  text-align: start;
+  padding: var(--space-xs) var(--space-sm);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.table tbody th {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.table td {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.empty {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+}

@@ -1,0 +1,86 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-xl);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+
+  font-weight: 600;
+  font-size: 0.9375rem;
+  letter-spacing: -0.006em;
+  text-decoration: none;
+  white-space: nowrap;
+
+  transition:
+    background-color var(--motion-fast) var(--easing),
+    border-color var(--motion-fast) var(--easing),
+    color var(--motion-fast) var(--easing),
+    transform var(--motion-fast) var(--easing);
+}
+
+.button:active {
+  /* A press should be felt, not announced. 1px is enough. */
+  transform: translateY(1px);
+}
+
+.button:disabled,
+.button[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* --- Primary: the single most important action on any given view ----------- */
+.primary {
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+}
+
+.primary:hover:not(:disabled) {
+  /* Darken by compositing the text colour over the fill rather than hard-coding a
+   * second brand shade, which would not survive a per-organisation accent. */
+  background: color-mix(in srgb, var(--brand-primary) 88%, var(--color-text));
+}
+
+/* --- Secondary: an equal-weight alternative, outlined --------------------- */
+.secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--color-surface-alt);
+  border-color: var(--color-text-muted);
+}
+
+/* --- Ghost: navigation and tertiary actions -------------------------------- */
+.ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding-inline: var(--space-lg);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+/* --- Sizes ----------------------------------------------------------------- */
+.md {
+  min-height: var(--min-touch-target);
+}
+
+.lg {
+  min-height: 52px;
+  padding-inline: var(--space-xxl);
+  font-size: 1rem;
+}
+
+.block {
+  width: 100%;
+}

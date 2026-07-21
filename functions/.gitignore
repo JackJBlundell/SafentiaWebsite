@@ -1,0 +1,17 @@
+# Compiled output
+lib/
+
+# Dependencies
+node_modules/
+
+# Firebase / local config and secrets (never commit)
+*.local
+.env
+.env.*
+!.env.example
+serviceAccount*.json
+ui-debug.log
+firebase-debug.log
+database-debug.log
+firestore-debug.log
+pubsub-debug.log

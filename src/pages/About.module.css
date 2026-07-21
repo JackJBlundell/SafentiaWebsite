@@ -1,0 +1,86 @@
+/* ==========================================================================
+ * About. Prose-led; the Container's prose measure does most of the work.
+ * ========================================================================== */
+
+.pageTitle {
+  font-size: clamp(2.25rem, 1.5rem + 3.5vw, 3.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  margin-bottom: var(--space-xxxl);
+}
+
+.story {
+  display: grid;
+  gap: var(--space-xl);
+  font-size: clamp(1rem, 0.95rem + 0.3vw, 1.125rem);
+  color: var(--color-text-secondary);
+}
+
+.sectionTitle {
+  font-size: clamp(1.625rem, 1.3rem + 1.6vw, 2.375rem);
+  letter-spacing: -0.024em;
+  margin-bottom: var(--space-xxxl);
+}
+
+/* --- Beliefs ---------------------------------------------------------------- */
+
+.beliefs {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+@media (min-width: 900px) {
+  .beliefs {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.belief {
+  display: grid;
+  align-content: start;
+  gap: var(--space-md);
+  padding: var(--space-xxl);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.beliefTitle {
+  font-size: 1.0625rem;
+  letter-spacing: -0.012em;
+}
+
+.beliefBody {
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+/* --- Standards ----------------------------------------------------------------- */
+
+.standards {
+  display: grid;
+  gap: var(--space-lg);
+  max-width: var(--reading-measure);
+}
+
+.standard {
+  display: grid;
+  gap: var(--space-xs);
+  padding: var(--space-xl);
+  border-left: 3px solid var(--brand-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.standardName {
+  font-weight: 700;
+  letter-spacing: -0.012em;
+}
+
+.standardLine {
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}

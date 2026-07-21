@@ -1,0 +1,64 @@
+/* ParagraphLibrary - toolbar sizing, cell details and the add/edit panel.
+   The table itself is the shared DataTable. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.search {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .search {
+    width: 20rem;
+  }
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 1.125rem;
+  color: var(--color-text);
+}
+
+.reference {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.bodyPreview {
+  color: var(--color-text-secondary);
+}
+
+.bodyInput {
+  min-height: 44px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* Edit + Delete together on the cell's end edge; the guard/error message
+   reads before the controls and is allowed to wrap. */
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  white-space: nowrap;
+}
+
+.rowError {
+  font-size: 0.8125rem;
+  color: var(--status-error);
+  white-space: normal;
+  max-width: 18rem;
+  text-align: right;
+}
+
+.noMatches {
+  margin: 0;
+  padding: var(--space-lg);
+  color: var(--color-text-muted);
+}

@@ -1,0 +1,199 @@
+// ============================================================================
+// createJob (callable, admin-only) - brief 4.5 #4, stories 1040 / 1034.
+//
+// The ONLY path that creates a job; direct client writes to /jobs are denied by
+// rules, so a job can never be malformed or created by an unauthorised user (1040).
+// We:
+//   1. Enforce App Check, auth and the admin role.
+//   2. Validate the input shape and timestamp.
+//   3. Verify the referenced template EXISTS and is PUBLISHED at the requested
+//      version (a job pins {templateId, templateVersion} - story 1031), the
+//      building EXISTS, and the named assessor actually HOLDS the assessor role
+//      (the union model: their member record carries assessor:true). Each failure
+//      is a distinct structured error so the UI can point at the cause (1040 AC).
+//   4. Write /jobs and the /assessorJobs index atomically (one update) so the
+//      index can never drift from the job.
+//   5. Notify the assessor (in-app + best-effort push) so assignment lands within
+//      seconds and tapping it deep-links to the job (1034).
+// ============================================================================
+
+import { onCall } from 'firebase-functions/v2/https';
+import { db } from '../admin';
+import { callableOptions } from '../lib/callable';
+import { createLogger } from '../lib/logging';
+import { fail, runCallable } from '../lib/errors';
+import {
+  assertAppCheck,
+  assertAuth,
+  assertOrgRole,
+  getClaims,
+  envFor,
+} from '../lib/guards';
+import { assertObject, requireString, requireTimestamp, TEXT_LIMITS } from '../lib/validate';
+import { assertRateLimit } from '../lib/rateLimit';
+import { assertValidSlot, assertNoSlotClash } from '../lib/jobSlots';
+import { sendNotification } from '../lib/notifications';
+import type {
+  CreateJobInput,
+  CreateJobResult,
+  Job,
+  Template,
+  Building,
+  OrgMember,
+} from '../shared/types';
+
+export const createJob = onCall<CreateJobInput>(callableOptions, (request) =>
+  runCallable<CreateJobResult>(
+    createLogger({ fn: 'createJob' }),
+    async () => {
+      // 1. Attestation, identity, authorisation.
+      assertAppCheck(request);
+      const { uid } = assertAuth(request);
+      await assertRateLimit(uid, 'createJob');
+      const claims = getClaims(request);
+      assertOrgRole(claims, 'admin');
+      const { paths } = envFor(claims);
+      const orgId = claims.orgId;
+
+      // 2. Validate input. Ids are short identifiers; scheduledFor is a timestamp.
+      const input = assertObject(request.data);
+      const templateId = requireString(input, 'templateId', TEXT_LIMITS.shortText);
+      const templateVersion = requireTimestamp(
+        // templateVersion is a positive integer like a timestamp - reuse the same
+        // positive-integer guard so a non-integer or zero version is rejected.
+        { templateVersion: input.templateVersion },
+        'templateVersion',
+      );
+      const customerId = requireString(input, 'customerId', TEXT_LIMITS.shortText);
+      const siteId = requireString(input, 'siteId', TEXT_LIMITS.shortText);
+      const buildingId = requireString(input, 'buildingId', TEXT_LIMITS.shortText);
+      const assessorUid = requireString(input, 'assessorUid', TEXT_LIMITS.shortText);
+      const scheduledFor = requireTimestamp(input, 'scheduledFor');
+      // Optional time slot (FR-E17). When present it must be well-formed (end
+      // after start, same UTC day). Date-only jobs never clash (lib/jobSlots).
+      const scheduledUntil =
+        input.scheduledUntil !== undefined
+          ? requireTimestamp(input, 'scheduledUntil')
+          : undefined;
+      if (scheduledUntil !== undefined) {
+        assertValidSlot(scheduledFor, scheduledUntil);
+      }
+
+      // 3a. Template must exist and be PUBLISHED at the requested version (1031).
+      const templateSnap = await db
+        .ref(paths.db.template(orgId, templateId))
+        .get();
+      if (!templateSnap.exists()) {
+        throw fail.notFound('The chosen template could not be found.', {
+          field: 'templateId',
+        });
+      }
+      const template = templateSnap.val() as Template;
+      if (template.status !== 'published') {
+        throw fail.failedPrecondition(
+          'A job can only use a published template.',
+          { field: 'templateId', status: template.status },
+        );
+      }
+      if (template.version !== templateVersion) {
+        // The version must match exactly: jobs pin the version they were created
+        // with, and an assessment must never shift shape mid-flight (1031).
+        throw fail.invalidArgument(
+          'The selected template version is not available.',
+          { field: 'templateVersion', available: template.version },
+        );
+      }
+
+      // 3b. Building must exist (it sits under the site in the tenant tree).
+      const buildingSnap = await db
+        .ref(paths.db.building(orgId, siteId, buildingId))
+        .get();
+      if (!buildingSnap.exists()) {
+        throw fail.notFound('The chosen building could not be found.', {
+          field: 'buildingId',
+        });
+      }
+      const building = buildingSnap.val() as Building;
+      // The building's own customerId must match the job's, so a job cannot pin a
+      // building to the wrong customer (data-integrity, brief 18.3).
+      if (building.customerId !== customerId) {
+        throw fail.invalidArgument(
+          'The building does not belong to the chosen customer.',
+          { field: 'buildingId' },
+        );
+      }
+
+      // 3c. Assessor must be an active member holding the assessor role (1040 AC).
+      const memberSnap = await db
+        .ref(paths.db.orgMember(orgId, assessorUid))
+        .get();
+      if (!memberSnap.exists()) {
+        throw fail.notFound('The chosen assessor is not a member of this organisation.', {
+          field: 'assessorUid',
+        });
+      }
+      const member = memberSnap.val() as OrgMember;
+      if (member.status !== 'active' || member.roles?.assessor !== true) {
+        throw fail.failedPrecondition(
+          'The chosen person is not an active assessor.',
+          { field: 'assessorUid' },
+        );
+      }
+
+      // 3d. Slotted jobs must not overlap another slotted, non-cancelled visit
+      // in the assessor's diary (FR-E17). The error names the conflicting
+      // building and time so the admin can resolve it immediately.
+      if (scheduledUntil !== undefined) {
+        await assertNoSlotClash(
+          paths,
+          orgId,
+          assessorUid,
+          scheduledFor,
+          scheduledUntil,
+        );
+      }
+
+      // 4. Atomic write: the job and its assessor index together. push() on /jobs
+      // yields the job id, which the index entry then references.
+      const jobRef = db.ref(paths.db.jobs(orgId)).push();
+      const jobId = jobRef.key as string;
+      const job: Job = {
+        templateId,
+        templateVersion,
+        customerId,
+        siteId,
+        buildingId,
+        assessorUid,
+        scheduledFor,
+        // RTDB rejects undefined values, so the optional slot end is spread in
+        // only when present.
+        ...(scheduledUntil !== undefined ? { scheduledUntil } : {}),
+        status: 'scheduled',
+      };
+      const update: Record<string, unknown> = {
+        [paths.db.job(orgId, jobId)]: job,
+        // The index value is the status, matching the schema (/assessorJobs index).
+        [paths.db.assessorJob(orgId, assessorUid, jobId)]: 'scheduled',
+      };
+      await db.ref().update(update);
+
+      // 5. Notify the assessor. Deep link opens the job detail cold (brief 9.3).
+      const logger = createLogger({ fn: 'createJob', orgId });
+      await sendNotification(
+        paths,
+        orgId,
+        assessorUid,
+        {
+          type: 'jobAssigned',
+          title: 'New job assigned',
+          body: `You have been assigned an assessment at ${building.name}.`,
+          link: `safentia://job/${jobId}`,
+        },
+        logger,
+      );
+
+      logger.info('Job created', { jobId, assessorUid });
+      return { jobId };
+    },
+  ),
+);

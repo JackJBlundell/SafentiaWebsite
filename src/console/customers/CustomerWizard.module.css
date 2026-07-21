@@ -1,0 +1,151 @@
+/* CustomerWizard - stepper header, step bodies, quick-add rows, control bar. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  max-width: 52rem;
+}
+
+/* --- Step bodies -------------------------------------------------------------- */
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+}
+
+.groupTitle {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.extraRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.extraFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+/* --- Quick-add sites/buildings ------------------------------------------------ */
+
+.quickAddRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-md);
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.quickAddRow > div {
+  flex: 1 1 12rem;
+  width: auto;
+}
+
+.checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+}
+
+.checklistSite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.checklistSiteName {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.checklistBuildings {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.checklistBuildings > li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.tick {
+  color: var(--brand-primary);
+  font-weight: 700;
+}
+
+.warning {
+  width: 100%;
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border-strong);
+  border-left: 4px solid var(--brand-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* --- Control bar ---------------------------------------------------------------- */
+
+.controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.summaryList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  font-size: 0.9375rem;
+}
+
+.summaryList > li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}

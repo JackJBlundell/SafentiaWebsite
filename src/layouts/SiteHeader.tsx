@@ -1,0 +1,135 @@
+// ============================================================================
+// SiteHeader - the public site's navigation.
+//
+// Two rules this component enforces, because they are the ones that rot:
+//   1. Every entry in NAV_LINKS points at a route that exists in routes.tsx.
+//      There are no dead links and no unfinished entries.
+//   2. "Sign in" is the only account action. There is no public sign-up: staff
+//      and customers arrive by invitation (Schedule 1 groups 1 and 2), and
+//      self-serve registration is Phase 3 work. The home page's call to action
+//      routes to /contact, not to a registration form that does not exist.
+//
+// The mobile menu is a plain disclosure, not a modal: focus stays in document
+// order, Escape closes it, and it never traps a keyboard user.
+// ============================================================================
+
+import { useEffect, useRef, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { Wordmark } from '../components/Wordmark';
+import { Button } from '../components/Button';
+import { ThemeToggle } from '../components/ThemeToggle';
+import styles from './SiteHeader.module.css';
+
+/** The public navigation. Keep in step with the public routes in routes.tsx. */
+const NAV_LINKS = [
+  { to: '/how-it-works', label: 'How it works' },
+  { to: '/about', label: 'About' },
+  { to: '/news', label: 'News' },
+  { to: '/faq', label: 'FAQ' },
+] as const;
+
+export function SiteHeader() {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  // Navigating away closes the menu. Without this, a client-side route change
+  // leaves the panel open over the new page.
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
+  // Escape closes and returns focus to the control that opened it.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        toggleRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
+  return (
+    <header className={styles.header}>
+      <div className={styles.inner}>
+        <Wordmark to="/" />
+
+        <nav className={styles.desktopNav} aria-label="Primary">
+          <ul className={styles.navList}>
+            {NAV_LINKS.map((link) => (
+              <li key={link.to}>
+                <NavLink
+                  to={link.to}
+                  className={({ isActive }) =>
+                    isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+                  }
+                >
+                  {link.label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className={styles.actions}>
+          <ThemeToggle />
+          <span className={styles.desktopOnly}>
+            <Button to="/login" variant="ghost">
+              Sign in
+            </Button>
+          </span>
+          <span className={styles.desktopOnly}>
+            <Button to="/contact" variant="primary">
+              Book a demonstration
+            </Button>
+          </span>
+
+          <button
+            ref={toggleRef}
+            type="button"
+            className={styles.menuButton}
+            aria-expanded={open}
+            aria-controls="site-menu"
+            onClick={() => setOpen((value) => !value)}
+          >
+            <span className="sr-only">{open ? 'Close menu' : 'Open menu'}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              {open ? (
+                <path d="M6 6l12 12M18 6L6 18" />
+              ) : (
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              )}
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="site-menu" className={styles.mobileMenu} hidden={!open}>
+        <nav aria-label="Primary, mobile">
+          <ul className={styles.mobileList}>
+            {NAV_LINKS.map((link) => (
+              <li key={link.to}>
+                <NavLink to={link.to} className={styles.mobileLink}>
+                  {link.label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <div className={styles.mobileActions}>
+          <Button to="/login" variant="secondary" block>
+            Sign in
+          </Button>
+          <Button to="/contact" variant="primary" block>
+            Book a demonstration
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+}

@@ -1,0 +1,96 @@
+.list {
+  list-style: none;
+  display: grid;
+  gap: var(--space-lg);
+  counter-reset: stage;
+}
+
+/* Five columns on a desktop, a vertical rail on a phone. */
+@media (min-width: 900px) {
+  .list {
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--space-xl);
+  }
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-md);
+  row-gap: var(--space-xs);
+  align-items: start;
+}
+
+.marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-xxxl);
+  height: var(--space-xxxl);
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--brand-primary);
+  color: var(--brand-primary);
+  background: var(--color-surface);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  z-index: 1;
+}
+
+/* The final stage is the destination; it gets the solid mark. */
+.stage:last-child .marker {
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+}
+
+.label {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  align-self: center;
+  text-wrap: balance;
+}
+
+.note {
+  grid-column: 2;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+/* Connector: vertical between stacked stages... */
+.stage:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: var(--space-lg);
+  top: var(--space-xxxl);
+  bottom: calc(-1 * var(--space-lg));
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--color-border);
+}
+
+/* ...horizontal between columns on a desktop. */
+@media (min-width: 900px) {
+  .stage {
+    grid-template-columns: 1fr;
+    row-gap: var(--space-sm);
+  }
+
+  .label {
+    align-self: start;
+  }
+
+  .note {
+    grid-column: 1;
+  }
+
+  .stage:not(:last-child)::after {
+    left: calc(var(--space-xxxl) + var(--space-sm));
+    right: calc(-1 * var(--space-xl) + var(--space-xs));
+    top: var(--space-lg);
+    bottom: auto;
+    width: auto;
+    height: 2px;
+    transform: translateY(-50%);
+  }
+}

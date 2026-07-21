@@ -1,0 +1,85 @@
+.sites {
+  display: grid;
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
+.cardHeaderPad {
+  padding: var(--space-lg) var(--space-lg) 0;
+}
+
+.cardBodyPad {
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.noBuildings {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+  color: var(--color-text-muted);
+}
+
+.buildingList {
+  list-style: none;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+}
+
+.buildingList li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.buildingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  min-height: var(--min-touch-target);
+  padding: var(--space-sm) var(--space-lg);
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.buildingRow:hover {
+  background: var(--color-surface-alt);
+}
+
+.buildingIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.buildingName {
+  font-weight: 600;
+}
+
+.buildingAddress {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.buildingStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-shrink: 0;
+}
+
+.nextReview {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+@media (max-width: 40rem) {
+  .buildingRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+  }
+
+  .buildingStatus {
+    flex-wrap: wrap;
+  }
+}

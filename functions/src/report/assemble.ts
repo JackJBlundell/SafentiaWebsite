@@ -1,0 +1,693 @@
+// ============================================================================
+// Report data assembly - gather the complete report model from RTDB + Storage
+// (brief 11, stories 1071-1076). The renderer (render.ts) is given a single,
+// fully-resolved model so it does no I/O of its own and stays focused on layout.
+//
+// Defensiveness is a first-class requirement here (brief 18.3): the data this
+// report replaces is inconsistent, and seeded/real records have gaps. Every field
+// access is guarded; a missing optional renders as a clearly-marked placeholder
+// ("Not recorded") rather than crashing the document or printing "undefined".
+// The only HARD precondition is that the assessment itself exists - without it
+// there is nothing to report, so the caller surfaces a not-found error.
+//
+// Images (the building photo, action photos and the flag-location composites)
+// are downloaded from Storage HERE into in-memory buffers so the renderer can
+// embed them synchronously. A failed download degrades to "image unavailable"
+// rather than failing the whole report - one broken object must not block a
+// legally-significant document.
+// ============================================================================
+
+import { db, storage } from '../admin';
+import type { EnvPaths } from '../lib/paths';
+import type { Logger } from '../lib/logging';
+import { SEVERITIES } from '../shared/types';
+import type {
+  Action,
+  Assessment,
+  AssessmentAnswer,
+  Building,
+  Job,
+  Keyed,
+  OrgProfile,
+  QuestionType,
+  ReportStandard,
+  Severity,
+  TemplateCertificate,
+  TemplateSection,
+} from '../shared/types';
+
+// ----------------------------------------------------------------------------
+// The resolved model the renderer consumes. Every field is either a concrete
+// value or has a defined "missing" representation, so the renderer never has to
+// reason about absence.
+// ----------------------------------------------------------------------------
+
+/** An image resolved to bytes for embedding, with its display title. `data` is
+ *  undefined when the object could not be fetched, so the renderer shows a clear
+ *  "image unavailable" note in its place rather than a blank gap. */
+export interface ResolvedImage {
+  title: string;
+  data?: Buffer;
+  /** Retained for diagnostics / the "unavailable" caption; never a raw error. */
+  available: boolean;
+}
+
+/** One question row in a Section 2 subject table. */
+export interface ReportQuestionRow {
+  questionText: string;
+  /** The answer rendered as display text, or a standardised "not answered" /
+   *  "not applicable" string (1073 AC2). */
+  answerText: string;
+  observation?: string;
+  /** Severity letter when the answer is a non-conformity, for styling. */
+  severity?: Severity;
+  /** The template's declared question type, so the renderer can present the
+   *  answer richly (Yes/No emphasis, choices against options, photo strip) and
+   *  fall back to plain text for any unknown/custom type. */
+  questionType?: QuestionType;
+  /** For select / multiselect: the choices the template offered, so the report
+   *  can show the answer in the context of what was available. */
+  options?: string[];
+  /** Optional guidance the template attached to the question (shown muted). */
+  guidance?: string;
+  /** Answer photographs, resolved to embeddable bytes (a failed download is
+   *  dropped, never fatal - brief 18.3). Rendered as a titled strip under the row. */
+  photos?: ResolvedImage[];
+}
+
+/** One template subject as its own table (story 1073). The report renders one of
+ *  these per section the template declares, in the template's authored order. */
+export interface ReportSection {
+  code: string;
+  title: string;
+  rows: ReportQuestionRow[];
+}
+
+/** One action in the Section 3 action plan (stories 1057, 1074). */
+export interface ReportAction {
+  severity: Severity;
+  sectionCode: string;
+  question: string;
+  observation: string;
+  responsible: string;
+  dueBy?: number;
+  lifeProtection: boolean;
+  /** The flag-location composite, embedded at legible size (1057 / 1074 AC2). */
+  flagImage?: ResolvedImage;
+  /** Other titled images attached to the action (1074 AC2). */
+  images: ResolvedImage[];
+}
+
+export interface ReportOverview {
+  address: string;
+  responsiblePerson: string;
+  article53Persons: string[];
+  /** The assessing organisation's contact (from the org profile). */
+  orgContactName: string;
+  orgContactEmail: string;
+  orgContactPhone: string;
+  buildingId: string;
+  assessmentId: string;
+  dateCarriedOut?: number;
+  riskLevel: string;
+  buildingDetailLines: string[];
+  assessmentDetailLines: string[];
+}
+
+/** Sign-off provenance from the workflow record (story 1075). */
+export interface ReportSignOff {
+  conductedBy: string;
+  checkedBy: string;
+  validatedBy: string;
+  releasedOn?: number;
+  reviewByDate?: number;
+}
+
+export interface ReportModel {
+  orgProfile: OrgProfile;
+  /** The industry standard the assessment's template follows (from the pinned
+   *  snapshot), selecting the report profile. Undefined → the generic profile. */
+  standard?: ReportStandard;
+  /** The organisation's PDF certificate for this template, taken from the PINNED
+   *  snapshot so a report always carries the certificate that was attached when
+   *  the assessment ran, not whatever the template holds today. Merged into the
+   *  rendered document as a post-process (see report/certificate.ts), never
+   *  drawn by the renderer. */
+  certificate?: TemplateCertificate;
+  /** Org logo bytes for the document header, if a logo is set and fetchable. */
+  logo?: ResolvedImage;
+  overview: ReportOverview;
+  /** The building photo for the overview, if present. */
+  buildingPhoto?: ResolvedImage;
+  riskDistribution: Building['ragDistribution'];
+  riskOpinion?: string;
+  narrative: {
+    summary?: string;
+    buildingDescription?: string;
+    premisesCovered?: string;
+    incidentHistory?: string;
+    riskOpinion?: string;
+  };
+  sections: ReportSection[];
+  actions: ReportAction[];
+  signOff: ReportSignOff;
+  generatedAt: number;
+}
+
+// ----------------------------------------------------------------------------
+// Small, defensive formatting helpers. Kept here (not in the renderer) so the
+// "what does a missing field look like" decision lives with data assembly.
+// ----------------------------------------------------------------------------
+
+/** Standardised placeholder for an absent value - one phrase everywhere. */
+const NOT_RECORDED = 'Not recorded';
+
+/** Trim a string and return undefined if it is empty, so callers can coalesce. */
+function clean(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/** A string field with the standardised placeholder when missing. */
+function orNotRecorded(value: unknown): string {
+  return clean(value) ?? NOT_RECORDED;
+}
+
+/** The building's responsible party as one display line - the structured
+ *  party's name (with role when recorded), falling back to the older free-text
+ *  string on records that predate the structured field. */
+function responsiblePartyLine(building: Building | undefined): string | undefined {
+  const party = building?.responsibleParty;
+  if (party?.name) {
+    return party.role ? `${party.name} (${party.role})` : party.name;
+  }
+  return building?.responsiblePerson;
+}
+
+/**
+ * Render a typed answer value as human-readable display text. The answer's
+ * `value` is deliberately `unknown` in the contract (callers narrow by question
+ * type); here we narrow by JS shape, which covers every question type's stored
+ * form without needing the template type for each question.
+ */
+function answerToText(answer: AssessmentAnswer | undefined): string {
+  if (!answer) {
+    // Distinct from "not applicable": the assessor did not record an answer.
+    return 'Not answered';
+  }
+  const text = clean(answer.text);
+  if (text) {
+    return text;
+  }
+  const value = answer.value;
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+  if (typeof value === 'string') {
+    return clean(value) ?? 'Not answered';
+  }
+  if (Array.isArray(value)) {
+    const items = value.map((v) => String(v)).filter((s) => s.length > 0);
+    return items.length > 0 ? items.join(', ') : 'Not answered';
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return 'Not answered';
+}
+
+// ----------------------------------------------------------------------------
+// Storage download. The admin Storage SDK reads any object regardless of rules
+// (it is the trusted server), so the report can embed tenant images the client
+// could not list. A failure is caught and degraded, never rethrown.
+// ----------------------------------------------------------------------------
+
+/**
+ * Download one Storage object to a buffer for embedding. Returns a ResolvedImage
+ * whose `data` is set on success and absent on any failure (missing object,
+ * permissions, transient error), so one broken image never fails the report
+ * (brief 18.3). The path comes from the data model, which itself came from the
+ * tenant-scoped path builders, so we never address outside the tenant.
+ */
+async function resolveImage(
+  storagePath: string | undefined,
+  title: string,
+  logger: Logger,
+): Promise<ResolvedImage | undefined> {
+  const path = clean(storagePath);
+  if (!path) {
+    return undefined;
+  }
+  try {
+    const [data] = await storage.bucket().file(path).download();
+    return { title, data, available: true };
+  } catch (caught) {
+    // Degrade, do not fail. The renderer prints "image unavailable" in its place.
+    logger.warn('Report image could not be downloaded; degrading gracefully', {
+      reason: caught instanceof Error ? caught.message : String(caught),
+    });
+    return { title, available: false };
+  }
+}
+
+/**
+ * A flag composite is stored against an answer/action as a download URL or a
+ * Storage path. The action contract carries `locationFlagUrl`; we accept either
+ * a gs:// path, an https download URL, or a bare object path and reduce it to the
+ * object path the admin SDK downloads. Anything we cannot parse degrades to "no
+ * image", consistent with the rest of assembly.
+ */
+function toObjectPath(urlOrPath: string | undefined): string | undefined {
+  const value = clean(urlOrPath);
+  if (!value) {
+    return undefined;
+  }
+  // gs://bucket/object/path -> object/path
+  if (value.startsWith('gs://')) {
+    const withoutScheme = value.slice('gs://'.length);
+    const slash = withoutScheme.indexOf('/');
+    return slash >= 0 ? withoutScheme.slice(slash + 1) : undefined;
+  }
+  // Firebase download URL: .../o/<url-encoded-path>?... -> decoded path
+  const oMarker = '/o/';
+  const oIndex = value.indexOf(oMarker);
+  if (oIndex >= 0) {
+    const after = value.slice(oIndex + oMarker.length);
+    const queryIndex = after.indexOf('?');
+    const encoded = queryIndex >= 0 ? after.slice(0, queryIndex) : after;
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return undefined;
+    }
+  }
+  // Otherwise treat it as a bare object path already.
+  return value;
+}
+
+// ----------------------------------------------------------------------------
+// Section 2 assembly: the template's OWN subjects, in authored order, each a
+// table of its questions.
+// ----------------------------------------------------------------------------
+
+/**
+ * Build the ordered subject tables from the assessment's pinned template snapshot
+ * and the captured answers. Templates are fully customisable (PAS 79 = 12 subjects
+ * '01'..'12'; BS 9792 Housing = ~30; custom = any codes, any count), so we iterate
+ * the template's OWN sections in their AUTHORED order and render exactly those -
+ * never a fixed global 01..12 set. Authored order is the source of truth (the base
+ * templates already declare their sections in report order); we do not reorder or
+ * synthesize "not included" subjects. For PAS 79, whose snapshot lists all 12
+ * sections in order '01'..'12' with titles, this produces output identical to the
+ * previous SECTION_CODES-driven pass. Within a section we render the template's
+ * questions in their authored order, pairing each with its answer (or the standard
+ * "not answered" placeholder).
+ */
+async function buildSections(
+  templateSections: TemplateSection[] | undefined,
+  answers: Keyed<AssessmentAnswer>,
+  logger: Logger,
+): Promise<ReportSection[]> {
+  const sections = Array.isArray(templateSections) ? templateSections : [];
+
+  const result: ReportSection[] = [];
+  for (const section of sections) {
+    if (!section || typeof section.code !== 'string') {
+      // Skip a malformed section entry rather than crash the document (18.3).
+      continue;
+    }
+
+    const questions = Array.isArray(section.questions) ? section.questions : [];
+    const rows: ReportQuestionRow[] = await Promise.all(
+      questions.map(async (question) => {
+        const answer = question?.id ? answers[question.id] : undefined;
+        const row: ReportQuestionRow = {
+          questionText: orNotRecorded(question?.text),
+          answerText: answerToText(answer),
+        };
+        // Carry the template's declared type + options so the renderer can present
+        // the answer richly; unknown/absent types fall back to the plain text above.
+        if (question?.type) {
+          row.questionType = question.type;
+        }
+        if (Array.isArray(question?.options) && question.options.length > 0) {
+          row.options = question.options.filter(
+            (o): o is string => typeof o === 'string',
+          );
+        }
+        const guidance = clean(question?.guidance);
+        if (guidance) {
+          row.guidance = guidance;
+        }
+        const observation = clean(answer?.observation);
+        if (observation) {
+          row.observation = observation;
+        }
+        if (answer?.severity && SEVERITIES.includes(answer.severity)) {
+          row.severity = answer.severity;
+        }
+        // Resolve any answer photographs to embeddable bytes. Each download
+        // degrades independently; an unavailable photo is simply dropped here so
+        // the row still renders (brief 18.3).
+        const rawPhotos = Array.isArray(answer?.photos) ? answer.photos : [];
+        if (rawPhotos.length > 0) {
+          const resolved = await Promise.all(
+            // Reduce to an object path first: like action images, a stored photo
+            // may be a gs:// path, an https download URL, or a bare object path.
+            rawPhotos.map((p) =>
+              resolveImage(toObjectPath(p?.path), orNotRecorded(p?.title), logger),
+            ),
+          );
+          const usable = resolved.filter(
+            (r): r is ResolvedImage => Boolean(r) && r!.available,
+          );
+          if (usable.length > 0) {
+            row.photos = usable;
+          }
+        }
+        return row;
+      }),
+    );
+
+    result.push({
+      code: section.code,
+      title: orNotRecorded(section.title) === NOT_RECORDED
+        ? subjectTitleFallback(section.code)
+        : section.title,
+      rows:
+        rows.length > 0
+          ? rows
+          : [
+              {
+                questionText: 'No questions were recorded for this subject.',
+                answerText: 'Not applicable',
+              },
+            ],
+    });
+  }
+  return result;
+}
+
+/** Canonical PAS 79 subject titles, used when a template omits a section title so
+ *  the report still reads to industry standard (brief 10.1). */
+function subjectTitleFallback(code: string): string {
+  const titles: Record<string, string> = {
+    '01': 'Persons at Risk',
+    '02': 'Sources of Ignition',
+    '03': 'Sources of Fuel',
+    '04': 'Construction',
+    '05': 'Means of Escape',
+    '06': 'Fire-fighting Equipment',
+    '07': 'Fire Detection and Warning',
+    '08': 'Emergency Lighting',
+    '09': "Firefighters' Provisions",
+    '10': 'Management',
+    '11': 'Signs and Signals',
+    '12': 'Effects on the Environment',
+  };
+  return titles[code] ?? `Subject ${code}`;
+}
+
+// ----------------------------------------------------------------------------
+// Section 3 assembly: actions ordered high -> low severity, with images resolved.
+// ----------------------------------------------------------------------------
+
+/** Sort weight so High sorts before Medium before Low (story 1074 AC1). */
+const SEVERITY_RANK: Record<Severity, number> = { H: 0, M: 1, L: 2 };
+
+async function buildActions(
+  actionsMap: Keyed<Action>,
+  logger: Logger,
+): Promise<ReportAction[]> {
+  const entries = Object.values(actionsMap).filter(
+    // An archived action is no longer part of the live remedial plan; open and
+    // signed-off both belong in the report (signed-off shows progress).
+    (action): action is Action => Boolean(action) && action.status !== 'archived',
+  );
+
+  // Order high -> low. Within equal severity, keep a stable, deterministic order
+  // by section code so the same data always renders identically (brief 18.2).
+  // Defensive ranks: an action whose severity is not L/M/H (custom/drifted data,
+  // brief 18.3) still sorts deterministically (after the known severities) rather
+  // than producing a NaN comparison.
+  const rankOf = (s: Severity): number => SEVERITY_RANK[s] ?? 3;
+  entries.sort((a, b) => {
+    const bySeverity = rankOf(a.severity) - rankOf(b.severity);
+    if (bySeverity !== 0) {
+      return bySeverity;
+    }
+    return String(a.sectionCode).localeCompare(String(b.sectionCode));
+  });
+
+  // Resolve every action's images. We do this concurrently per action but await
+  // the lot, so the renderer receives fully-resolved buffers and stays sync.
+  return Promise.all(
+    entries.map(async (action) => {
+      const flagPath = toObjectPath(action.locationFlagUrl);
+      const flagImage = await resolveImage(flagPath, 'Location of finding', logger);
+
+      const images: ResolvedImage[] = [];
+      const rawImages = Array.isArray(action.images) ? action.images : [];
+      for (const image of rawImages) {
+        const resolved = await resolveImage(
+          image?.path,
+          orNotRecorded(image?.title),
+          logger,
+        );
+        if (resolved) {
+          images.push(resolved);
+        }
+      }
+
+      const reportAction: ReportAction = {
+        severity: action.severity,
+        sectionCode: orNotRecorded(action.sectionCode),
+        question: orNotRecorded(action.question),
+        observation: orNotRecorded(action.observation),
+        responsible: orNotRecorded(action.responsible),
+        lifeProtection: action.lifeProtection === true,
+        images,
+      };
+      if (typeof action.dueBy === 'number' && Number.isFinite(action.dueBy)) {
+        reportAction.dueBy = action.dueBy;
+      }
+      if (flagImage) {
+        reportAction.flagImage = flagImage;
+      }
+      return reportAction;
+    }),
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Top-level assembly.
+// ----------------------------------------------------------------------------
+
+/** Read a node and return its typed value or null - one guarded read everywhere. */
+async function readValue<T>(path: string): Promise<T | null> {
+  const snap = await db.ref(path).get();
+  return snap.exists() ? (snap.val() as T) : null;
+}
+
+/**
+ * Assemble the full report model for an assessment. Throws only when the
+ * assessment is missing (the single hard precondition); every other gap is
+ * tolerated and rendered as a marked placeholder.
+ */
+export async function assembleReport(
+  paths: EnvPaths,
+  orgId: string,
+  assessmentId: string,
+  logger: Logger,
+): Promise<ReportModel> {
+  // 1. The assessment is mandatory.
+  const assessment = await readValue<Assessment>(
+    paths.db.assessment(orgId, assessmentId),
+  );
+  if (!assessment) {
+    // Caller maps this to a structured not-found; assembly does not import errors
+    // so it stays a pure-ish data module. A plain Error is enough as a signal.
+    throw new Error(`Assessment not found: ${assessmentId}`);
+  }
+
+  // 2. The job carries the building's siteId (buildings are keyed by site), so we
+  // need it to address the building. Tolerate its absence.
+  const job = assessment.jobId
+    ? await readValue<Job>(paths.db.job(orgId, assessment.jobId))
+    : null;
+
+  // 3. Building (under its site). Without the job's siteId we cannot address it,
+  // so we degrade the building-derived fields to placeholders.
+  const building =
+    job?.siteId && assessment.buildingId
+      ? await readValue<Building>(
+          paths.db.building(orgId, job.siteId, assessment.buildingId),
+        )
+      : null;
+
+  // 4. Answers, actions, org profile - each read defensively, defaulting to empty.
+  const [answers, actionsMap, orgProfile] = await Promise.all([
+    readValue<Keyed<AssessmentAnswer>>(
+      paths.db.assessmentAnswers(orgId, assessmentId),
+    ),
+    assessment.buildingId
+      ? readValue<Keyed<Action>>(paths.db.actions(orgId, assessment.buildingId))
+      : Promise.resolve(null),
+    readValue<OrgProfile>(paths.db.orgProfile(orgId)),
+  ]);
+
+  // The org profile drives branding; if it is somehow missing we still produce a
+  // report under a neutral default rather than failing (brief 18.3).
+  const profile: OrgProfile = orgProfile ?? {
+    name: 'Fire Risk Assessment',
+    brand: { primary: '#1F2937', secondary: '#6B7280' },
+  };
+
+  // 5. Resolve embedded images (logo, building photo) concurrently.
+  const [logo, buildingPhoto] = await Promise.all([
+    resolveImage(toObjectPath(profile.logoUrl), profile.name, logger),
+    resolveImage(toObjectPath(building?.photoUrl), 'Building', logger),
+  ]);
+
+  // 6. Build the overview from the schema only - nothing hand-entered at render
+  // time (1071 AC1).
+  const overview = buildOverview(assessment, building, profile, assessmentId);
+
+  // 7. Sections + actions.
+  const sections = await buildSections(
+    assessment.templateSnapshot?.sections,
+    answers ?? {},
+    logger,
+  );
+  const actions = await buildActions(actionsMap ?? {}, logger);
+
+  // 8. Sign-off provenance from the workflow record (story 1075).
+  const signOff = buildSignOff(assessment, building);
+
+  return {
+    orgProfile: profile,
+    ...(assessment.templateSnapshot?.standard
+      ? { standard: assessment.templateSnapshot.standard }
+      : {}),
+    ...(assessment.templateSnapshot?.certificate
+      ? { certificate: assessment.templateSnapshot.certificate }
+      : {}),
+    ...(logo ? { logo } : {}),
+    overview,
+    ...(buildingPhoto ? { buildingPhoto } : {}),
+    riskDistribution: building?.ragDistribution,
+    ...(clean(assessment.narrative?.riskOpinion)
+      ? { riskOpinion: clean(assessment.narrative?.riskOpinion) }
+      : {}),
+    narrative: {
+      summary: clean(assessment.narrative?.summary),
+      buildingDescription: clean(assessment.narrative?.buildingDescription),
+      premisesCovered: clean(assessment.narrative?.premisesCovered),
+      incidentHistory: clean(assessment.narrative?.incidentHistory),
+      riskOpinion: clean(assessment.narrative?.riskOpinion),
+    },
+    sections,
+    actions,
+    signOff,
+    generatedAt: Date.now(),
+  };
+}
+
+/** Build the overview block from schema fields, with placeholders for gaps. */
+function buildOverview(
+  assessment: Assessment,
+  building: Building | null,
+  profile: OrgProfile,
+  assessmentId: string,
+): ReportOverview {
+  const article53 = Array.isArray(building?.article53Persons)
+    ? building!.article53Persons.map((p) => clean(p)).filter((p): p is string => Boolean(p))
+    : [];
+
+  // Building detail lines, each omitted when its source field is absent so the
+  // overview never prints "Floors: Not recorded" noise for fields the org leaves
+  // blank; only present facts are listed.
+  const detailLines: string[] = [];
+  const details = building?.details;
+  if (details) {
+    if (typeof details.area === 'number') {
+      detailLines.push(`Approximate floor area: ${details.area} m2`);
+    }
+    if (typeof details.floors === 'number') {
+      detailLines.push(`Number of floors: ${details.floors}`);
+    }
+    if (typeof details.occupiedFloors === 'number') {
+      detailLines.push(`Occupied floors: ${details.occupiedFloors}`);
+    }
+    if (typeof details.occupants === 'number') {
+      detailLines.push(`Typical number of occupants: ${details.occupants}`);
+    }
+    if (typeof details.isLandlord === 'boolean') {
+      detailLines.push(
+        `Landlord responsibility: ${details.isLandlord ? 'Yes' : 'No'}`,
+      );
+    }
+    if (clean(details.alarmType)) {
+      detailLines.push(`Fire alarm type: ${clean(details.alarmType)}`);
+    }
+    if (clean(details.alarmCategory)) {
+      detailLines.push(`Fire alarm category: ${clean(details.alarmCategory)}`);
+    }
+  }
+
+  // Assessment detail lines.
+  const assessmentLines: string[] = [];
+  assessmentLines.push(`Assessment status: ${orNotRecorded(assessment.status)}`);
+  if (assessment.templateSnapshot?.name) {
+    assessmentLines.push(
+      `Methodology: ${orNotRecorded(assessment.templateSnapshot.name)} (version ${
+        assessment.templateSnapshot.version ?? 'unknown'
+      })`,
+    );
+  }
+
+  return {
+    address: orNotRecorded(building?.address),
+    // A missing building degrades to "not recorded"; null (RTDB absent) and
+    // undefined mean the same thing to the line builder.
+    responsiblePerson: orNotRecorded(responsiblePartyLine(building ?? undefined)),
+    article53Persons: article53,
+    orgContactName: orNotRecorded(profile.contact?.name),
+    orgContactEmail: orNotRecorded(profile.contact?.email),
+    orgContactPhone: orNotRecorded(profile.contact?.phone),
+    buildingId: orNotRecorded(assessment.buildingId),
+    assessmentId,
+    ...(typeof assessment.conductedAt === 'number'
+      ? { dateCarriedOut: assessment.conductedAt }
+      : {}),
+    riskLevel: orNotRecorded(building?.riskLevel),
+    buildingDetailLines: detailLines,
+    assessmentDetailLines: assessmentLines,
+  };
+}
+
+/**
+ * Build the sign-off block. The review-by date is the building's statutory FRA
+ * review next-due where recorded (the industry-standard "review by" date); we
+ * read it from the service schedule rather than inventing a window, so the date
+ * is sourced from the schema (story 1075 AC2).
+ */
+function buildSignOff(
+  assessment: Assessment,
+  building: Building | null,
+): ReportSignOff {
+  const workflow = assessment.workflow;
+  const reviewBy = building?.serviceSchedule?.fraReview?.nextDue;
+  return {
+    conductedBy: orNotRecorded(assessment.conductedBy),
+    checkedBy: orNotRecorded(workflow?.checkedBy),
+    validatedBy: orNotRecorded(workflow?.validatedBy),
+    ...(typeof workflow?.releasedAt === 'number'
+      ? { releasedOn: workflow.releasedAt }
+      : {}),
+    ...(typeof reviewBy === 'number' ? { reviewByDate: reviewBy } : {}),
+  };
+}

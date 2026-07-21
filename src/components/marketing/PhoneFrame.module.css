@@ -1,0 +1,44 @@
+.phone {
+  width: min(320px, 100%);
+  margin-inline: auto;
+  padding: var(--space-md);
+  padding-top: var(--space-xl);
+  border-radius: calc(var(--radius-xl) + var(--space-md));
+  background: var(--color-text);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--shadow-color) 20%, transparent),
+    0 32px 64px -32px color-mix(in srgb, var(--shadow-color) 45%, transparent);
+  position: relative;
+}
+
+.speaker {
+  position: absolute;
+  top: var(--space-sm);
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--space-huge);
+  height: var(--space-xs);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-text-inverse) 30%, transparent);
+}
+
+.screen {
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+/* In dark mode the bezel and the page background converge; a subtle edge keeps
+ * the device legible without inventing a new colour. */
+:global(:root[data-theme='dark']) .phone {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme='light'])) .phone {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-sunken);
+  }
+}

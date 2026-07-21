@@ -1,0 +1,76 @@
+/* Lightbox - full-size image overlay over the dimmed page (the house dialog
+   shell, as ImageCropDialog): a title bar with Download and Close, and the
+   image scaled to fit the viewport beneath it. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background: var(--color-overlay, rgb(0 0 0 / 0.45));
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-width: min(64rem, 100%);
+  max-height: 100%;
+  padding: var(--space-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.barActions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-shrink: 0;
+}
+
+.downloadLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--brand-primary);
+  font-size: 0.875rem;
+  text-decoration: underline;
+}
+
+.downloadLink:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: auto;
+}
+
+.image {
+  max-width: 100%;
+  max-height: calc(100vh - 10rem);
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}

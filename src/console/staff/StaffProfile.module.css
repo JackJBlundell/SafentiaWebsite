@@ -1,0 +1,143 @@
+/* StaffProfile - the member header meta, the three history-card cell styles,
+   and the admin member editor (moved from the directory). Chips and status
+   pills come from shared.module.css. Everything clears the 44px target. */
+
+/* --- History card cells ------------------------------------------------------ */
+
+.identity {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.strong {
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.time {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stage {
+  color: var(--color-text-secondary);
+}
+
+.target {
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.targetLink {
+  color: var(--brand-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+
+.targetLink:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Empty/error copy inside a flush Card, aligned with the card header's inset. */
+.cardMessage {
+  padding: 0 var(--space-xxl) var(--space-xxl);
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+/* Skeleton region padding inside a flush Card. */
+.cardPad {
+  padding: 0 var(--space-xxl) var(--space-xxl);
+}
+
+/* --- The member editor panel (admin only) ------------------------------------ */
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.roleFieldset {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.panelLegend {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-block-end: var(--space-sm);
+}
+
+.roleGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-lg);
+}
+
+.roleOption {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.hint {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.statusActions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.confirmBox {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  text-align: start;
+  min-inline-size: min(20rem, 100%);
+}
+
+.confirmCopy {
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  max-width: 60ch;
+}
+
+.confirmButtons {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}

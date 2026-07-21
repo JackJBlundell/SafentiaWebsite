@@ -1,0 +1,200 @@
+/* ==========================================================================
+ * tokens.css - the design tokens as CSS custom properties.
+ *
+ * Why these values are written here as well as in tokens/palette.ts: the public
+ * marketing pages are PRE-RENDERED (story 2075), so they paint before any React
+ * code runs. If the theme only existed in JavaScript, every crawler and every
+ * first paint would see unstyled HTML. So the stylesheet carries the defaults and
+ * the ThemeProvider overrides only what it must (the per-organisation brand
+ * accent, which cannot be known at build time).
+ *
+ * That duplication is a drift risk, so it is PINNED: tokens.test.ts parses this
+ * file and asserts every value matches tokens/palette.ts exactly. Change a colour
+ * in one place and the test fails until you change it in the other.
+ *
+ * Colour discipline (brief 9.1 / 18.5):
+ *   - RAG and status colours are a FIXED safety language. They never change with
+ *     brand, and they are never used decoratively. On this site they appear only
+ *     inside product visuals, where red genuinely means high risk.
+ *   - The brand accent is the only colour that varies per organisation.
+ * ========================================================================== */
+
+:root {
+  /* --- Neutrals: light (NEUTRALS.light) ---------------------------------- */
+  --color-background: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f0f2f5;
+  --color-surface-sunken: #eceef2;
+  --color-border: #d8dce3;
+  --color-border-strong: #b9c0cb;
+  --color-text: #10141a;
+  --color-text-secondary: #4a525e;
+  --color-text-muted: #737c89;
+  --color-text-inverse: #ffffff;
+  --color-overlay: rgba(16, 20, 26, 0.45);
+  --color-skeleton: #e4e7ec;
+  --color-skeleton-highlight: #f2f4f7;
+
+  /* --- RAG: light (RAG.light). Fixed safety language, never branded. ------ */
+  --rag-red: #c0271f;
+  --rag-amber: #8a5a00;
+  --rag-green: #1f7a3d;
+  --rag-red-surface: #fce9e8;
+  --rag-amber-surface: #fbf1dd;
+  --rag-green-surface: #e6f4ec;
+
+  /* --- Status: light (STATUS.light) --------------------------------------- */
+  --status-error: #c0271f;
+  --status-on-error: #ffffff;
+  --status-error-surface: #fce9e8;
+  --status-success: #1f7a3d;
+  --status-on-success: #ffffff;
+  --status-success-surface: #e6f4ec;
+  --status-warning: #8a5a00;
+  --status-on-warning: #ffffff;
+  --status-warning-surface: #fbf1dd;
+  --status-info: #1a5fb4;
+  --status-on-info: #ffffff;
+  --status-info-surface: #e7f0fb;
+
+  /* --- Brand (DEFAULT_BRAND). Overridden per-org by the ThemeProvider. ----- */
+  --brand-primary: #2563eb;
+  --brand-on-primary: #ffffff;
+  --brand-secondary: #1e3a8a;
+  --brand-on-secondary: #ffffff;
+
+  /* --- Shadow tint, fed to elevation() ------------------------------------ */
+  --shadow-color: #0b1220;
+
+  /* --- Spacing (spacing) --------------------------------- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-xxl: 24px;
+  --space-xxxl: 32px;
+  --space-huge: 48px;
+
+  /* --- Section rhythm (sectionSpacing) -------------------- */
+  --section-tight: 64px;
+  --section-base: 96px;
+  --section-loose: 128px;
+
+  /* --- Radii (radii) ------------------------------------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* --- Layout ------------------------------------------------------------- */
+  --container-max: 1200px;
+  --container-gutter: 24px;
+  --header-height: 64px;
+  --reading-measure: 68ch;
+  --min-touch-target: 44px;
+
+  /* --- Motion (motion + EASING) -------------------------- */
+  --motion-fast: 140ms;
+  --motion-base: 220ms;
+  --motion-slow: 320ms;
+  --easing: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* --- Typography (tokens/typography.ts) ---------------------------------- */
+  --font-family: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI',
+    Roboto, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'Liberation Mono', monospace;
+
+  color-scheme: light;
+}
+
+/* --- Neutrals, RAG and status: dark ---------------------------------------
+ * The dark values are NOT a filter over the light ones. Each shade was chosen so
+ * it clears WCAG AA against that mode's surfaces while still reading
+ * unmistakably as red, amber or green (verified by contrast.test.ts).
+ * -------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-background: #0e1217;
+    --color-surface: #171c23;
+    --color-surface-alt: #1f2630;
+    --color-surface-sunken: #0a0e12;
+    --color-border: #2c333d;
+    --color-border-strong: #3c444f;
+    --color-text: #f2f4f7;
+    --color-text-secondary: #b6bec9;
+    --color-text-muted: #7e8794;
+    --color-text-inverse: #10141a;
+    --color-overlay: rgba(0, 0, 0, 0.6);
+    --color-skeleton: #222a33;
+    --color-skeleton-highlight: #2c353f;
+
+    --rag-red: #ff6b61;
+    --rag-amber: #ffc24b;
+    --rag-green: #56d98a;
+    --rag-red-surface: #3a1a18;
+    --rag-amber-surface: #3a2e12;
+    --rag-green-surface: #12321f;
+
+    --status-error: #ff6b61;
+    --status-on-error: #2a0f0d;
+    --status-error-surface: #3a1a18;
+    --status-success: #56d98a;
+    --status-on-success: #062012;
+    --status-success-surface: #12321f;
+    --status-warning: #ffc24b;
+    --status-on-warning: #2a1f06;
+    --status-warning-surface: #3a2e12;
+    --status-info: #74a8e8;
+    --status-on-info: #0a1a2e;
+    --status-info-surface: #13243a;
+
+    --shadow-color: #000000;
+
+    color-scheme: dark;
+  }
+}
+
+/* The explicit toggle wins over the OS preference, in both directions. Declared
+ * after the media query so `[data-theme='dark']` beats a light OS setting. */
+:root[data-theme='dark'] {
+  --color-background: #0e1217;
+  --color-surface: #171c23;
+  --color-surface-alt: #1f2630;
+  --color-surface-sunken: #0a0e12;
+  --color-border: #2c333d;
+  --color-border-strong: #3c444f;
+  --color-text: #f2f4f7;
+  --color-text-secondary: #b6bec9;
+  --color-text-muted: #7e8794;
+  --color-text-inverse: #10141a;
+  --color-overlay: rgba(0, 0, 0, 0.6);
+  --color-skeleton: #222a33;
+  --color-skeleton-highlight: #2c353f;
+
+  --rag-red: #ff6b61;
+  --rag-amber: #ffc24b;
+  --rag-green: #56d98a;
+  --rag-red-surface: #3a1a18;
+  --rag-amber-surface: #3a2e12;
+  --rag-green-surface: #12321f;
+
+  --status-error: #ff6b61;
+  --status-on-error: #2a0f0d;
+  --status-error-surface: #3a1a18;
+  --status-success: #56d98a;
+  --status-on-success: #062012;
+  --status-success-surface: #12321f;
+  --status-warning: #ffc24b;
+  --status-on-warning: #2a1f06;
+  --status-warning-surface: #3a2e12;
+  --status-info: #74a8e8;
+  --status-on-info: #0a1a2e;
+  --status-info-surface: #13243a;
+
+  --shadow-color: #000000;
+
+  color-scheme: dark;
+}

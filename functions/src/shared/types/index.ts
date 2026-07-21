@@ -1,0 +1,1438 @@
+// ============================================================================
+// Safentia domain types - the single schema contract.
+//
+// This mirrors section 6 of Safentia_Phase1_Project_Brief.md (the canonical
+// Realtime Database schema) plus the Cloud Function call contracts (section 4.5).
+//
+// ARCHITECTURE NOTE (read before editing):
+//   By project-lead decision there is NO shared npm package. This file is the
+//   canonical contract and is MIRRORED, identically, into two places:
+//     - Safentia/src/types/index.ts                         (mobile app)
+//     - fireritesite/functions/src/shared/types/index.ts    (Cloud Functions)
+//   When you change one, change the other in the SAME change set. The drift this
+//   risks is documented, with the sync rule, in SCHEMA_CHANGES.md. Treat the two
+//   files as one contract that happens to live in two repos.
+//
+// Why string-literal unions plus `const` arrays: the unions give us compile-time
+// safety; the arrays give us a runtime allow-list the seed, the Functions input
+// validation and the security-rules tests can all share, so "what values are
+// legal" is stated exactly once.
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// Environment (test mode isolation - section 4.8)
+// ----------------------------------------------------------------------------
+
+/**
+ * The data root a signed-in user is bound to. Resolved ONCE from the user's
+ * custom claim (`testMode`) at sign-in and carried transparently by the path
+ * builders thereafter - never branched on per screen. `test` users can only ever
+ * touch `/test`, `live` users only `/live`; the boundary is enforced by security
+ * rules, not by client code (see brief 4.8).
+ */
+export type Environment = 'live' | 'test';
+export const ENVIRONMENTS = ['live', 'test'] as const;
+
+// ----------------------------------------------------------------------------
+// Roles and permissions (section 5)
+// ----------------------------------------------------------------------------
+
+/** Organisation-level roles. A user holds a SET; permission is their union. */
+export type OrgRole = 'admin' | 'assessor' | 'auditor' | 'finance' | 'viewer';
+export const ORG_ROLES = ['admin', 'assessor', 'auditor', 'finance', 'viewer'] as const;
+
+/** Customer-portal roles (Phase 2 surfaces; data paths built now). */
+export type CustomerRole = 'admin' | 'finance' | 'viewer';
+export const CUSTOMER_ROLES = ['admin', 'finance', 'viewer'] as const;
+
+/** A role set is an object of optional `true` flags - never a list, so rules and
+ *  clients can test a single role with one key lookup. */
+export type OrgRoleSet = { [R in OrgRole]?: true };
+export type CustomerRoleSet = { [R in CustomerRole]?: true };
+
+/** Lifecycle of a person's membership (section 4.1 account states). */
+export type MemberStatus = 'active' | 'locked' | 'archived';
+export const MEMBER_STATUSES = ['active', 'locked', 'archived'] as const;
+
+// ----------------------------------------------------------------------------
+// Custom claims carried on the Firebase ID token (section 4.1)
+// ----------------------------------------------------------------------------
+
+/**
+ * The shape `onMembershipChange` writes onto a user's ID token. The client reads
+ * this to resolve org, permissions and environment. `customerId` and `testMode`
+ * are optional: a normal Phase 1 org member has neither set.
+ */
+export interface SafentiaClaims {
+  orgId: string;
+  roles: OrgRoleSet;
+  customerId?: string;
+  /** true routes the user to `/test`; absent/false routes to `/live`. Set
+   *  server-side from the member record only - never trusted from the client. */
+  testMode?: boolean;
+}
+
+// ----------------------------------------------------------------------------
+// Risk / RAG (Red-Amber-Green) - a SAFETY semantic, never overridden by brand
+// ----------------------------------------------------------------------------
+
+export type RiskLevel = 'low' | 'medium' | 'high' | 'pending';
+export const RISK_LEVELS = ['low', 'medium', 'high', 'pending'] as const;
+
+/**
+ * TRUE counts of findings by severity. The report's risk meter must render
+ * PROPORTIONALLY to these (brief 6 + story 1072): the legacy system's failing was
+ * skewing the whole building red for one red item; we must not repeat it.
+ */
+export interface RagDistribution {
+  low: number;
+  medium: number;
+  high: number;
+}
+
+/** Non-conformity severity. Single letters match the schema and the report. */
+export type Severity = 'L' | 'M' | 'H';
+export const SEVERITIES = ['L', 'M', 'H'] as const;
+
+// ----------------------------------------------------------------------------
+// Platform (global, NOT under an environment root - section 6)
+// ----------------------------------------------------------------------------
+
+export interface PlanLimits {
+  orgStaff: number;
+  customers: number;
+  notificationsPerMonth: number;
+}
+
+/** Phase 3 fills the values; the shape is fixed now so the invite-limit hook
+ *  (story 1023) and Phase 3 entitlements slot in without reshaping. */
+export interface Plan {
+  name: string;
+  stripePriceId: string;
+  limits: PlanLimits;
+}
+
+/**
+ * Publicly-readable client configuration (story 1080). Lives at
+ * `/platform/clientConfig` (global, NOT environment-scoped) and is readable by
+ * any client, signed in or not, so the force-update gate can evaluate before
+ * sign-in. Written only by trusted/admin tooling, never the client.
+ *
+ * The minimum-supported-version gate compares the running app's version against
+ * `minimumSupportedVersion`: a build below it is blocked with a link to the
+ * store, so a defective build of a safety-critical product can be retired from
+ * the field without a release. All fields are optional and the gate FAILS OPEN
+ * (never blocks) when the value is absent or unreadable, so a missing config can
+ * never brick the fleet.
+ */
+export interface ClientConfig {
+  /** Lowest app version allowed to run, as a semver string e.g. "1.2.0". */
+  minimumSupportedVersion?: string;
+  /** Store links shown on the blocking upgrade screen. */
+  iosStoreUrl?: string;
+  androidStoreUrl?: string;
+  /** Optional override message for the upgrade screen. */
+  message?: string;
+}
+
+/**
+ * Admin-editable AI context for the assessment summary writer, stored globally at
+ * `/platform/aiContext`. This is the regulatory SOURCE OF TRUTH the AI is grounded
+ * in: when the law or a standard changes, an admin pastes the updated text into
+ * `regulatoryContext` - no code change or redeploy. Read server-side only (the
+ * generateAssessmentDraft Function); the app never reads it. All fields optional
+ * and the Function FALLS BACK to its built-in framework when this is absent, so a
+ * missing or empty context can never break drafting.
+ */
+export interface AiContext {
+  /** The regulatory framework the AI treats as source of truth (real UK
+   *  instruments and standards). Replaces the built-in framework when present. */
+  regulatoryContext?: string;
+  /** Optional extra house guidance appended to the summary instructions. */
+  additionalGuidance?: string;
+  updatedAt?: number;
+  updatedBy?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Organisation (section 6)
+// ----------------------------------------------------------------------------
+
+/** Per-org brand tokens that drive whitelabel theming (brief 9.1). These layer
+ *  on top of the design system's accent/header; they NEVER override RAG. */
+export interface OrgBrand {
+  primary: string;
+  secondary: string;
+}
+
+export interface OrgContact {
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface OrgProfile {
+  name: string;
+  logoUrl?: string;
+  brand: OrgBrand;
+  contact?: OrgContact;
+  /** Optional font family the org wants applied (whitelabel typography). Falls
+   *  back to the design-system default when absent. */
+  fontFamily?: string;
+}
+
+/** Phase 3 billing block; present in the schema now, populated later. */
+export interface OrgSubscription {
+  stripeCustomerId?: string;
+  planId?: string;
+  status?: string;
+  currentPeriodEnd?: number;
+}
+
+export interface OrgUsage {
+  staffCount: number;
+  customerCount: number;
+  notificationsThisMonth: number;
+}
+
+/**
+ * Configurable RAG derivation (Phase 2, story 2012; Schedule 1 group 5
+ * "configurable RAG thresholds and roll-up calculation, agreed during
+ * Discovery"). The building's risk level derives from its latest released
+ * assessment's finding distribution and the state of its action plan; these
+ * values tune that derivation per organisation.
+ *
+ * The DEFAULTS (RAG_CONFIG_DEFAULTS in the derivation module) are the
+ * developer's proposed model and are explicitly subject to client agreement at
+ * the Phase 2 review - which is exactly why this is data, not code.
+ */
+export interface RagConfig {
+  /** Share of red findings (0..1) at or above which the building is high risk. */
+  redShareForHigh: number;
+  /** Combined share of amber and red findings (0..1) at or above which the
+   *  building is at least medium risk. */
+  amberRedShareForMedium: number;
+  /** An open High-severity (or Life Protection) action holds the building at
+   *  high risk regardless of shares. */
+  openHighActionForcesHigh: boolean;
+  /** An overdue action raises the derived level by one band. */
+  overdueActionEscalates: boolean;
+}
+
+/** Organisation-level configuration, distinct from the public profile. */
+export interface OrgSettings {
+  ragConfig?: RagConfig;
+}
+
+export interface Organisation {
+  profile: OrgProfile;
+  settings?: OrgSettings;
+  subscription?: OrgSubscription;
+  usage?: OrgUsage;
+}
+
+// ----------------------------------------------------------------------------
+// Membership (section 6)
+// ----------------------------------------------------------------------------
+
+/** Non-transactional email categories a member may quieten. Absent = all on.
+ *  Security and account email (invitations, password reset) is never optional. */
+export interface EmailPreferences {
+  reviewDue?: boolean;
+  actionAssigned?: boolean;
+  awaitingValidation?: boolean;
+  released?: boolean;
+  /** An auditor has asked this assessor for more information. */
+  infoRequested?: boolean;
+  /** A deadline the recipient owns is approaching or has passed. */
+  deadlineReminder?: boolean;
+}
+
+export interface OrgMember {
+  roles: OrgRoleSet;
+  /** The member's own notification email choices (story 2066); written only via
+   *  updateMyPreferences (self-scoped callable). */
+  emailPreferences?: EmailPreferences;
+  /** Marks a test user; `onMembershipChange` copies this into the custom claim
+   *  (brief 4.8). Never set from the client. */
+  testMode?: true;
+  name: string;
+  email: string;
+  status: MemberStatus;
+}
+
+export interface CustomerMember {
+  roles: CustomerRoleSet;
+  name: string;
+  email: string;
+  status: MemberStatus;
+  /** Job title (e.g. "Facilities Director"), shown when this account is chosen as
+   *  a responsible party. Distinct from `roles`, which are portal permissions. */
+  jobTitle?: string;
+  /** Contact phone, carried onto a responsible party chosen from this account. */
+  phone?: string;
+}
+
+/** Reverse index for login routing - `/userOrgs/{uid}/{orgId}: true`. */
+export interface CustomerUserIndexEntry {
+  orgId: string;
+  customerId: string;
+}
+
+// ----------------------------------------------------------------------------
+// Customer / Site / Building (section 6)
+// ----------------------------------------------------------------------------
+
+/**
+ * A customer is an ORGANISATION the fire-safety company serves - a housing
+ * association, a property group - never a person. People belong to it as
+ * CustomerContact records (below). The org-level email/phone here are the
+ * switchboard details; person-level details live on the contacts.
+ */
+export interface Customer {
+  name: string;
+  /** Head-office / correspondence address. */
+  address?: string;
+  email?: string;
+  phone?: string;
+  /** Customer-level risk score (rolls up from buildings). */
+  score?: number;
+  status: MemberStatus;
+}
+
+/**
+ * A person at a customer organisation. Contacts exist INDEPENDENTLY of portal
+ * accounts: assessors pick responsible parties from them in the app, sites
+ * name them as site contacts, and inviting one to the portal links the
+ * eventual account back here via `uid`. Exactly one contact per customer is
+ * the primary; the primary is created with portal admin roles and is
+ * auto-invited when the customer is created.
+ * Path: /{env}/customerContacts/{orgId}/{customerId}/{contactId}.
+ */
+export interface CustomerContact {
+  name: string;
+  email?: string;
+  phone?: string;
+  /** Job title, e.g. "Facilities Director" - shown wherever the contact is
+   *  offered as a responsible party. */
+  jobTitle?: string;
+  /** Portal permissions this contact should hold once their account exists. */
+  portalRoles?: CustomerRoleSet;
+  /** The customer's primary contact. Reassigned, never removed. */
+  isPrimary?: true;
+  /** Linked account uid, set by acceptInvitation when their invite is used. */
+  uid?: string;
+  createdAt: number;
+}
+
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
+export interface Site {
+  name: string;
+  address?: string;
+  geo?: GeoPoint;
+  /** The site's contact: a CustomerContact id under the owning customer. */
+  contactId?: string;
+}
+
+export type AlarmCategory = 'L1' | 'L2' | 'L3' | 'L4' | 'L5' | 'M' | 'P1' | 'P2';
+export const ALARM_CATEGORIES = ['L1', 'L2', 'L3', 'L4', 'L5', 'M', 'P1', 'P2'] as const;
+
+export interface BuildingDetails {
+  area?: number;
+  floors?: number;
+  occupiedFloors?: number;
+  occupants?: number;
+  isLandlord?: boolean;
+  alarmType?: string;
+  alarmCategory?: AlarmCategory;
+}
+
+/** Next-due dates for each statutory service (brief story 1047). Stored as epoch
+ *  millis so they sort and compare without timezone ambiguity. */
+export interface ServiceScheduleItem {
+  nextDue?: number;
+}
+
+export interface ServiceSchedule {
+  fireAlarmService?: ServiceScheduleItem;
+  fireMarshalTraining?: ServiceScheduleItem;
+  fireSafetyTraining?: ServiceScheduleItem;
+  fireDrill?: ServiceScheduleItem;
+  pat?: ServiceScheduleItem;
+  extinguisherMaintenance?: ServiceScheduleItem;
+  fraReview?: ServiceScheduleItem;
+}
+
+/** The statutory service keys, as a runtime list, so the service-schedule step
+ *  and the seed iterate the exact same set. */
+export const SERVICE_SCHEDULE_KEYS = [
+  'fireAlarmService',
+  'fireMarshalTraining',
+  'fireSafetyTraining',
+  'fireDrill',
+  'pat',
+  'extinguisherMaintenance',
+  'fraReview',
+] as const;
+export type ServiceScheduleKey = (typeof SERVICE_SCHEDULE_KEYS)[number];
+
+/**
+ * A responsible party (the person accountable for fire safety / remedial actions).
+ * Baked into the building as the reusable default (set by an admin, editable in
+ * the app) so it is chosen once and applied everywhere, rather than re-typed on
+ * every finding. The assessment carries its own copy (defaulted from the
+ * building) so it can be switched for a specific visit without altering the
+ * building's default. Only `name` is required.
+ */
+export interface ResponsibleParty {
+  name: string;
+  /** Role / job title, e.g. "Facilities Director". */
+  role?: string;
+  email?: string;
+  phone?: string;
+  /** When chosen from the customer's accounts (a customer member), the member's
+   *  uid, so the chosen person stays linked to the source account (e.g. to notify
+   *  them when the assessment is reviewed/accepted/released). Absent for a
+   *  manually typed party. */
+  contactId?: string;
+}
+
+export interface Building {
+  name: string;
+  customerId: string;
+  address?: string;
+  details?: BuildingDetails;
+  responsiblePerson?: string;
+  /** The building's default responsible party (admin-set; the reusable default
+   *  for assessments and their actions). Supersedes the legacy `responsiblePerson`
+   *  string when present. */
+  responsibleParty?: ResponsibleParty;
+  /** Article 5(3) duty-holders (UK Fire Safety Order). */
+  article53Persons?: string[];
+  photoUrl?: string;
+  riskLevel: RiskLevel;
+  /** TRUE counts - the report meter must be proportional to these. */
+  ragDistribution?: RagDistribution;
+  serviceSchedule?: ServiceSchedule;
+  lastAssessedAt?: number;
+}
+
+// ----------------------------------------------------------------------------
+// Floor plans (section 6) - optional per building; absence is a first-class path
+// ----------------------------------------------------------------------------
+
+export interface FloorPlan {
+  name: string;
+  description?: string;
+  imageUrl: string;
+  /** Source kind: 'image' (photo/screenshot, supports flattened composites) or
+   *  'pdf' (annotated with pins only). Absent defaults to 'image'. */
+  kind?: 'image' | 'pdf';
+}
+
+// ----------------------------------------------------------------------------
+// Templates (section 6) - published versions are IMMUTABLE
+// ----------------------------------------------------------------------------
+
+export type QuestionType =
+  | 'text'
+  | 'longtext'
+  | 'yesno'
+  | 'select'
+  | 'multiselect'
+  | 'photo'
+  | 'nonConformity';
+export const QUESTION_TYPES = [
+  'text',
+  'longtext',
+  'yesno',
+  'select',
+  'multiselect',
+  'photo',
+  'nonConformity',
+] as const;
+
+export type TemplateStatus = 'draft' | 'published' | 'archived';
+export const TEMPLATE_STATUSES = ['draft', 'published', 'archived'] as const;
+
+/** Which industry standard a template follows. Drives the report PROFILE that
+ *  renders its assessments (report/profiles): `pas79` and `bs9792` get their
+ *  standard-specific report treatment; `custom` (or an untagged template) gets
+ *  the generic, best-effort report built purely from whatever sections it has.
+ *  This is the ROBUST lineage signal - report selection keys off this, never off
+ *  the template id or name (which a clone or custom author can change). */
+export type ReportStandard = 'pas79' | 'bs9792' | 'custom';
+export const REPORT_STANDARDS = ['pas79', 'bs9792', 'custom'] as const;
+
+export interface TemplateQuestion {
+  id: string;
+  text: string;
+  type: QuestionType;
+  /** For select / multiselect. */
+  options?: string[];
+  /** When true, the assessor may pin this answer's location on a floor plan. */
+  allowsFlagLocation?: boolean;
+  allowsPhotos?: boolean;
+  /** Whether an answer is mandatory before submission. */
+  required?: boolean;
+  /** Standardised help text shown inline (brief 10.1). */
+  guidance?: string;
+  /**
+   * Standardised finding wording (FR-E21, client requirement): when the
+   * assessor flags this question as a deficiency, these pre-fill the finding's
+   * observation and recommendation so wording is consistent across assessors.
+   * The assessor may still amend on site - professional judgement stays central.
+   */
+  observation?: string;
+  recommendation?: string;
+  /** Id of the StandardParagraph this question references (the client's
+   *  Question Reference Number mapping); feeds the AI summary of findings. */
+  standardParagraphRef?: string;
+}
+
+/**
+ * One entry in the organisation's Standard Paragraphs library (FR-E21): the
+ * client-authored reference text a template question can point at via
+ * `standardParagraphRef`. Stored per organisation at
+ * /{env}/standardParagraphs/{orgId}/{paragraphId}; the AI summary of findings
+ * is generated from the paragraphs the flagged questions reference. `reference`
+ * is the client's own numbering (e.g. "4.2.1") - it is display data, never a
+ * key (RTDB keys cannot carry dots).
+ */
+export interface StandardParagraph {
+  reference: string;
+  title?: string;
+  body: string;
+  updatedAt: number;
+}
+
+/** A section code is an OPAQUE, template-defined identifier for a subject within
+ *  a template. Templates are fully customisable: an organisation may import the
+ *  built-in base templates (PAS 79, BS 9792) or author a wholly custom one with
+ *  any number of sections and any codes. The app therefore renders and orders
+ *  sections from the template's OWN section list - never from a fixed global set.
+ *  Zero-padded numeric strings ('01', '02', ...) are the convention because they
+ *  sort lexicographically, but they are NOT required and NOT capped at 12. */
+export type SectionCode = string;
+
+/** The 12 canonical PAS 79 subject codes, in report order. Used ONLY to author
+ *  the built-in PAS 79 base template and as a display fallback for it - it is NOT
+ *  a constraint on BS 9792 or any custom template, which define their own. */
+export const SECTION_CODES: SectionCode[] = [
+  '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12',
+];
+
+export interface TemplateSection {
+  id: string;
+  code: SectionCode;
+  title: string;
+  questions: TemplateQuestion[];
+}
+
+export interface Template {
+  name: string;
+  version: number;
+  status: TemplateStatus;
+  /** When this version was published (stamped by publishTemplate; absent on
+   *  drafts and on pre-builder seed data). */
+  publishedAt?: number;
+  /** The industry standard this template follows, selecting its report profile.
+   *  Optional for backward tolerance: an untagged template renders under the
+   *  generic (`custom`) profile. The two base templates set it explicitly. */
+  standard?: ReportStandard;
+  /** An organisation-supplied PDF (an accreditation certificate, a cover sheet)
+   *  merged into every report rendered from this template. Absent = no insert. */
+  certificate?: TemplateCertificate;
+  sections: TemplateSection[];
+}
+
+export type CertificatePosition = 'top' | 'bottom';
+export const CERTIFICATE_POSITIONS = ['top', 'bottom'] as const;
+
+/** A PDF spliced into the generated report. The pages are merged verbatim - the
+ *  report renderer never rewrites them, so accreditation artwork stays intact. */
+export interface TemplateCertificate {
+  /** Tenant-scoped Storage path, validated by requireTenantStorageRef. */
+  url: string;
+  /** Original filename, shown in the console so admins can tell versions apart. */
+  name: string;
+  /** Whether the pages are prepended before the report or appended after it. */
+  position: CertificatePosition;
+  uploadedAt: number;
+}
+
+// ----------------------------------------------------------------------------
+// Jobs (section 6) - the unit of distributed work
+// ----------------------------------------------------------------------------
+
+export type JobStatus =
+  | 'scheduled'
+  | 'inProgress'
+  | 'readyForValidation'
+  | 'infoRequired'
+  | 'readyForRelease'
+  | 'released'
+  | 'cancelled';
+export const JOB_STATUSES = [
+  'scheduled',
+  'inProgress',
+  'readyForValidation',
+  'infoRequired',
+  'readyForRelease',
+  'released',
+  'cancelled',
+] as const;
+
+export interface Job {
+  templateId: string;
+  /** The job PINS the exact version it was created with so the assessment can
+   *  never shift shape mid-flight (story 1031). */
+  templateVersion: number;
+  customerId: string;
+  siteId: string;
+  buildingId: string;
+  assessorUid: string;
+  scheduledFor: number;
+  /** End of the visit's time slot. Slot scheduling enforces per-assessor
+   *  clash-freedom between [scheduledFor, scheduledUntil). */
+  scheduledUntil?: number;
+  status: JobStatus;
+}
+
+// ----------------------------------------------------------------------------
+// Assessments (section 6)
+// ----------------------------------------------------------------------------
+
+export type AssessmentStatus =
+  | 'inProgress'
+  | 'readyForValidation'
+  | 'infoRequired'
+  | 'readyForRelease'
+  | 'released';
+export const ASSESSMENT_STATUSES = [
+  'inProgress',
+  'readyForValidation',
+  'infoRequired',
+  'readyForRelease',
+  'released',
+] as const;
+
+/** Client-facing stage names - use these EXACT words in UI copy (brief 6.1). */
+export const ASSESSMENT_STAGE_LABELS: Record<AssessmentStatus, string> = {
+  inProgress: 'Assessment in progress',
+  readyForValidation: 'Ready for validation',
+  infoRequired: 'More information required',
+  readyForRelease: 'Complete, ready for release',
+  released: 'Released',
+};
+
+export interface AssessmentNarrative {
+  summary?: string;
+  buildingDescription?: string;
+  premisesCovered?: string;
+  incidentHistory?: string;
+  riskOpinion?: string;
+}
+
+/** Timestamps and attributions across the validation lifecycle. */
+export interface AssessmentWorkflow {
+  submittedAt?: number;
+  checkedBy?: string;
+  validatedBy?: string;
+  acceptedAt?: number;
+  releasedAt?: number;
+  /** The account that performed the release (may differ from validatedBy: an
+   *  admin can release what an auditor accepted). Stamped by releaseAssessment;
+   *  the stage trigger prefers it for released-stage attribution. */
+  releasedBy?: string;
+}
+
+export interface Assessment {
+  jobId: string;
+  buildingId: string;
+  customerId: string;
+  /** A copy of the pinned template at start time, so the assessment renders the
+   *  exact questions it began with regardless of later template changes. */
+  templateSnapshot: Template;
+  conductedBy: string;
+  conductedAt: number;
+  /** The responsible party for this assessment and its actions. Defaulted from
+   *  the building's `responsibleParty`; editable in-app so a visit can switch it
+   *  without changing the building default. */
+  responsibleParty?: ResponsibleParty;
+  /** Manual overall-risk override set by the assessor. When present it drives the
+   *  headline risk instead of the value calculated from the findings; `byUid` and
+   *  `at` record who set it and when, so the manual change is auditable. */
+  manualRiskLevel?: { level: RiskLevel; byUid: string; at: number };
+  narrative?: AssessmentNarrative;
+  workflow?: AssessmentWorkflow;
+  status: AssessmentStatus;
+}
+
+// ----------------------------------------------------------------------------
+// Assessment answers (section 6)
+// ----------------------------------------------------------------------------
+
+export interface AnswerPhoto {
+  /** Storage path (tenant + env scoped). */
+  path: string;
+  title: string;
+}
+
+export interface FlagPin {
+  /** Normalised 0..1 coordinates relative to the plan image, so the pin stays
+   *  correct at any render size. */
+  x: number;
+  y: number;
+  severity: Severity;
+}
+
+export interface AnswerFlag {
+  planId: string;
+  pins: FlagPin[];
+  /** The flattened plan-plus-pins composite uploaded on save (brief 8). */
+  flagImageUrl?: string;
+}
+
+/** A request for more information raised by an auditor on a specific question
+ *  (story 1050). Retained as a thread for the audit trail. */
+export interface InfoRequest {
+  byUid: string;
+  message: string;
+  resolvedAt?: number;
+  /** When the assessor is expected to have responded. Set for the whole batch
+   *  when the auditor sends the basket (defaults to 7 days ahead, editable),
+   *  so every request in one round shares a deadline. Drives the reminder
+   *  sweep; absent on requests raised before deadlines existed. */
+  dueBy?: number;
+  /** Assessor's reply, kept alongside the request for the audit trail. */
+  response?: string;
+  respondedAt?: number;
+}
+
+/** Default window an assessor gets to answer an auditor's information request,
+ *  counted from when the basket is sent. The auditor can override per batch. */
+export const INFO_REQUEST_DUE_DAYS = 7;
+
+export interface AssessmentAnswer {
+  /** Free-text answer (text / longtext) or display text for other types. */
+  text?: string;
+  /** Typed value: boolean for yesno, string for select, string[] for
+   *  multiselect. `unknown` is deliberate - callers narrow by question type. */
+  value?: unknown;
+  photos?: AnswerPhoto[];
+  flags?: AnswerFlag[];
+  /** Present when this answer is a non-conformity. */
+  severity?: Severity;
+  observation?: string;
+  infoRequest?: InfoRequest;
+  /** Server timestamp of the last write - the basis for last-write-wins conflict
+   *  resolution (brief 12). */
+  updatedAt?: number;
+}
+
+// ----------------------------------------------------------------------------
+// Actions / action plan (section 6) - "LTP" = Life Protection
+// ----------------------------------------------------------------------------
+
+export type ActionStatus = 'open' | 'signedOff' | 'archived';
+export const ACTION_STATUSES = ['open', 'signedOff', 'archived'] as const;
+
+/** Default due windows by severity (story 1045). High = 7 days, Medium = 30
+ *  days, Low = 3 months; all editable by the assessor. */
+export const DUE_WINDOW_DAYS: Record<Severity, number> = {
+  H: 7,
+  M: 30,
+  L: 90,
+};
+
+export interface Action {
+  assessmentId: string;
+  sectionCode: SectionCode;
+  question: string;
+  observation: string;
+  severity: Severity;
+  /** The flag composite carried onto the action (brief 8 downstream + 1057). */
+  locationFlagUrl?: string;
+  images?: AnswerPhoto[];
+  responsible?: string;
+  dueBy?: number;
+  /** The "LTP" flag - this remedial action protects life. */
+  lifeProtection: boolean;
+  status: ActionStatus;
+  signedOffBy?: string;
+  signedOffAt?: number;
+}
+
+// ----------------------------------------------------------------------------
+// Documents (section 6)
+// ----------------------------------------------------------------------------
+
+export type DocumentCategory =
+  | 'fireDoorRecords'
+  | 'floorPlans'
+  | 'safetyPolicy'
+  | 'emergencyPlans'
+  | 'other'
+  | 'ppmCertificates'
+  | 'quotesRemedials'
+  | 'trainingRecords'
+  | 'signedWorkSurvey'
+  | 'userGuides';
+export const DOCUMENT_CATEGORIES = [
+  'fireDoorRecords',
+  'floorPlans',
+  'safetyPolicy',
+  'emergencyPlans',
+  'other',
+  'ppmCertificates',
+  'quotesRemedials',
+  'trainingRecords',
+  'signedWorkSurvey',
+  'userGuides',
+] as const;
+
+export interface SafentiaDocument {
+  fileName: string;
+  description?: string;
+  storagePath: string;
+  uploadedBy: string;
+  uploadedAt: number;
+}
+
+// ----------------------------------------------------------------------------
+// Log book (section 6) - APP WRITES ONLY in Phase 1, append-only
+// ----------------------------------------------------------------------------
+
+// The building Fire Safety Log Book holds GENUINE building fire-safety records
+// only. Assessment WORKFLOW events (started, submitted, validated, released) are
+// NOT log-book content - they live in the assessment's own activity timeline and
+// the /activity audit trail. The one assessment-derived record that DOES belong
+// here is `fraCompleted`: the milestone that a fire risk assessment was carried
+// out / released for the building (written once, on release).
+export type LogBookType =
+  | 'fireIncident'
+  | 'falseAlarm'
+  | 'fireDoorRecord'
+  | 'serviceConfirmed'
+  | 'assessorAction'
+  | 'fraCompleted';
+export const LOG_BOOK_TYPES = [
+  'fireIncident',
+  'falseAlarm',
+  'fireDoorRecord',
+  'serviceConfirmed',
+  'assessorAction',
+  'fraCompleted',
+] as const;
+
+export interface LogBookEntry {
+  type: LogBookType;
+  /** Type-specific data; shape varies by `type`, validated at write time. */
+  payload: Record<string, unknown>;
+  byUid: string;
+  at: number;
+}
+
+// ----------------------------------------------------------------------------
+// Reports / notifications / activity / invitations (section 6)
+// ----------------------------------------------------------------------------
+
+export type ReportScope = 'building' | 'site' | 'customer';
+export const REPORT_SCOPES = ['building', 'site', 'customer'] as const;
+
+export interface Report {
+  pdfPath: string;
+  generatedAt: number;
+  assessmentId?: string;
+  emailedTo?: string[];
+  webLink?: string;
+  /** Present once the customer's contact has accepted the report. Until then the
+   *  portal gates the PDF behind the acceptance prompt. */
+  acceptance?: ReportAcceptance;
+}
+
+/** A customer contact's manual sign-off of a released report. The typed name is
+ *  the artefact: it is what the contact entered, not a copy of their profile, so
+ *  it stands as their own attestation in the audit trail. */
+export interface ReportAcceptance {
+  /** Name exactly as the contact typed it at the acceptance prompt. */
+  name: string;
+  /** The portal account that accepted, resolved server-side from the caller. */
+  byUid: string;
+  at: number;
+}
+
+export interface Notification {
+  type: string;
+  title: string;
+  body: string;
+  link?: string;
+  readAt?: number;
+}
+
+export interface ActivityEntry {
+  actorUid: string;
+  action: string;
+  target: string;
+  at: number;
+}
+
+/** One entry in the per-org email send log (`/{env}/emailLog/{orgId}`), appended
+ *  server-side by the email seam (lib/email) for every dispatch attempt, so an
+ *  admin can see what was sent, when, and whether it actually left. Admin-only
+ *  read; never client-writable. */
+export interface EmailLogEntry {
+  /** The recipient, stored REDACTED: the first character of the local part plus
+   *  the full domain (e.g. `j***@example.com`). The log only needs enough for an
+   *  admin to recognise WHO was written to; storing the full address would
+   *  duplicate PII into a long-lived log for no operational gain (data
+   *  minimisation, brief 18.4). */
+  to: string;
+  subject: string;
+  /** The send's business category (e.g. 'invitation', 'review-reminder'), so the
+   *  log filters by purpose without parsing subjects. */
+  category: string;
+  /** Epoch millis, server clock, at the dispatch attempt. */
+  sentAt: number;
+  /** What actually happened: delivered to the provider, skipped because no
+   *  provider key is configured, or the provider rejected / was unreachable. */
+  outcome: 'sent' | 'skipped-no-provider' | 'failed';
+}
+
+export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
+export const INVITATION_STATUSES = ['pending', 'accepted', 'expired', 'revoked'] as const;
+
+export interface Invitation {
+  orgId: string;
+  customerId?: string;
+  /** The CustomerContact this portal invite belongs to; acceptInvitation
+   *  writes the accepted account's uid back onto that contact. */
+  contactId?: string;
+  email: string;
+  roles: OrgRoleSet;
+  /** Tokenised single-use accept secret. */
+  token: string;
+  expiresAt: number;
+  status: InvitationStatus;
+}
+
+/**
+ * Admin-facing summary of an invitation, kept under
+ * /{env}/orgInvitations/{orgId}/{inviteId} so an organisation can LIST its own
+ * invitations (the /invitations root is unreadable by clients - it holds the
+ * bearer tokens). Maintained by the invitation Functions; the token is never
+ * copied here, so a compromised admin read still cannot accept on a victim's
+ * behalf.
+ */
+export interface InvitationSummary {
+  email: string;
+  roles: OrgRoleSet;
+  customerId?: string;
+  contactId?: string;
+  status: InvitationStatus;
+  expiresAt: number;
+  createdAt: number;
+  invitedBy: string;
+}
+
+// ============================================================================
+// Cloud Function call contracts (brief 4.5)
+//
+// Every callable's input, success and error shape lives here and is imported by
+// BOTH the Function and its caller, so the two never define the same shape twice.
+// ============================================================================
+
+/**
+ * Structured, actionable error a Function returns to the client. The `code` is
+ * what the UI branches on; `message` is human-readable British-English copy safe
+ * to show an assessor. Raw Firebase errors are NEVER surfaced (brief 4.5 + 18.3).
+ */
+export type SafentiaErrorCode =
+  | 'unauthenticated'
+  | 'permission-denied'
+  | 'app-check-failed'
+  | 'invalid-argument'
+  | 'not-found'
+  | 'already-exists'
+  | 'failed-precondition'
+  | 'resource-exhausted'
+  | 'internal';
+
+export interface SafentiaError {
+  code: SafentiaErrorCode;
+  message: string;
+  /** Optional machine-readable detail for the UI (e.g. which field failed). */
+  details?: Record<string, unknown>;
+}
+
+// --- createInvitation (admin only) ---
+export interface CreateInvitationInput {
+  email: string;
+  roles: OrgRoleSet;
+  customerId?: string;
+  /** Required with customerId: the contact this portal invitation is for. */
+  contactId?: string;
+}
+export interface CreateInvitationResult {
+  inviteId: string;
+  expiresAt: number;
+}
+
+// --- acceptInvitation (public, token-bearing) ---
+export interface AcceptInvitationInput {
+  token: string;
+  /** Required only for email/password account creation; absent for Google. */
+  password?: string;
+  displayName?: string;
+}
+export interface AcceptInvitationResult {
+  orgId: string;
+  uid: string;
+}
+
+// --- createJob (admin only) ---
+export interface CreateJobInput {
+  templateId: string;
+  templateVersion: number;
+  customerId: string;
+  siteId: string;
+  buildingId: string;
+  assessorUid: string;
+  scheduledFor: number;
+  /** End of the slot; required by the console (clash checking), optional in the
+   *  contract so historic date-only jobs remain valid. */
+  scheduledUntil?: number;
+}
+export interface CreateJobResult {
+  jobId: string;
+}
+
+// --- startAssessment (assessor-on-job only; idempotent) ---
+export interface StartAssessmentInput {
+  jobId: string;
+}
+export interface StartAssessmentResult {
+  assessmentId: string;
+  /** true when an existing assessment was resumed rather than created. */
+  resumed: boolean;
+}
+
+// --- submitAssessment (assessor only) ---
+export interface SubmitAssessmentInput {
+  assessmentId: string;
+}
+export interface SubmitAssessmentResult {
+  status: AssessmentStatus;
+}
+
+// --- setActiveOrganisation (any member of the target org) ---
+// Switches which organisation the signed-in user is acting in, by re-minting
+// their custom claims for that org. The client force-refreshes its token after,
+// so org/roles/environment all follow the new claim.
+export interface SetActiveOrganisationInput {
+  orgId: string;
+}
+export interface SetActiveOrganisationResult {
+  orgId: string;
+  /** The role names the user holds in the newly active org. */
+  roles: OrgRole[];
+}
+
+// --- generateReport (admin / auditor only) ---
+export interface GenerateReportInput {
+  assessmentId: string;
+  /** Optional recipients to email the report to once generated. */
+  emailTo?: string[];
+}
+export interface GenerateReportResult {
+  reportId: string;
+  pdfPath: string;
+}
+
+// --- generateAssessmentDraft (assessor on job; AI-assisted, online only) ---
+/** One issue the AI surfaced from the answers, tied to the UK regulation it
+ *  engages. Severity uses the non-conformity scale so it lines up with the RAG
+ *  meter and, downstream, the action plan. */
+export interface DraftIssue {
+  /** PAS 79 section code the finding sits under (e.g. "04"). */
+  sectionCode: string;
+  /** The question the finding relates to. */
+  question: string;
+  /** Plain-British description of the issue to be addressed. */
+  finding: string;
+  severity: Severity;
+  /** The UK fire-safety regulation or standard the finding engages, e.g.
+   *  "Regulatory Reform (Fire Safety) Order 2005, art. 14" or "BS 5839-1". */
+  regulation: string;
+  /** What the responsible person should do to remedy it. */
+  recommendedAction: string;
+}
+export interface GenerateAssessmentDraftInput {
+  assessmentId: string;
+}
+export interface GenerateAssessmentDraftResult {
+  /** AI-drafted narrative blocks for the assessor to review and edit. */
+  narrative: AssessmentNarrative;
+  /** The issues the AI identified across the answers, grounded in UK regs. */
+  issues: DraftIssue[];
+}
+
+// --- createOrganisation (any signed-in account; creator becomes admin) ---
+export interface CreateOrganisationInput {
+  name: string;
+}
+export interface CreateOrganisationResult {
+  orgId: string;
+}
+
+// --- updateOrgProfile (admin) ---
+export interface UpdateOrgProfileInput {
+  /** Partial update; only present fields change. logoUrl points at an object the
+   *  caller already uploaded through the tenant-scoped Storage pipeline. */
+  profile: {
+    name?: string;
+    brand?: OrgBrand;
+    contact?: OrgContact | null;
+    /** null (or empty string) removes the override; the platform default applies. */
+    fontFamily?: string | null;
+    logoUrl?: string | null;
+  };
+}
+export interface UpdateOrgProfileResult {
+  updated: true;
+}
+
+// --- updateOrgSettings (admin) ---
+export interface UpdateOrgSettingsInput {
+  ragConfig: RagConfig;
+}
+export interface UpdateOrgSettingsResult {
+  updated: true;
+}
+
+// --- updateMember (admin; the last active admin is protected server-side) ---
+export interface UpdateMemberInput {
+  memberUid: string;
+  /** Replacement role set; omitted = unchanged. */
+  roles?: OrgRoleSet;
+  /** Target status; omitted = unchanged. Lock blocks sign-in on next token
+   *  refresh; archive removes from pickers while preserving history. */
+  status?: MemberStatus;
+}
+export interface UpdateMemberResult {
+  updated: true;
+}
+
+// --- revokeInvitation / resendInvitation (admin, own org only) ---
+export interface RevokeInvitationInput {
+  inviteId: string;
+}
+export interface RevokeInvitationResult {
+  revoked: true;
+}
+export interface ResendInvitationInput {
+  inviteId: string;
+}
+export interface ResendInvitationResult {
+  /** The fresh expiry; resending mints a NEW token and kills the old link. */
+  expiresAt: number;
+}
+
+// --- manageCustomer / manageSite / manageBuilding (admin CRUD; every action
+//     writes an /activity entry server-side, which is why these are callables
+//     rather than rules-governed client writes: the audit trail cannot be
+//     skipped or forged when the same Function writes both) ---
+/**
+ * A partial update whose fields can also be explicitly CLEARED: `null` deletes
+ * the field (RTDB write semantics), absent leaves it unchanged. Without this
+ * distinction an edit form cannot empty a previously-set optional - omitting
+ * the key reads as "no change", so a blanked phone number or responsible party
+ * silently survives on the record. Servers still reject `null` on required
+ * fields (name etc.); the type admits it so the CLEAR intent can travel.
+ */
+export type ClearableFields<T> = { [K in keyof T]?: T[K] | null };
+
+export type ManageAction = 'create' | 'update' | 'archive';
+
+export interface ManageCustomerInput {
+  /** `restore` returns an archived customer to active. */
+  action: ManageAction | 'restore';
+  /** Required for update/archive. */
+  customerId?: string;
+  /** Fields to set (create) or change (update); null clears. Ignored for archive. */
+  customer?: ClearableFields<Customer>;
+  /**
+   * Create only: the organisation's primary contact. The Function creates the
+   * contact (isPrimary, portal admin) and, when an email is given, issues the
+   * portal invitation and sends the branded email - all server-side, so a
+   * customer can never exist half-provisioned.
+   */
+  primaryContact?: {
+    name: string;
+    email?: string;
+    phone?: string;
+    jobTitle?: string;
+  };
+}
+export interface ManageCustomerResult {
+  customerId: string;
+  /** Present when action was create with a primaryContact. */
+  primaryContactId?: string;
+  /** Present when the primary contact was auto-invited (had an email). */
+  inviteId?: string;
+}
+
+// --- manageCustomerContact (admin) ---
+export interface ManageCustomerContactInput {
+  action: 'create' | 'update' | 'remove';
+  customerId: string;
+  /** Required for update/remove. */
+  contactId?: string;
+  contact?: ClearableFields<CustomerContact>;
+}
+export interface ManageCustomerContactResult {
+  contactId: string;
+}
+
+export interface ManageSiteInput {
+  action: Exclude<ManageAction, 'archive'>;
+  customerId: string;
+  /** Required for update. */
+  siteId?: string;
+  site?: ClearableFields<Site>;
+}
+export interface ManageSiteResult {
+  siteId: string;
+}
+
+export interface ManageBuildingInput {
+  action: Exclude<ManageAction, 'archive'>;
+  /** The site the building belongs to (buildings are stored per site). */
+  siteId: string;
+  /** Required for update. */
+  buildingId?: string;
+  building?: ClearableFields<Building>;
+}
+export interface ManageBuildingResult {
+  buildingId: string;
+}
+
+// --- importRecords (admin; bulk CSV import of an estate) ---
+/**
+ * One building as a CSV import row carries it. A deliberate SUBSET of Building:
+ * the platform-derived fields (riskLevel, ragDistribution, lastAssessedAt) can
+ * never come from a file, and the pointer fields (photoUrl, floor plans) need
+ * an upload rather than a cell. serviceSchedule carries the FRA review only -
+ * the other statutory dates are maintained on the building record.
+ */
+export interface ImportBuildingRow {
+  name: string;
+  address?: string;
+  responsiblePerson?: string;
+  responsibleParty?: ResponsibleParty;
+  article53Persons?: string[];
+  details?: BuildingDetails;
+  serviceSchedule?: ServiceSchedule;
+}
+
+/** One site and the buildings that stand on it, as grouped from the CSV rows.
+ *  `buildings` may be empty: a site can be recorded before its buildings are. */
+export interface ImportSiteRow {
+  name: string;
+  address?: string;
+  email?: string;
+  phone?: string;
+  geo?: GeoPoint;
+  buildings: ImportBuildingRow[];
+}
+
+/**
+ * A whole-file import, applied in ONE atomic write so a part-created estate can
+ * never be left to unpick. `sites` mode creates sites and their buildings under
+ * a customer; `buildings` mode adds buildings to one existing site.
+ */
+export interface ImportRecordsInput {
+  mode: 'sites' | 'buildings';
+  customerId: string;
+  /** Required for `buildings`: the site the records land on. */
+  siteId?: string;
+  /** Required for `sites`. */
+  sites?: ImportSiteRow[];
+  /** Required for `buildings`. */
+  buildings?: ImportBuildingRow[];
+}
+export interface ImportRecordsResult {
+  sitesCreated: number;
+  buildingsCreated: number;
+}
+
+// --- manageFloorPlan (admin; file already uploaded via Storage rules) ---
+export interface ManageFloorPlanInput {
+  action: 'create' | 'update' | 'remove';
+  buildingId: string;
+  /** Required for update/remove. */
+  planId?: string;
+  plan?: ClearableFields<FloorPlan>;
+}
+export interface ManageFloorPlanResult {
+  planId: string;
+}
+
+// --- manageBuildingDocument (admin; file already uploaded via Storage rules) ---
+export interface ManageBuildingDocumentInput {
+  action: 'create' | 'remove';
+  buildingId: string;
+  category: DocumentCategory;
+  /** Required for remove. */
+  docId?: string;
+  document?: ClearableFields<SafentiaDocument>;
+}
+export interface ManageBuildingDocumentResult {
+  docId: string;
+}
+
+// --- updateMyPreferences (any signed-in member; strictly self-scoped) ---
+export interface UpdateMyPreferencesInput {
+  emailPreferences: EmailPreferences;
+}
+export interface UpdateMyPreferencesResult {
+  updated: true;
+}
+
+// --- manageAction (admin; the action plan between assessments, story 2043) ---
+export interface ManageActionInput {
+  buildingId: string;
+  /** Required for update/signOff/reopen. */
+  actionId?: string;
+  action: 'create' | 'update' | 'signOff' | 'reopen';
+  /** create: observation + severity required. update: whitelisted fields only
+   *  (responsible, dueBy, observation); status moves ONLY via signOff/reopen so
+   *  the sign-off provenance fields can never be forged by an edit. */
+  fields?: {
+    observation?: string;
+    severity?: Severity;
+    responsible?: string | null;
+    dueBy?: number | null;
+    lifeProtection?: boolean;
+  };
+}
+export interface ManageActionResult {
+  actionId: string;
+}
+
+// --- publishTemplate (admin) ---
+// Drafts are edited directly under rules at /templateDrafts (autosave-friendly);
+// publishing is the auditable, atomic moment: the callable validates the draft,
+// bumps the version, promotes it to the live /templates node (client-immutable
+// once published), archives a frozen copy under /templateVersions for history
+// (story 2053), clears the draft and writes the activity entry.
+export interface PublishTemplateInput {
+  templateId: string;
+}
+export interface PublishTemplateResult {
+  version: number;
+}
+
+// --- rescheduleJob / cancelJob (admin) ---
+export interface RescheduleJobInput {
+  jobId: string;
+  scheduledFor: number;
+  scheduledUntil?: number;
+  /** Optionally move the visit to a different assessor at the same time. */
+  assessorUid?: string;
+}
+export interface RescheduleJobResult {
+  updated: true;
+}
+export interface CancelJobInput {
+  jobId: string;
+  /** Shown to the assessor in the cancellation notification. */
+  reason?: string;
+}
+export interface CancelJobResult {
+  cancelled: true;
+}
+
+// --- Auditor lifecycle (FR-E18): every transition server-side ---
+export interface RequestInfoInput {
+  assessmentId: string;
+  /** One open InfoRequest per flagged question. */
+  requests: Array<{ questionId: string; message: string }>;
+  /** Response deadline stamped onto every request in this batch. Omitted =
+   *  INFO_REQUEST_DUE_DAYS ahead of the server clock. */
+  dueBy?: number;
+}
+export interface RequestInfoResult {
+  flagged: number;
+}
+export interface AcceptAssessmentInput {
+  assessmentId: string;
+}
+export interface AcceptAssessmentResult {
+  accepted: true;
+}
+// --- acceptReport (portal; the customer contact signs the report off) ---
+// Called once per report by a signed-in portal contact. The name is theirs to
+// type; the server takes the uid and the timestamp from the verified session so
+// neither can be spoofed by the client.
+export interface AcceptReportInput {
+  buildingId: string;
+  reportId: string;
+  /** The contact's full name, as typed at the acceptance prompt. */
+  name: string;
+}
+export interface AcceptReportResult {
+  acceptedAt: number;
+}
+
+export interface ReleaseAssessmentInput {
+  assessmentId: string;
+}
+export interface ReleaseAssessmentResult {
+  released: true;
+  /** Action-plan items created from the assessment's non-conformities. */
+  actionsCreated: number;
+}
+
+// --- registerInterest (public site; unauthenticated, App Check only) ---
+// The marketing site's book-a-demonstration form. The lead is stored under the
+// platform-global /platform/leads (a lead pre-dates any tenant, so there is no
+// organisation or environment to scope it to) and the sales contact is notified
+// by email. The result is deliberately opaque: a public endpoint must not reveal
+// anything about what happened server-side beyond receipt.
+export interface RegisterInterestInput {
+  name: string;
+  organisation: string;
+  email: string;
+  phone?: string;
+  message?: string;
+}
+export interface RegisterInterestResult {
+  received: true;
+}
+
+/** A stored register-interest lead (/platform/leads/{leadId}). Written by the
+ *  registerInterest callable via the Admin SDK only; no client can address it. */
+export interface PlatformLead {
+  name: string;
+  organisation: string;
+  email: string;
+  phone?: string;
+  message?: string;
+  /** Epoch millis, server clock, at receipt. */
+  receivedAt: number;
+}
+
+// ----------------------------------------------------------------------------
+// Helper: a record keyed by id, as RTDB returns a node of children.
+// ----------------------------------------------------------------------------
+
+/** RTDB returns object maps, not arrays. `Keyed<T>` models "a node of T children
+ *  keyed by their id" so list reads are typed without pretending they're arrays. */
+export type Keyed<T> = Record<string, T>;

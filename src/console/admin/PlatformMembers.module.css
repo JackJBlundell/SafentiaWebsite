@@ -1,0 +1,26 @@
+/* PlatformMembers - platform-wide members list. Tokens only; the role chips
+   carry their label as text, so colour is never the sole carrier. */
+
+.roleChips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.roleChip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.noRoles {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}

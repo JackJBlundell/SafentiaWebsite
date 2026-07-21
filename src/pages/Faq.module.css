@@ -1,0 +1,106 @@
+.title {
+  font-size: 2.25rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--space-lg);
+}
+
+.lede {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.group {
+  margin-bottom: var(--space-xxxl);
+}
+
+.group:last-child {
+  margin-bottom: 0;
+}
+
+.groupHeading {
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--space-md);
+}
+
+.item {
+  border-top: 1px solid var(--color-border);
+}
+
+.item:last-child {
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* The question row is the interactive target, so it carries the 44px minimum
+ * and generous padding; the whole row toggles, not just the text. */
+.question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  min-height: var(--min-touch-target);
+  padding-block: var(--space-md);
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  list-style: none;
+}
+
+/* Remove the default disclosure triangle; the +/- indicator replaces it. */
+.question::-webkit-details-marker {
+  display: none;
+}
+
+/* The open/closed indicator is pure CSS, so it needs no JavaScript and cannot
+ * fall out of step with the element's real state. \2212 is the minus sign. */
+.question::after {
+  content: '+';
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  transition: color var(--motion-fast) var(--easing);
+}
+
+.item[open] > .question::after {
+  content: '\2212';
+}
+
+.question:hover::after {
+  color: var(--color-text);
+}
+
+.question:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.answer {
+  margin: 0;
+  padding: 0 0 var(--space-xl);
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+  /* Keeps the answer clear of the indicator column on narrow screens. */
+  max-width: var(--reading-measure);
+}
+
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xl);
+  padding: var(--space-xxl);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.ctaText {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}

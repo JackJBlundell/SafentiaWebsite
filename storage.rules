@@ -1,0 +1,152 @@
+rules_version = '2';
+
+// ============================================================================
+// Safentia Storage rules (brief 4.3 / 4.4 / 4.8, stories 1011 / 1076).
+//
+// The object layout mirrors RTDB tenancy AND the environment root, exactly as the
+// paths module builds it: {env}/orgs/{orgId}/buildings/{buildingId}/... and
+// {env}/orgs/{orgId}/reports/{reportId}.pdf. Three boundaries are enforced, each
+// proven in the rules matrix:
+//   1. ENVIRONMENT - a testMode user touches only the test/ prefix, a live user
+//      only live/; both cross-environment directions denied (brief 4.8).
+//   2. ORG ISOLATION - the {orgId} segment must equal the caller's orgId claim,
+//      so cross-org reads and writes are impossible (story 1011).
+//   3. CONTENT + SIZE - images must be image/* and <= 10MB, documents (any type)
+//      <= 25MB, validated at the rules layer so an oversized or wrong-type upload
+//      is rejected before it lands (story 1011 AC).
+//
+// Storage rules cannot read RTDB, so membership is asserted from the custom claim
+// (orgId + testMode) that onMembershipChange maintains - the same trusted signal
+// the database rules use. App Check is enforced at the bucket level (brief 4.6).
+// ============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper: the caller is signed in and the {env} prefix matches their testMode
+    // claim (the test/live boundary). A live user has testMode absent/false and
+    // may only enter the live/ tree; a test user only test/. App Check is enforced
+    // for Storage at the bucket configuration level (brief 4.6), not asserted via
+    // request.app here - the same separation RTDB uses, where attestation is a
+    // platform setting rather than a rule expression.
+    function envMatches(env) {
+      // 'in' guard first: unlike RTDB rules, Storage rules ERROR (deny) when
+      // reading an absent token property, and live tokens never carry testMode
+      // (lib/claims sets it only as a literal true). Without the guard every
+      // live user is denied all Storage access - emulator-proven, 2026-07-14.
+      return request.auth != null
+        && (env == 'test') == (('testMode' in request.auth.token)
+          && request.auth.token.testMode == true);
+    }
+
+    // Helper: the {orgId} segment is the caller's own org (tenant isolation).
+    function ownOrg(orgId) {
+      return request.auth.token.orgId == orgId;
+    }
+
+    // Helper: an image upload within the 10MB ceiling.
+    function validImage() {
+      return request.resource.contentType.matches('image/.*')
+        && request.resource.size <= 10 * 1024 * 1024;
+    }
+
+    // Helper: a document upload within the 25MB ceiling (any content type, since
+    // documents legitimately span PDFs, office files, images of certificates).
+    function validDocument() {
+      return request.resource.size <= 25 * 1024 * 1024;
+    }
+
+    // Helper: a floor plan file - an image (<=10MB) OR a PDF (<=25MB). Lets an
+    // assessor upload a PDF plan while keeping the image ceiling for photos.
+    function validFloorPlanFile() {
+      return validImage()
+        || (request.resource.contentType == 'application/pdf'
+          && request.resource.size <= 25 * 1024 * 1024);
+    }
+
+    // --- Building media: photos, floor plans, flag composites (images) --------
+    // Read: any member of the owning org, in the matching environment.
+    // Write: same scope, and the object must be a valid image within 10MB.
+    match /{env}/orgs/{orgId}/buildings/{buildingId}/photos/{photoId} {
+      allow read: if envMatches(env) && ownOrg(orgId);
+      allow write: if envMatches(env) && ownOrg(orgId) && validImage();
+    }
+    match /{env}/orgs/{orgId}/buildings/{buildingId}/floorPlans/{planId} {
+      allow read: if envMatches(env) && ownOrg(orgId);
+      allow write: if envMatches(env) && ownOrg(orgId) && validFloorPlanFile();
+    }
+    match /{env}/orgs/{orgId}/buildings/{buildingId}/flags/{flagId} {
+      allow read: if envMatches(env) && ownOrg(orgId);
+      allow write: if envMatches(env) && ownOrg(orgId) && validImage();
+    }
+
+    // --- Documents (grouped by category) - up to 25MB, any type ---------------
+    match /{env}/orgs/{orgId}/buildings/{buildingId}/documents/{category}/{docId} {
+      allow read: if envMatches(env) && ownOrg(orgId);
+      allow write: if envMatches(env) && ownOrg(orgId) && validDocument();
+    }
+
+    // --- Generated report PDFs (story 1076) -----------------------------------
+    // Readable only by the owning org. Written by generateReport via the admin
+    // SDK, which bypasses these rules, so client writes are denied here.
+    //
+    // PHASE 2: customer-portal read access is deliberately NOT granted by a blanket
+    // `customerId != null` check - that would let ANY customer token read EVERY
+    // org's reports (cross-tenant leak). When the portal lands, scope it to the
+    // OWNING customer, e.g. by writing the customerId into the object's metadata
+    // and checking `resource.metadata.customerId == request.auth.token.customerId`
+    // (Storage rules cannot read RTDB), alongside an env/owner check.
+    // Helper: an organisation asset - the whitelabel logo (an image <=10MB) OR a
+    // template certificate (a PDF <=25MB, merged verbatim into every report the
+    // template renders). PDFs are bounded to the document ceiling because a
+    // certificate is a scanned, print-resolution document, not a web image.
+    function validOrgAsset() {
+      return validImage()
+        || (request.resource.contentType == 'application/pdf'
+          && request.resource.size <= 25 * 1024 * 1024);
+    }
+
+    // Organisation-level assets: the whitelabel logo. Image-bounded like photos;
+    // written by admins from the settings screen (role enforcement lives in the
+    // updateOrgProfile callable that records the URL - rules here hold the
+    // tenant, env and content boundaries).
+    match /{env}/orgs/{orgId}/assets/{assetId} {
+      allow read: if envMatches(env) && ownOrg(orgId);
+      // Admin-only: the logo renders on branded reports sent to clients, and a
+      // Storage write covers replace-in-place and delete, so member-wide write
+      // would let any account deface the mark the callable validated. The admin
+      // role rides in the custom claims, the one signal Storage rules can read.
+      allow write: if envMatches(env) && ownOrg(orgId)
+        && request.auth.token.roles.admin == true
+        && validOrgAsset();
+    }
+
+    match /{env}/orgs/{orgId}/reports/{reportFile} {
+      // Staff read their org's reports; a customer's PORTAL users read exactly
+      // the reports stamped with their customerId in custom metadata (written
+      // by the report generator - the object path carries no customer segment,
+      // so metadata is the only per-object scope Storage rules can check).
+      allow read: if envMatches(env)
+        && (ownOrg(orgId)
+          || (request.auth.token.portalOrgId == orgId
+            && resource.metadata.customerId == request.auth.token.customerId));
+      allow write: if false;
+    }
+
+    // --- Nightly RTDB backups (exportBackups) ---------------------------------
+    // Written by the scheduled exportBackups Function via the Admin SDK (which
+    // bypasses these rules). NO client - staff, portal, operator - may read or
+    // write a backup: it is whole-database PII and belongs to the Admin SDK and
+    // the Cloud console alone. Stated explicitly (not left to the default deny)
+    // so the boundary survives any future broadening of the matches above.
+    match /backups/{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // --- Default deny ---------------------------------------------------------
+    // Anything not matched above is denied. A fire-safety product fails closed.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

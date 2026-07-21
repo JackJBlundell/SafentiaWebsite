@@ -1,0 +1,165 @@
+/* StaffDirectory - the toolbar, the members/invitations table cell content, and
+   the invitation confirm affordance. The role chips and status pills come from
+   shared.module.css; the member editor now lives on the profile. Everything
+   clears the 44px target. */
+
+.searchField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  flex: 1 1 14rem;
+  max-width: 22rem;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.input {
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+/* The role filter select shares the input's look and 44px target. */
+.select {
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  /* Sits beside the labelled search field; nudged down to align with its input. */
+  align-self: flex-end;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+/* --- Table cell content ------------------------------------------------------ */
+
+.identity {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.memberName {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+.memberEmail {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+/* The invitation status pill. Its own vocabulary (pending vs settled), distinct
+   from the member status badge in shared.module.css. Colour supports the state,
+   never carries it - the word is always present. */
+.statusBadge {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.statusPending {
+  color: var(--status-warning);
+  background: var(--status-warning-surface);
+}
+
+.statusDone {
+  color: var(--color-text-muted);
+  background: var(--color-surface-sunken);
+}
+
+/* Invitation actions live in the row's last cell: buttons end-aligned, with the
+   confirm box and announcements stacking beneath when present. */
+.cellActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.inviteActions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.confirmBox {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  text-align: start;
+  min-inline-size: min(20rem, 100%);
+}
+
+.confirmCopy {
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  max-width: 60ch;
+}
+
+.confirmButtons {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* Empty copy inside a flush Card, aligned with the card header's inset. */
+.noRows {
+  padding: 0 var(--space-xxl) var(--space-xxl);
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+.success {
+  margin: 0;
+  color: var(--status-success);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: end;
+}

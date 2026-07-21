@@ -1,0 +1,6 @@
+/* PlatformCustomers - platform-wide customers list. Tokens only. */
+
+.name {
+  font-weight: 600;
+  color: var(--color-text);
+}

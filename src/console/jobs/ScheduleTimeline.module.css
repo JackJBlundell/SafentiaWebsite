@@ -1,0 +1,158 @@
+/* ScheduleTimeline - one assessor-day as a vertical track. Tokens only; the
+   proposal is the one brand-accented element, existing bookings stay neutral,
+   and a clash borrows the fixed --status-error language. Heights are
+   percentages of the track so the layout is fully responsive in width and
+   scales if the visible window consts change. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.frame {
+  position: relative;
+  /* 12 visible hours at 48px each; tall enough that one 15-minute slot
+     (12px) is still distinguishable without the track dominating the step. */
+  height: 576px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  overflow: hidden;
+}
+
+/* The clickable day surface fills the frame; blocks are inset to the right of
+   the hour-label gutter. */
+.day {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.hourLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--color-border);
+  pointer-events: none;
+}
+
+.hourLabel {
+  position: absolute;
+  top: 2px;
+  left: var(--space-sm);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+/* Shared block anatomy: name over times, clipped when short. */
+.booked,
+.proposal {
+  position: absolute;
+  left: 3.25rem; /* clear of the hour-label gutter */
+  right: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  min-height: 10px;
+}
+
+.booked {
+  overflow: hidden; /* the proposal must NOT clip: its resize grip overhangs */
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-secondary);
+  pointer-events: none; /* clicks land on the day surface beneath */
+}
+
+.proposal {
+  /* Slightly narrower than bookings so an exact overlap still shows both. */
+  right: var(--space-lg);
+  background: var(--brand-primary);
+  border: 1px solid var(--brand-primary);
+  color: var(--brand-on-primary);
+  cursor: grab;
+  touch-action: none;
+  transition: background var(--motion-fast) var(--easing),
+    border-color var(--motion-fast) var(--easing);
+}
+
+.proposal:active {
+  cursor: grabbing;
+}
+
+.proposal:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+/* A clashing proposal speaks the fixed status language, never brand. */
+.proposalConflict {
+  background: var(--status-error);
+  border-color: var(--status-error);
+  color: var(--status-on-error);
+}
+
+.blockName {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.blockTimes {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Resize handle: a slim visual grip whose HIT AREA extends past the block's
+   bottom edge to honour the 44px touch-target rule without 44px of chrome. */
+.resizeHandle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -14px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.resizeGrip {
+  width: 40px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.conflictLine {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--status-error);
+}
+
+.placeLine {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proposal {
+    transition: none;
+  }
+}

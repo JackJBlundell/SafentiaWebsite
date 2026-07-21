@@ -1,0 +1,299 @@
+/* AnswerCard - one question inside a section Card. Quiet separations, strong
+   question text, typed answer presentation. 44px targets on all controls. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-block: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.card:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.questionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  flex: 1 1 32ch;
+}
+
+.questionText {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.guidance {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.answerText {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.longText {
+  white-space: pre-wrap;
+}
+
+.answerWord {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.optionList {
+  margin: 0;
+  padding-left: 1.25em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.optionItem {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+}
+
+.unanswered {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+/* --- Non-conformity finding ------------------------------------------------ */
+
+.finding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+}
+
+.findingHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.severityChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.ltp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--status-error-surface);
+  color: var(--status-error);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.findingFacts {
+  margin: 0;
+  display: flex;
+  gap: var(--space-xl);
+  flex-wrap: wrap;
+}
+
+.findingFact dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.findingFact dd {
+  margin: var(--space-xs) 0 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.quietFact {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+/* --- Photos and flag composites --------------------------------------------- */
+
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-md);
+}
+
+.photoLink {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+}
+
+.photoLink:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.photoImg {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
+}
+
+.photoTitle {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.photoPending {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.photoError {
+  font-size: 0.8125rem;
+  color: var(--status-error);
+}
+
+/* --- Info-request thread ----------------------------------------------------- */
+
+.threadOpen,
+.threadResolved {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+}
+
+.threadOpen {
+  background: var(--status-warning-surface);
+  border: 1px solid var(--color-border);
+}
+
+.threadResolved {
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+}
+
+.threadTitle {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.threadMessage,
+.threadResponse {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+.threadWho {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-xs);
+}
+
+.threadAwaiting {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+/* --- Inline flag composer ----------------------------------------------------- */
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+}
+
+.composerLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.composerInput {
+  min-height: var(--min-touch-target);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.composerInput:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.composerActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.composerHint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  max-width: 40ch;
+}

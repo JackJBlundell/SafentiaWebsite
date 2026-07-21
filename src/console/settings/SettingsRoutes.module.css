@@ -1,0 +1,63 @@
+/* SettingsRoutes - the settings sub-nav. Horizontal tabs on small screens; a
+   left column of links beside the content from 1024px up. */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-xl);
+  align-items: start;
+}
+
+.content {
+  min-width: 0;
+}
+
+.subNav {
+  display: flex;
+  gap: var(--space-xs);
+  border-block-end: 1px solid var(--color-border);
+  padding-block-end: var(--space-sm);
+}
+
+.subNavLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.subNavLink:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.subNavLink:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+.subNavLinkActive {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .subNav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-xs);
+    border-block-end: none;
+    padding-block-end: 0;
+    position: sticky;
+    top: calc(var(--header-height) + var(--space-lg));
+  }
+}

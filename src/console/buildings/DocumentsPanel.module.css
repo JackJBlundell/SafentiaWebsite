@@ -1,0 +1,225 @@
+/* DocumentsPanel - grouped category lists; forms match the AccountPage input
+   rhythm. All controls clear the 44px target. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.heading {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.category {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.categoryHeading {
+  font-size: 0.9375rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.row {
+  padding: var(--space-md) 0;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.row:last-child {
+  border-block-end: none;
+}
+
+.rowBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.fileLink {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  overflow-wrap: anywhere;
+  /* An inline link still needs a comfortable target on touch screens. */
+  display: inline-block;
+  padding-block: var(--space-xs);
+}
+
+.fileLink:hover {
+  color: var(--brand-primary);
+}
+
+/* Image documents: the filename is a button opening the lightbox, styled to
+   read exactly like the download link. */
+.fileLinkButton {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  overflow-wrap: anywhere;
+  display: inline-block;
+  padding-block: var(--space-xs);
+  padding-inline: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: start;
+  font-family: inherit;
+}
+
+.fileLinkButton:hover {
+  color: var(--brand-primary);
+}
+
+.fileLinkButton:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.fileName {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.description {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.rowActions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-block-start: var(--space-xs);
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+.confirmCopy {
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.addForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding-block-start: var(--space-lg);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.addTrigger {
+  padding-block-start: var(--space-sm);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+  max-width: 34rem;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.input,
+.select {
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+}
+
+.input:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.fileInput {
+  min-height: var(--min-touch-target);
+  padding-block: var(--space-sm);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.progressWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  max-width: 34rem;
+}
+
+.progress {
+  flex: 1;
+  height: 8px;
+  accent-color: var(--brand-primary);
+}
+
+.progressLabel {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+}
+
+.inlineError {
+  color: var(--color-text);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.875rem;
+  max-width: 34rem;
+}

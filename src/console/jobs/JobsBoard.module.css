@@ -1,0 +1,210 @@
+/* Jobs board styling: the page rhythm, the at-a-glance tiles, the filter bar
+   (fields, active-filter chips, clear-all), the date/slot cell, the status
+   badge tones, and the load-more footer. Tokens only; every control clears the
+   44px target. */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  min-width: 0;
+}
+
+/* --- At-a-glance tiles ------------------------------------------------------- */
+
+.stats {
+  min-width: 0;
+}
+
+/* --- Filter bar ------------------------------------------------------------- */
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.filterGrid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-md);
+}
+
+.filterField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  flex: 1 1 11rem;
+  min-width: 10rem;
+}
+
+/* Search leads the bar and earns more room; the date pair travels as one unit
+   so From and To wrap together rather than splitting across a break. */
+.searchField {
+  flex: 2 1 18rem;
+}
+
+.dateRange {
+  display: flex;
+  gap: var(--space-md);
+  flex: 2 1 20rem;
+  min-width: 0;
+}
+
+.dateRange .filterField {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.filterLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.filterInput {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.filterInput:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+/* --- Active-filter summary: removable chips plus one clear-all --------------- */
+
+.activeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-block-start: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.activeLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 44px;
+  padding: 0 var(--space-sm) 0 var(--space-md);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.chipRemove {
+  font-size: 1.125rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+}
+
+.chip:hover .chipRemove {
+  color: var(--color-text);
+}
+
+.clearAll {
+  margin-inline-start: auto;
+}
+
+/* --- Table states ----------------------------------------------------------- */
+
+.tableSkeleton {
+  padding: var(--space-lg);
+}
+
+/* --- Date + slot cell ------------------------------------------------------- */
+
+.when {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.whenDate {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.whenSlot {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Status badge: label first, tone supporting ----------------------------- */
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.status-open {
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.status-attention {
+  color: var(--status-warning);
+  background: var(--status-warning-surface);
+  border: 1px solid transparent;
+}
+
+.status-done {
+  color: var(--status-success);
+  background: var(--status-success-surface);
+  border: 1px solid transparent;
+}
+
+.status-muted {
+  color: var(--color-text-muted);
+  background: var(--color-surface-sunken);
+  border: 1px solid transparent;
+}
+
+/* --- Load more -------------------------------------------------------------- */
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}

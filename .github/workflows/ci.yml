@@ -1,0 +1,88 @@
+# =============================================================================
+# Safentia CI (findings 2079 AC2): every push and PR must compile, pass the
+# unit suites, AND pass the security-rules matrix against the real emulator.
+# All three jobs are required - make them required status checks on main so a
+# red rules matrix BLOCKS the merge, not just decorates it.
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch supersedes the running build.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned so a firebase-tools release cannot silently change what CI proves.
+  FIREBASE_TOOLS_VERSION: 13.35.1
+
+jobs:
+  web:
+    name: Web console (typecheck, unit tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  functions:
+    name: Functions (typecheck, unit tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      # The unit config excludes __tests__/rules (those need the emulator and
+      # run in the rules-tests job below).
+      - run: npm test
+
+  rules-tests:
+    name: Security rules matrix (RTDB + Storage emulators)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      # The emulators are JVM programs; ubuntu-latest ships a JDK, but assert it
+      # explicitly so a runner-image change fails loudly here, not mid-suite.
+      - name: Verify Java is available (emulator requirement)
+        run: java -version
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ env.FIREBASE_TOOLS_VERSION }}
+      - run: npm ci
+        working-directory: functions
+      # emulators:exec boots the RTDB + Storage emulators with THIS repo's
+      # database.rules.json / storage.rules (per firebase.json), runs the matrix,
+      # and propagates jest's exit code - so a broken rule fails the build.
+      # --project only namespaces the emulators; nothing touches the real
+      # safentia-tech project and no credentials are needed.
+      - name: Run the rules matrix inside emulators:exec
+        run: >-
+          npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
+          emulators:exec --only database,storage --project safentia-tech
+          'npm --prefix functions run test:rules'
