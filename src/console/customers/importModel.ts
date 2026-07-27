@@ -106,12 +106,6 @@ const BUILDING_COLUMNS: readonly ImportColumn[] = [
     example: '12 Harbour Road, Bristol, BS1 5UH',
   },
   {
-    header: 'responsible_person',
-    required: false,
-    help: 'The named person on site, if you record one.',
-    example: 'Alice Fenwick',
-  },
-  {
     header: 'responsible_party_name',
     required: false,
     help: 'The party accountable for fire safety. Required if any other responsible_party column is filled in.',
@@ -190,6 +184,16 @@ const BUILDING_COLUMNS: readonly ImportColumn[] = [
     example: '01/09/2027',
   },
 ];
+
+/** Columns the import used to accept, and what to use instead. An unrecognised
+ *  heading blocks the whole file, so a spreadsheet kept from an earlier import
+ *  is named its replacement rather than told only that the column is unknown. */
+const RETIRED_COLUMNS = new Map<string, string>([
+  [
+    'responsible_person',
+    'This column has been replaced. Use responsible_party_name, with responsible_party_role, responsible_party_email and responsible_party_phone if you hold them.',
+  ],
+]);
 
 /** The columns a file must use, for the given mode, in the order the example
  *  file writes them. */
@@ -530,13 +534,7 @@ function readBuilding(ctx: CellContext): ImportBuildingRow | undefined {
 
   const row: ImportBuildingRow = { name };
   const address = text(ctx, 'building_address', TEXT_LIMITS.shortText);
-  const responsiblePerson = text(
-    ctx,
-    'responsible_person',
-    TEXT_LIMITS.displayName,
-  );
   if (address !== undefined) row.address = address;
-  if (responsiblePerson !== undefined) row.responsiblePerson = responsiblePerson;
   if (responsibleParty !== undefined) row.responsibleParty = responsibleParty;
   if (article53.length > 0) row.article53Persons = article53;
   if (Object.keys(details).length > 0) row.details = details;
@@ -638,7 +636,9 @@ export function readImportRows(
       errors.push({
         line: 1,
         column: header,
-        message: 'This is not a column the import recognises.',
+        message:
+          RETIRED_COLUMNS.get(header) ??
+          'This is not a column the import recognises.',
       });
       return;
     }

@@ -31,6 +31,7 @@ import { assertRateLimit } from '../lib/rateLimit';
 import { assertValidSlot, assertNoSlotClash } from '../lib/jobSlots';
 import { activityUpdate } from '../lib/events';
 import { sendNotification } from '../lib/notifications';
+import { isUkToday, ukWhenPhrase } from '../lib/ukCalendar';
 import type {
   RescheduleJobInput,
   RescheduleJobResult,
@@ -173,20 +174,26 @@ export const rescheduleJob = onCall<RescheduleJobInput>(callableOptions, (reques
       const where = building?.name ?? 'a building';
       // UK product: name the date on the Europe/London wall clock the assessor
       // lives by, not a raw UTC slice that reads a day off around midnight BST.
-      const when = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Europe/London',
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      }).format(scheduledFor);
+      // 'today'/'tomorrow' rather than a bare date when it is one of those: a visit
+      // moved INTO today missed the 07:00 digest, so this notification is the only
+      // thing that tells the assessor their afternoon just changed - and the title
+      // says so too, so it is legible without opening the app.
+      const today = isUkToday(scheduledFor);
+      const when = ukWhenPhrase(scheduledFor, scheduledUntil);
 
       await sendNotification(
         paths,
         orgId,
         assessorUid,
         {
-          type: 'jobRescheduled',
-          title: assessorChanged ? 'Job assigned to you' : 'Job rescheduled',
+          type: today ? 'jobRescheduledToday' : 'jobRescheduled',
+          title: today
+            ? assessorChanged
+              ? 'Job assigned to you today'
+              : 'Job moved to today'
+            : assessorChanged
+              ? 'Job assigned to you'
+              : 'Job rescheduled',
           body: assessorChanged
             ? `The assessment at ${where} has been reassigned to you, scheduled for ${when}.`
             : `Your assessment at ${where} has been rescheduled to ${when}.`,
@@ -211,7 +218,7 @@ export const rescheduleJob = onCall<RescheduleJobInput>(callableOptions, (reques
         );
       }
 
-      logger.info('Job rescheduled', { jobId, changed });
+      logger.info('Job rescheduled', { jobId, changed, today });
       return { updated: true };
     },
   ),

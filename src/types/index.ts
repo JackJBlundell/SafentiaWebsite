@@ -423,10 +423,8 @@ export interface Building {
   customerId: string;
   address?: string;
   details?: BuildingDetails;
-  responsiblePerson?: string;
   /** The building's default responsible party (admin-set; the reusable default
-   *  for assessments and their actions). Supersedes the legacy `responsiblePerson`
-   *  string when present. */
+   *  for assessments and their actions). */
   responsibleParty?: ResponsibleParty;
   /** Article 5(3) duty-holders (UK Fire Safety Order). */
   article53Persons?: string[];
@@ -1434,7 +1432,6 @@ export interface ManageBuildingResult {
 export interface ImportBuildingRow {
   name: string;
   address?: string;
-  responsiblePerson?: string;
   responsibleParty?: ResponsibleParty;
   article53Persons?: string[];
   details?: BuildingDetails;

@@ -423,10 +423,11 @@ export interface Building {
   customerId: string;
   address?: string;
   details?: BuildingDetails;
-  responsiblePerson?: string;
   /** The building's default responsible party (admin-set; the reusable default
-   *  for assessments and their actions). Supersedes the legacy `responsiblePerson`
-   *  string when present. */
+   *  for assessments and their actions). The SOLE record of who is accountable
+   *  for the building - the free-text predecessor it replaced was deleted from
+   *  the contract and the data together (scripts/backfillResponsibleParty.ts),
+   *  so there is no second place to look. */
   responsibleParty?: ResponsibleParty;
   /** Article 5(3) duty-holders (UK Fire Safety Order). */
   article53Persons?: string[];
@@ -1434,7 +1435,6 @@ export interface ManageBuildingResult {
 export interface ImportBuildingRow {
   name: string;
   address?: string;
-  responsiblePerson?: string;
   responsibleParty?: ResponsibleParty;
   article53Persons?: string[];
   details?: BuildingDetails;

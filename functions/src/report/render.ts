@@ -529,7 +529,10 @@ function renderOverview(
   // profile hook is pure and defensive; it returns [] when it adds nothing.
   const overviewRows: Array<[string, string]> = [
     ['Premises address', o.address],
-    ['Responsible person', o.responsiblePerson],
+    // "Responsible person" is the statutory term (Regulatory Reform (Fire
+    // Safety) Order 2005) - the legally correct heading for this row. Do not
+    // reword it to match the field name behind it.
+    ['Responsible person', o.responsiblePartyLine],
     ['Article 5(3) persons', article53],
     ['Assessing organisation', model.orgProfile.name],
     ['Contact name', o.orgContactName],

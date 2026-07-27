@@ -43,6 +43,7 @@ import { activityUpdate } from '../lib/events';
 import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import { orgEmailBrand, renderBrandedEmail } from '../lib/emailTemplates';
+import { resolveResponsibleName } from '../lib/responsibleParty';
 import {
   createActionRecord,
   reopenFragment,
@@ -84,6 +85,44 @@ function formatDueDate(millis: number): string {
   });
 }
 
+/** A building found in the org's estate, with the site it stands under. */
+interface LocatedBuilding {
+  building: Building;
+  siteId: string;
+}
+
+/**
+ * Find a building record (and its site) within THIS org's estate.
+ *
+ * The callable is told a buildingId but never a siteId, and buildings live under
+ * /{env}/buildings/{orgId}/{siteId}/{buildingId}, so the record can only be
+ * reached by walking the org's own buildings root - bounded by the estate size,
+ * and never another tenant's data. That read is deliberately NOT done for every
+ * verb: step 2's existence gate uses the targeted buildingCustomer index, and
+ * this walk runs only where the RECORD (not merely its existence) is needed -
+ * inheriting a responsible party on create, and routing the assignment email.
+ * Both of those happen on the same request, so the caller resolves it once and
+ * passes the result down rather than reading the estate twice.
+ */
+async function locateBuilding(
+  paths: EnvPaths,
+  orgId: string,
+  buildingId: string,
+): Promise<LocatedBuilding | undefined> {
+  const estateSnap = await db.ref(paths.db.buildingsRoot(orgId)).get();
+  const estate =
+    (estateSnap.val() as Record<string, Record<string, Building>> | null) ?? {};
+  for (const [siteId, site] of Object.entries(estate)) {
+    if (site && typeof site === 'object' && buildingId in site) {
+      const building = site[buildingId];
+      if (building) {
+        return { building, siteId };
+      }
+    }
+  }
+  return undefined;
+}
+
 /** The action facts the assignment email carries. */
 interface AssignedActionView {
   responsible: string;
@@ -119,31 +158,20 @@ async function emailAssignedAction(
   buildingId: string,
   view: AssignedActionView,
   logger: Logger,
+  located?: LocatedBuilding,
 ): Promise<void> {
   try {
-    // Locate the building record (the existence gate only proved presence).
-    // One estate read, only on the assignment path - buildings live under
-    // /{env}/buildings/{orgId}/{siteId}/{buildingId} and the callable is not
-    // told the siteId.
-    const estateSnap = await db.ref(paths.db.buildingsRoot(orgId)).get();
-    const estate =
-      (estateSnap.val() as Record<string, Record<string, Building>> | null) ??
-      {};
-    let building: Building | undefined;
-    // The portal route to a building is /app/sites/{siteId}/buildings/{id}, so
-    // the CTA needs the site this walk already passes through.
-    let siteId: string | undefined;
-    for (const [candidateSiteId, site] of Object.entries(estate)) {
-      if (site && typeof site === 'object' && buildingId in site) {
-        building = site[buildingId];
-        siteId = candidateSiteId;
-        break;
-      }
-    }
-    if (!building || !siteId) {
+    // The building record (the existence gate only proved presence). The create
+    // path has already located it to inherit the responsible party, so it hands
+    // the result in; the other callers pay for the walk here. The portal route
+    // to a building is /app/sites/{siteId}/buildings/{id}, so the CTA below
+    // needs the site the walk passes through as well as the record.
+    const resolved = located ?? (await locateBuilding(paths, orgId, buildingId));
+    if (!resolved) {
       logger.info('Assignment email skipped: building record not found');
       return;
     }
+    const { building, siteId } = resolved;
 
     const party = building.responsibleParty;
     if (!party?.contactId) {
@@ -301,13 +329,35 @@ export const manageAction = onCall<ManageActionInput>(
               },
             );
           }
+          // The responsible party is INHERITED when the admin did not name one:
+          // the building's default (structured party first, legacy free-text
+          // string last), exactly as the release pipeline inherits it for an
+          // assessment-born action. Without this the same person had to be
+          // re-typed on every manual action, and any left blank vanished from
+          // the action plan's "who owes this" column.
+          //
+          // There is no assessment party to consider on this path: manageAction
+          // only ever creates MANUAL actions, which carry the MANUAL_ASSESSMENT_ID
+          // sentinel precisely because they have no originating assessment
+          // (lib/actionPlan). Should a future verb create an assessment-born
+          // action here, its assessment must be passed as the first source.
+          //
+          // Located only when needed, and the record is handed to the assignment
+          // email below so a create costs at most ONE estate read.
+          let located: LocatedBuilding | undefined;
+          if (payload.responsible == null) {
+            located = await locateBuilding(paths, orgId, buildingId);
+          }
+          const responsible = resolveResponsibleName(
+            payload.responsible ?? undefined,
+            undefined,
+            located?.building,
+          );
           const record = createActionRecord(
             {
               observation: payload.observation,
               severity: payload.severity,
-              ...(payload.responsible != null
-                ? { responsible: payload.responsible }
-                : {}),
+              ...(responsible != null ? { responsible } : {}),
               ...(payload.dueBy != null ? { dueBy: payload.dueBy } : {}),
               ...(payload.lifeProtection !== undefined
                 ? { lifeProtection: payload.lifeProtection }
@@ -327,7 +377,13 @@ export const manageAction = onCall<ManageActionInput>(
             }),
           });
           logger.info('Action created', { buildingId, actionId });
-          // Story 2047: created WITH a responsible - tell them, once.
+          // Story 2047: created WITH a responsible - tell them, once. An
+          // INHERITED responsible sends too, deliberately: the notification
+          // answers "an action is now yours", which is equally true whether the
+          // admin typed the party's name or the building's default supplied it,
+          // and the send is still gated on the party being a linked contact
+          // whose name matches exactly. `located` is passed through so the
+          // email path does not re-read the estate this branch already walked.
           if (record.responsible !== undefined) {
             await emailAssignedAction(
               paths,
@@ -341,6 +397,7 @@ export const manageAction = onCall<ManageActionInput>(
                 lifeProtection: record.lifeProtection === true,
               },
               logger,
+              located,
             );
           }
           return { actionId };

@@ -1,5 +1,8 @@
-# Compiled output
-lib/
+# Compiled output (tsc outDir). ANCHORED with a leading slash: a bare `lib/`
+# matches at ANY depth, which silently untracked the 28 shared helpers in
+# `src/lib/` (paths, guards, notifications, ...) and left a fresh clone unable to
+# build the Functions. Only the build output at the functions root is ignored.
+/lib/
 
 # Dependencies
 node_modules/

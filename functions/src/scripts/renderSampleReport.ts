@@ -212,7 +212,10 @@ function buildModel(): ReportModel {
     logo: placeholder('Organisation logo'),
     overview: {
       address: 'Marlowe House, 14 Weaver Street, Manchester, M3 5GT',
-      responsiblePerson: 'Northgate Residential Management Ltd',
+      // Rendered exactly as assemble.ts composes a structured ResponsibleParty
+      // ({ name, role }), so the sample exercises the real "Name (Role)" line
+      // rather than a bare name the assembler can no longer produce.
+      responsiblePartyLine: 'Northgate Residential Management Ltd (Managing agent)',
       article53Persons: ['Building manager (day)', 'Concierge (24h)'],
       orgContactName: 'James Harrison',
       orgContactEmail: 'assessments@harrisonfire.example.co.uk',

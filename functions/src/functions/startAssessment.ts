@@ -12,8 +12,14 @@
 //   2. Load the job; reject if cancelled/released (cannot start work on it).
 //   3. If the assessment already exists, return it with resumed:true.
 //   4. Otherwise create it from the job's PINNED template version as the
-//      templateSnapshot, and move the job to inProgress - atomically, so the job
-//      status and the assessment are never out of step (brief 18.3).
+//      templateSnapshot, stamp the responsible party inherited from the
+//      building, and move the job to inProgress - atomically, so the job status
+//      and the assessment are never out of step (brief 18.3).
+//
+// The party stamp mirrors onAssessmentCreate (the offline-first path's server
+// reconciler): both routes into existence must persist the SAME inherited
+// default, or which route an assessment took would decide whether its
+// responsible party was ever recorded.
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -30,9 +36,11 @@ import {
 } from '../lib/guards';
 import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
+import { resolveResponsibleParty } from '../lib/responsibleParty';
 import type {
   StartAssessmentInput,
   StartAssessmentResult,
+  Building,
   Job,
   Template,
   Assessment,
@@ -111,7 +119,22 @@ export const startAssessment = onCall<StartAssessmentInput>(
           );
         }
 
-        // 4b. Atomic create: the assessment AND the job status move together.
+        // 4b. Resolve the responsible party the assessment inherits from its
+        // building, so the default is PERSISTED at birth rather than re-derived
+        // by each reader (the report, the action plan and the portal all read
+        // the stored record). The job knows the site, so this is one targeted
+        // read. Best-effort by design: a building record that has gone missing
+        // must not stop an assessor starting work, so an absent building simply
+        // leaves the field unset and the read-time fallbacks still apply.
+        const buildingSnap = await db
+          .ref(paths.db.building(orgId, job.siteId, job.buildingId))
+          .get();
+        const party = resolveResponsibleParty(
+          undefined,
+          buildingSnap.val() as Building | null,
+        );
+
+        // 4c. Atomic create: the assessment AND the job status move together.
         const now = Date.now();
         const assessment: Assessment = {
           jobId,
@@ -120,6 +143,9 @@ export const startAssessment = onCall<StartAssessmentInput>(
           templateSnapshot: template,
           conductedBy: uid,
           conductedAt: now,
+          // RTDB rejects undefined, so the party is spread in only when the
+          // building actually names one.
+          ...(party !== undefined ? { responsibleParty: party } : {}),
           status: 'inProgress',
         };
         const update: Record<string, unknown> = {

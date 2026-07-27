@@ -120,7 +120,7 @@ describe('ActionsPanel', () => {
         dueBy: Date.now() - 3 * DAY_MS,
       }),
     };
-    render(<ActionsPanel buildingId="bld-1" />);
+    render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
     // The LTP overdue action escalates beyond the plain overdue badge.
     expect(screen.getByText('Overdue · LTP')).toBeInTheDocument();
     expect(screen.getByText('Overdue')).toBeInTheDocument();
@@ -137,7 +137,7 @@ describe('ActionsPanel', () => {
         signedOffAt: Date.now(),
       }),
     };
-    render(<ActionsPanel buildingId="bld-1" />);
+    render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
     expect(screen.getByText('Open item')).toBeInTheDocument();
     expect(screen.getByText('Completed item')).toBeInTheDocument();
 
@@ -153,7 +153,7 @@ describe('ActionsPanel', () => {
       late: action({ observation: 'Late item', dueBy: Date.now() - 3 * DAY_MS }),
       fine: action({ observation: 'Future item', dueBy: Date.now() + 30 * DAY_MS }),
     };
-    render(<ActionsPanel buildingId="bld-1" />);
+    render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
     fireEvent.click(screen.getByLabelText('Overdue only'));
     expect(screen.getByText('Late item')).toBeInTheDocument();
     expect(screen.queryByText('Future item')).not.toBeInTheDocument();
@@ -165,7 +165,7 @@ describe('ActionsPanel', () => {
       a2: action({ observation: 'Bravo item', responsible: 'Ben Brook' }),
       a3: action({ observation: 'Charlie item' }),
     };
-    render(<ActionsPanel buildingId="bld-1" />);
+    render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
 
     const filter = screen.getByLabelText('Responsible');
     // Options are the distinct names present, plus Everyone and Unassigned.
@@ -191,7 +191,7 @@ describe('ActionsPanel', () => {
       }),
       a2: action({ observation: 'Plain finding' }),
     };
-    render(<ActionsPanel buildingId="bld-1" />);
+    render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
     const link = screen.getByRole('link', { name: 'View location' });
     expect(link).toHaveAttribute('href', 'https://example.com/flags/composite.png');
     expect(link).toHaveAttribute('target', '_blank');
@@ -201,7 +201,7 @@ describe('ActionsPanel', () => {
 
   it('signs off only after the explicit confirm step', async () => {
     mocks.rtdb.data = { a1: action({ observation: 'Open item' }) };
-    render(<ActionsPanel buildingId="bld-1" />);
+    render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Sign off' }));
     // First press arms the confirmation; nothing has been sent yet.
@@ -226,7 +226,7 @@ describe('ActionsPanel', () => {
         signedOffAt: Date.now(),
       }),
     };
-    render(<ActionsPanel buildingId="bld-1" />);
+    render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Reopen' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(mocks.callable).not.toHaveBeenCalled();
@@ -235,7 +235,7 @@ describe('ActionsPanel', () => {
 
   it('creates an action through manageAction with the whitelisted fields', async () => {
     mocks.rtdb.data = {};
-    render(<ActionsPanel buildingId="bld-1" />);
+    render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Add action' }));
     fireEvent.change(screen.getByLabelText('Observation'), {
       target: { value: 'New finding' },
@@ -266,7 +266,7 @@ describe('ActionsPanel', () => {
       environment: 'test',
     } satisfies SessionClaims;
     mocks.rtdb.data = { a1: action({ observation: 'Open item' }) };
-    render(<ActionsPanel buildingId="bld-1" />);
+    render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
     expect(screen.queryByRole('button', { name: 'Add action' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sign off' })).not.toBeInTheDocument();
   });

@@ -13,6 +13,14 @@
 // derivation (story 2045) - so this table can never disagree with a dashboard.
 // An overdue action that protects life (LTP) is the plan's loudest state and
 // is escalated visually beyond the ordinary overdue tone - never colour alone.
+//
+// Responsible party: there is ONE responsible party per building, chosen once
+// by an admin and inherited by everything the building produces. So the add
+// form does not start from a blank text box - it reads the building and
+// preselects that default (the `responsibleParty` the admin set), offering the
+// names already used in the plan alongside it. An admin confirms a choice
+// instead of retyping a name, which is what let the plan drift into
+// near-duplicate spellings of the same person.
 // ============================================================================
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -28,6 +36,7 @@ import type {
   Action,
   ActionStatus,
   ActionStatusChange,
+  Building,
   ManageActionInput,
   ManageActionResult,
   Severity,
@@ -56,6 +65,19 @@ const STATUS_LABELS: Record<ActionStatus, string> = {
  *  fixed values. */
 type ResponsibleFilter = 'all' | 'unassigned' | `name:${string}`;
 const responsibleOption = (name: string): ResponsibleFilter => `name:${name}`;
+
+/** The Responsible FIELD's value encoding in the add/edit form. Same prefixing
+ *  trick as the filter above (a party genuinely called "Unassigned" can never
+ *  be read as the fixed entry), plus 'other' for the free-text escape hatch -
+ *  a one-off contractor still has to be typeable. */
+type ResponsibleChoice = 'unassigned' | 'other' | `name:${string}`;
+const responsibleChoice = (name: string): ResponsibleChoice => `name:${name}`;
+
+/** The building's default responsible party: the structured `responsibleParty`
+ *  an admin set. Empty when the building names nobody. */
+function buildingDefaultResponsible(building: Building | null | undefined): string {
+  return building?.responsibleParty?.name?.trim() || '';
+}
 
 interface ActionRow {
   id: string;
@@ -233,6 +255,10 @@ interface Draft {
   observation: string;
   severity: Severity;
   responsible: string;
+  /** TRUE while the admin is typing a name the picker does not offer, so the
+   *  free-text box stays open even when it is momentarily empty (which is a
+   *  different intent from choosing Unassigned). */
+  responsibleOther: boolean;
   dueBy: string;
   lifeProtection: boolean;
 }
@@ -240,11 +266,18 @@ const EMPTY_DRAFT: Draft = {
   observation: '',
   severity: 'M',
   responsible: '',
+  responsibleOther: false,
   dueBy: '',
   lifeProtection: false,
 };
 
-export function ActionsPanel({ buildingId }: { buildingId: string }) {
+export function ActionsPanel({
+  siteId,
+  buildingId,
+}: {
+  siteId: string;
+  buildingId: string;
+}) {
   const { claims, paths, user } = useAuth();
   const orgId = claims?.orgId ?? '';
   const isAdmin = claims?.roles.admin === true;
@@ -254,6 +287,16 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
     path: paths ? paths.db.actions(orgId, buildingId) : '',
     enabled: Boolean(orgId && paths && buildingId),
   });
+  // The building, for its default responsible party. Read on the SAME cache key
+  // the building page already uses (the ServiceSchedulePanel precedent), so the
+  // panel stays self-contained without opening a second subscription to a node
+  // its host is already watching.
+  const buildingQuery = useRtdbQuery<Building | null>({
+    key: keys.building(orgId, siteId, buildingId),
+    path: paths ? paths.db.building(orgId, siteId, buildingId) : '',
+    enabled: Boolean(orgId && paths && siteId && buildingId),
+  });
+  const defaultResponsible = buildingDefaultResponsible(buildingQuery.data);
   const manage = useCallable<ManageActionInput, ManageActionResult>(
     'manageAction',
   );
@@ -294,6 +337,18 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
       hasUnassigned: actions.some((action) => !action.responsible),
     };
   }, [actionsQuery.data]);
+
+  // The Responsible FIELD's options: the building's default first (it is the
+  // answer for nearly every action, so it leads and is the one preselected),
+  // then the other names already in the plan. Offering the plan's own names is
+  // what stops the same person being re-typed three ways.
+  const responsibleChoices = useMemo(
+    () => [
+      ...(defaultResponsible ? [defaultResponsible] : []),
+      ...responsibleOptions.names.filter((name) => name !== defaultResponsible),
+    ],
+    [defaultResponsible, responsibleOptions.names],
+  );
 
   const now = Date.now();
   const rows = useMemo<ActionRow[]>(() => {
@@ -343,6 +398,29 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
     setCompletionNote('');
     manage.clearError();
   };
+
+  // A new action starts on the building's default responsible party: the admin
+  // confirms it (or picks someone else) rather than retyping a name the record
+  // already holds. If the building read has not landed yet the picker simply
+  // opens on Unassigned - the panel never blocks recording the finding.
+  const newDraft = (): Draft => ({
+    ...EMPTY_DRAFT,
+    responsible: defaultResponsible,
+  });
+
+  // An existing action opens on whatever it already carries. A name the picker
+  // no longer offers (typed before it left the plan) opens the free-text box
+  // holding that name, so editing an action can never silently reassign it.
+  const editDraft = (action: Action): Draft => ({
+    observation: action.observation,
+    severity: action.severity,
+    responsible: action.responsible ?? '',
+    responsibleOther: Boolean(
+      action.responsible && !responsibleChoices.includes(action.responsible),
+    ),
+    dueBy: toDateInputValue(action.dueBy),
+    lifeProtection: action.lifeProtection,
+  });
 
   const disarm = () => {
     setConfirming(null);
@@ -555,15 +633,7 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
             <span className={styles.rowActions}>
               <Button
                 variant="secondary"
-                onClick={() =>
-                  openForm(row.id, {
-                    observation: row.action.observation,
-                    severity: row.action.severity,
-                    responsible: row.action.responsible ?? '',
-                    dueBy: toDateInputValue(row.action.dueBy),
-                    lifeProtection: row.action.lifeProtection,
-                  })
-                }
+                onClick={() => openForm(row.id, editDraft(row.action))}
               >
                 Edit
               </Button>
@@ -614,10 +684,7 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
           Action plan
         </h2>
         {isAdmin && formTarget === null && (
-          <Button
-            variant="secondary"
-            onClick={() => openForm('new', EMPTY_DRAFT)}
-          >
+          <Button variant="secondary" onClick={() => openForm('new', newDraft())}>
             Add action
           </Button>
         )}
@@ -728,18 +795,56 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
             </label>
             <label className={styles.field}>
               <span className={styles.fieldLabel}>Responsible</span>
-              <input
-                className={styles.input}
-                type="text"
-                value={draft.responsible}
-                onChange={(event) =>
+              <select
+                className={styles.select}
+                value={
+                  draft.responsibleOther
+                    ? 'other'
+                    : draft.responsible
+                      ? responsibleChoice(draft.responsible)
+                      : 'unassigned'
+                }
+                onChange={(event) => {
+                  const choice = event.target.value as ResponsibleChoice;
                   setDraft((current) => ({
                     ...current,
-                    responsible: event.target.value,
-                  }))
-                }
-              />
+                    // 'other' clears the name so the box opens empty and ready
+                    // to type; the fixed entries close it again.
+                    responsible:
+                      choice === 'unassigned' || choice === 'other'
+                        ? ''
+                        : choice.slice('name:'.length),
+                    responsibleOther: choice === 'other',
+                  }));
+                }}
+              >
+                {responsibleChoices.map((name) => (
+                  <option key={name} value={responsibleChoice(name)}>
+                    {name === defaultResponsible
+                      ? `${name} (building default)`
+                      : name}
+                  </option>
+                ))}
+                <option value="unassigned">Unassigned</option>
+                <option value="other">Someone else</option>
+              </select>
             </label>
+            {draft.responsibleOther && (
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>Responsible name</span>
+                <input
+                  className={styles.input}
+                  type="text"
+                  value={draft.responsible}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      responsible: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            )}
             <label className={styles.field}>
               <span className={styles.fieldLabel}>Due by</span>
               <input

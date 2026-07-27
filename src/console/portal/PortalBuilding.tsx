@@ -173,10 +173,8 @@ function FactsCard({ building }: { building: Building }) {
     { label: 'Alarm type', value: details?.alarmType },
     { label: 'Alarm category', value: details?.alarmCategory },
     {
-      label: building.responsibleParty?.name
-        ? 'Responsible party'
-        : 'Responsible person',
-      value: building.responsibleParty?.name ?? building.responsiblePerson,
+      label: 'Responsible party',
+      value: building.responsibleParty?.name,
     },
     {
       label: 'Last assessed',

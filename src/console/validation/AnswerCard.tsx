@@ -243,11 +243,28 @@ const dueDateFormat = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
 });
 
-function responsiblePartyLine(party: ResponsibleParty | undefined): string {
-  if (!party?.name) {
-    return 'Not set on this assessment';
-  }
+function responsiblePartyLine(party: ResponsibleParty): string {
   return party.role ? `${party.name} (${party.role})` : party.name;
+}
+
+/** Where an inherited responsible party was resolved from, so the card names
+ *  the source instead of implying one: an assessment recorded before the
+ *  server started stamping its own copy inherits the BUILDING's party, and an
+ *  auditor reading "assessment default" for a value the assessment does not
+ *  hold would be reading a lie. */
+export type ResponsiblePartySource = 'assessment' | 'building';
+const RESPONSIBLE_SOURCE_LABEL: Record<ResponsiblePartySource, string> = {
+  assessment: 'assessment default',
+  building: 'building default',
+};
+
+/** A responsible party a finding inherits when it records none of its own,
+ *  paired with the level it came from. Resolved ONCE by the review (which
+ *  already holds both the assessment and the building) and handed down, so the
+ *  console never grows a second, drifting copy of that resolution order. */
+export interface InheritedResponsibleParty {
+  party: ResponsibleParty;
+  source: ResponsiblePartySource;
 }
 
 function AnswerBody({
@@ -257,7 +274,7 @@ function AnswerBody({
 }: {
   question: TemplateQuestion;
   answer: AssessmentAnswer;
-  responsibleParty?: ResponsibleParty;
+  responsibleParty?: InheritedResponsibleParty;
 }) {
   switch (question.type) {
     case 'text':
@@ -353,9 +370,9 @@ function AnswerBody({
                 <dt>Responsible party</dt>
                 <dd>
                   {extras.responsible ??
-                    (responsibleParty?.name
-                      ? `${responsiblePartyLine(responsibleParty)} (assessment default)`
-                      : 'Not set on this assessment')}
+                    (responsibleParty
+                      ? `${responsiblePartyLine(responsibleParty.party)} (${RESPONSIBLE_SOURCE_LABEL[responsibleParty.source]})`
+                      : 'Not set on this assessment or the building')}
                 </dd>
               </div>
               {extras.dueBy !== undefined ? (
@@ -401,8 +418,10 @@ export interface FlaggingHandle {
 export interface AnswerCardProps {
   question: TemplateQuestion;
   answer: AssessmentAnswer | undefined;
-  /** The assessment's responsible party (what release assigns to actions). */
-  responsibleParty?: ResponsibleParty;
+  /** The responsible party a finding inherits when it names none of its own -
+   *  what release assigns to the action - and the level it was resolved from.
+   *  Resolved by the review; the card only renders it. */
+  responsibleParty?: InheritedResponsibleParty;
   /** Resolve a uid to a display name for info-request threads. */
   nameFor: (uid: string) => string;
   /** Present only while flagging is allowed (status readyForValidation). */

@@ -48,6 +48,7 @@ import { deriveRiskLevel, RAG_CONFIG_DEFAULTS } from '../lib/ragDerivation';
 import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import { orgEmailBrand, renderBrandedEmail } from '../lib/emailTemplates';
+import { resolveResponsibleName } from '../lib/responsibleParty';
 import { SEVERITIES } from '../shared/types';
 import type { EnvPaths } from '../shared/paths';
 import type { Logger } from '../lib/logging';
@@ -319,11 +320,14 @@ export const releaseAssessment = onCall<ReleaseAssessmentInput>(
             // The responsible party: the finding's own, else the visit's (the
             // assessment copy, itself defaulted from the building), else the
             // building's default (structured party first, legacy string last).
-            const responsible =
-              extras.responsible ??
-              assessment.responsibleParty?.name ??
-              building.responsibleParty?.name ??
-              building.responsiblePerson;
+            // The chain itself lives in lib/responsibleParty so the release
+            // pipeline, the manual action plan and the report cannot drift in
+            // who they hold accountable.
+            const responsible = resolveResponsibleName(
+              extras.responsible,
+              assessment,
+              building,
+            );
             // The flag composite: the first plan flag that has one (brief 8).
             const locationFlagUrl = (answer.flags ?? []).find(
               (flag) => typeof flag?.flagImageUrl === 'string',

@@ -78,7 +78,6 @@ const SITE_FIELDS = [
 const BUILDING_FIELDS = [
   'name',
   'address',
-  'responsiblePerson',
   'responsibleParty',
   'article53Persons',
   'details',
@@ -337,11 +336,6 @@ function readBuilding(
   assertFields(payload, BUILDING_FIELDS, where);
   const name = requireString(payload, 'name', TEXT_LIMITS.shortText);
   const address = optionalString(payload, 'address', TEXT_LIMITS.shortText);
-  const responsiblePerson = optionalString(
-    payload,
-    'responsiblePerson',
-    TEXT_LIMITS.displayName,
-  );
   const responsibleParty = optionalParty(payload, where);
   const article53Persons = optionalArticle53(payload, where);
   const details = optionalDetails(payload, where);
@@ -354,7 +348,6 @@ function readBuilding(
     riskLevel: 'pending',
     ...(address ? { address } : {}),
     ...(details ? { details } : {}),
-    ...(responsiblePerson ? { responsiblePerson } : {}),
     ...(responsibleParty ? { responsibleParty } : {}),
     ...(article53Persons ? { article53Persons } : {}),
     ...(serviceSchedule ? { serviceSchedule } : {}),

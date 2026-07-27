@@ -54,7 +54,11 @@ import { Card, CardHeader } from '../ui/Card';
 import { DescriptionList, PageGrid } from '../ui/Grid';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
-import { AnswerCard, isAnswered } from './AnswerCard';
+import {
+  AnswerCard,
+  isAnswered,
+  type InheritedResponsibleParty,
+} from './AnswerCard';
 import { actorName } from '../lib/actorName';
 import { useReportDownload } from './releaseShared';
 import styles from './AssessmentReview.module.css';
@@ -240,6 +244,29 @@ export function AssessmentReview() {
     enabled: Boolean(orgId && paths && siteId && buildingId),
   });
   const building = buildingQuery.data ?? null;
+
+  // The responsible party this review answers with, resolved ONCE here for both
+  // the aside fact and every finding card: the assessment's own copy first,
+  // then the building's default. That is the server's order, deliberately - the
+  // value an auditor reads has to be the value release will stamp on the
+  // actions.
+  //
+  // The fallback exists because the assessment's copy is only stamped from the
+  // assessor's app at capture time; every assessment recorded before that
+  // stamping landed holds nothing, and a blank "Responsible party" sent
+  // auditors off to look the name up (or, worse, invent one). The building is
+  // already loaded above for the header and the service-schedule card, so this
+  // costs no extra read. Once the backfill has run the first branch simply
+  // wins everywhere and the rest goes quiet on its own.
+  const responsibleParty = useMemo<InheritedResponsibleParty | undefined>(() => {
+    if (assessment?.responsibleParty?.name) {
+      return { party: assessment.responsibleParty, source: 'assessment' };
+    }
+    if (building?.responsibleParty?.name) {
+      return { party: building.responsibleParty, source: 'building' };
+    }
+    return undefined;
+  }, [assessment?.responsibleParty, building]);
 
   // Released reports for this building. Only read once the assessment is
   // released - that is the only state that surfaces a download, and the node is
@@ -501,10 +528,15 @@ export function AssessmentReview() {
                   { label: 'Conducted', value: dateFormat.format(assessment.conductedAt) },
                   {
                     label: 'Responsible party',
-                    value: assessment.responsibleParty
-                      ? assessment.responsibleParty.role
-                        ? `${assessment.responsibleParty.name} (${assessment.responsibleParty.role})`
-                        : assessment.responsibleParty.name
+                    // Named as the building's when that is where it came from,
+                    // so the auditor can see this assessment carries no party
+                    // of its own rather than assuming the assessor chose it.
+                    value: responsibleParty
+                      ? `${
+                          responsibleParty.party.role
+                            ? `${responsibleParty.party.name} (${responsibleParty.party.role})`
+                            : responsibleParty.party.name
+                        }${responsibleParty.source === 'building' ? ' (building default)' : ''}`
                       : undefined,
                   },
                   {
@@ -798,7 +830,7 @@ export function AssessmentReview() {
                   key={question.id}
                   question={question}
                   answer={answers[question.id]}
-                  responsibleParty={assessment.responsibleParty}
+                  responsibleParty={responsibleParty}
                   nameFor={nameFor}
                   flagging={
                     canFlag

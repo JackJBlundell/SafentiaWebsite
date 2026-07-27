@@ -355,7 +355,7 @@ export function BuildingDetail() {
           overdueHref={`${urls.building(customerId, siteId, buildingId)}#actions-panel-heading`}
         />
 
-        <ActionsPanel buildingId={buildingId} />
+        <ActionsPanel siteId={siteId} buildingId={buildingId} />
         <AssessmentHistoryPanel buildingId={buildingId} />
         <FloorPlansPanel buildingId={buildingId} />
         <DocumentsPanel buildingId={buildingId} />

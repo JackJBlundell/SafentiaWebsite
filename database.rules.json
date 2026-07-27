@@ -295,8 +295,11 @@
             ".write": "auth != null && auth.uid === $uid && ((auth.token.testMode === true) === ($env === 'test')) && data.exists() && newData.exists() && newData.child('type').val() === data.child('type').val()",
             ".validate": "newData.hasChildren(['type','title','body']) && newData.child('title').val() === data.child('title').val() && newData.child('body').val() === data.child('body').val()"
           },
-          "deviceTokens": {
-            ".write": "auth != null && auth.uid === $uid && ((auth.token.testMode === true) === ($env === 'test'))"
+          "devices": {
+            "$token": {
+              ".write": "auth != null && auth.uid === $uid && ((auth.token.testMode === true) === ($env === 'test'))",
+              ".validate": "newData.hasChildren(['token','updatedAt']) && newData.child('token').isString() && newData.child('token').val() === $token && newData.child('updatedAt').isNumber()"
+            }
           }
         }
       },

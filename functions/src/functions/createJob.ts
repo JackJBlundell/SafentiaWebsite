@@ -14,7 +14,9 @@
 //   4. Write /jobs and the /assessorJobs index atomically (one update) so the
 //      index can never drift from the job.
 //   5. Notify the assessor (in-app + best-effort push) so assignment lands within
-//      seconds and tapping it deep-links to the job (1034).
+//      seconds and tapping it deep-links to the job (1034). The notification names
+//      the scheduled day - and calls out a SAME-DAY booking specifically, since the
+//      07:00 "jobs due today" digest has already run by the time most of them land.
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -179,21 +181,31 @@ export const createJob = onCall<CreateJobInput>(callableOptions, (request) =>
       await db.ref().update(update);
 
       // 5. Notify the assessor. Deep link opens the job detail cold (brief 9.3).
+      //
+      // The copy NAMES THE DAY. The morning "jobs due today" digest
+      // (dailyJobReminders) runs at 07:00 and can only cover the diary as it stood
+      // then, so a job booked into today at 11:00 has no other route to the
+      // assessor - a bare "you have been assigned an assessment" reads identically
+      // whether the visit is this afternoon or next month. Same-day assignments get
+      // their own title too, so the push is recognisable as urgent on the lock
+      // screen without being opened.
       const logger = createLogger({ fn: 'createJob', orgId });
+      const today = isUkToday(scheduledFor);
+      const when = ukWhenPhrase(scheduledFor, scheduledUntil);
       await sendNotification(
         paths,
         orgId,
         assessorUid,
         {
-          type: 'jobAssigned',
-          title: 'New job assigned',
-          body: `You have been assigned an assessment at ${building.name}.`,
+          type: today ? 'jobAssignedToday' : 'jobAssigned',
+          title: today ? 'New job today' : 'New job assigned',
+          body: `You have been assigned an assessment at ${building.name}, scheduled for ${when}.`,
           link: `safentia://job/${jobId}`,
         },
         logger,
       );
 
-      logger.info('Job created', { jobId, assessorUid });
+      logger.info('Job created', { jobId, assessorUid, today });
       return { jobId };
     },
   ),

@@ -61,7 +61,6 @@ const BUILDING_FIELDS = [
   'customerId',
   'address',
   'details',
-  'responsiblePerson',
   'responsibleParty',
   'article53Persons',
   'photoUrl',
@@ -252,7 +251,6 @@ interface BuildingFields {
   customerId?: string;
   address?: string | null;
   details?: BuildingDetails | null;
-  responsiblePerson?: string | null;
   responsibleParty?: ResponsibleParty | null;
   article53Persons?: string[] | null;
   photoUrl?: string | null;
@@ -293,15 +291,9 @@ function readFields(
   const name = optionalString(payload, 'name', TEXT_LIMITS.shortText);
   const customerId = optionalString(payload, 'customerId', TEXT_LIMITS.shortText);
   const address = clearableString(payload, 'address', TEXT_LIMITS.shortText);
-  const responsiblePerson = clearableString(
-    payload,
-    'responsiblePerson',
-    TEXT_LIMITS.displayName,
-  );
   if (name !== undefined) fields.name = name;
   if (customerId !== undefined) fields.customerId = customerId;
   if (address !== undefined) fields.address = address;
-  if (responsiblePerson !== undefined) fields.responsiblePerson = responsiblePerson;
   const details = optionalDetails(payload);
   if (details !== undefined) fields.details = details;
   const party = optionalParty(payload);
@@ -407,9 +399,6 @@ export const manageBuilding = onCall<ManageBuildingInput>(
             riskLevel: 'pending',
             ...(fields.address ? { address: fields.address } : {}),
             ...(fields.details ? { details: fields.details } : {}),
-            ...(fields.responsiblePerson
-              ? { responsiblePerson: fields.responsiblePerson }
-              : {}),
             ...(fields.responsibleParty
               ? { responsibleParty: fields.responsibleParty }
               : {}),

@@ -20,6 +20,7 @@
 import { db, storage } from '../admin';
 import type { EnvPaths } from '../lib/paths';
 import type { Logger } from '../lib/logging';
+import { resolveResponsibleParty } from '../lib/responsibleParty';
 import { SEVERITIES } from '../shared/types';
 import type {
   Action,
@@ -110,7 +111,11 @@ export interface ReportAction {
 
 export interface ReportOverview {
   address: string;
-  responsiblePerson: string;
+  /** The responsible party as one rendered line ("Name (Role)"). Named for what
+   *  it holds; the PDF prints it under the statutory heading "Responsible
+   *  person" (Regulatory Reform (Fire Safety) Order 2005), which is a legal
+   *  term of art and NOT a reference to any stored field. */
+  responsiblePartyLine: string;
   article53Persons: string[];
   /** The assessing organisation's contact (from the org profile). */
   orgContactName: string;
@@ -186,15 +191,25 @@ function orNotRecorded(value: unknown): string {
   return clean(value) ?? NOT_RECORDED;
 }
 
-/** The building's responsible party as one display line - the structured
- *  party's name (with role when recorded), falling back to the older free-text
- *  string on records that predate the structured field. */
-function responsiblePartyLine(building: Building | undefined): string | undefined {
-  const party = building?.responsibleParty;
-  if (party?.name) {
-    return party.role ? `${party.name} (${party.role})` : party.name;
+/** The responsible party as one display line: the party that actually governs
+ *  THIS assessment (the visit's own copy when the assessor switched it, else the
+ *  building's default), with the role appended when recorded.
+ *
+ *  Taking the assessment into account is not cosmetic: the whole point of the
+ *  assessment-level copy is that a visit can name a different party without
+ *  editing the building, and a report that printed the building's party would
+ *  silently discard that choice - in the one document that is the legal record
+ *  of who was told. The precedence itself is lib/responsibleParty's, shared with
+ *  the release pipeline that stamps the same name onto every action. */
+function responsiblePartyLine(
+  assessment: Assessment,
+  building: Building | undefined,
+): string | undefined {
+  const party = resolveResponsibleParty(assessment, building);
+  if (!party) {
+    return undefined;
   }
-  return building?.responsiblePerson;
+  return party.role ? `${party.name} (${party.role})` : party.name;
 }
 
 /**
@@ -770,7 +785,9 @@ function buildOverview(
     address: orNotRecorded(building?.address),
     // A missing building degrades to "not recorded"; null (RTDB absent) and
     // undefined mean the same thing to the line builder.
-    responsiblePerson: orNotRecorded(responsiblePartyLine(building ?? undefined)),
+    responsiblePartyLine: orNotRecorded(
+      responsiblePartyLine(assessment, building ?? undefined),
+    ),
     article53Persons: article53,
     orgContactName: orNotRecorded(profile.contact?.name),
     orgContactEmail: orNotRecorded(profile.contact?.email),

@@ -18,12 +18,20 @@
 //      assessment's templateSnapshot with that canonical copy, so a tampered or
 //      stale client snapshot can never be the shape the assessment is validated
 //      against (brief 18.4).
-//   2. Atomically flip the job AND the assessor reverse-index to inProgress -
+//   2. STAMP the responsible party the assessment inherits from its building,
+//      when the client did not send one. The defaulting used to happen only at
+//      render time in the app, so nothing was ever persisted and every consumer
+//      of the stored record (report, action plan, portal) saw a blank party.
+//      Resolving it here - once, server-side, at the same seam that already
+//      reconciles the snapshot - is what makes "chosen once, applied
+//      everywhere" true of the DATA rather than of one screen.
+//   3. Atomically flip the job AND the assessor reverse-index to inProgress -
 //      but ONLY from 'scheduled', so a later lifecycle state (e.g. the auditor
 //      has already moved it on) is never stomped.
 //
 // IDEMPOTENCE: re-running on the same node is harmless - the snapshot overwrite
-// is deterministic and the status flip is conditional on 'scheduled', so a
+// is deterministic, the party stamp re-reads the CURRENT value and writes only
+// into an empty field, and the status flip is conditional on 'scheduled', so a
 // second fire is a no-op. This mirrors the deterministic `job-${jobId}` id the
 // client and the old callable both derive, so a job can never spawn two
 // assessments.
@@ -36,8 +44,10 @@ import { createLogger } from '../lib/logging';
 import { logTriggerError } from '../lib/errors';
 import { appendActivity } from '../lib/events';
 import { paths } from '../lib/paths';
+import { resolveResponsibleParty } from '../lib/responsibleParty';
 import {
   type Assessment,
+  type Building,
   type Job,
   type Template,
   type Environment,
@@ -117,7 +127,43 @@ export const onAssessmentCreate = onValueCreated(
         }
       }
 
-      // 3. Atomically move the job AND the assessor reverse-index to inProgress -
+      // 3. Stamp the inherited responsible party, when the assessment does not
+      // already carry one. The job knows where the building lives (the
+      // assessment only carries a buildingId, and buildings are addressed
+      // site-first), so this is one targeted read rather than an estate scan.
+      //
+      // NEVER STOMP AN OVERRIDE: the trigger snapshot is the value at CREATE
+      // time, but an assessor can have set their own party in the seconds since
+      // (or a retry can re-fire this trigger long after). So the absence is
+      // re-confirmed against the CURRENT node immediately before writing, and
+      // only the single `responsibleParty` child is written - never the record.
+      if (!assessment.responsibleParty) {
+        const buildingSnap = await db
+          .ref(envPaths.db.building(orgId, job.siteId, job.buildingId))
+          .get();
+        const building = buildingSnap.val() as Building | null;
+        const party = resolveResponsibleParty(assessment, building);
+        if (!party) {
+          logger.info('No responsible party to inherit', {
+            buildingId: job.buildingId,
+          });
+        } else {
+          const partyRef = db.ref(
+            `${envPaths.db.assessment(orgId, assessmentId)}/responsibleParty`,
+          );
+          const currentSnap = await partyRef.get();
+          if (currentSnap.exists()) {
+            logger.info('Responsible party already set; stamp skipped');
+          } else {
+            await partyRef.set(party);
+            logger.info('Stamped responsible party from building default', {
+              buildingId: job.buildingId,
+            });
+          }
+        }
+      }
+
+      // 4. Atomically move the job AND the assessor reverse-index to inProgress -
       // but only if the job is still 'scheduled', so we never stomp a later
       // lifecycle state. A single multi-location update() keeps the two in step
       // (brief 18.3); the conditional makes a re-fire a no-op.
