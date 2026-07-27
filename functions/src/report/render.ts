@@ -22,7 +22,8 @@ import type {
   ResolvedImage,
 } from './assemble';
 import { selectProfile, type ReportProfile } from './profiles';
-import type { Severity } from '../shared/types';
+import type { MatrixAnswer, QuestionMatrix, Severity } from '../shared/types';
+import { adjustToMeetAA } from '../lib/contrast';
 
 // ----------------------------------------------------------------------------
 // Design tokens. Stated once so the whole document is consistent (brief 18.8).
@@ -42,6 +43,10 @@ const COLOURS = {
     high: '#C62828', // red
   } as Record<RagBand, string>,
 } as const;
+
+/** The paper the report is read on. The brand accent is corrected against this
+ *  before it is painted, so a pale org colour still reads in print. */
+const PAPER = COLOURS.white;
 
 const FONT = {
   regular: 'Helvetica',
@@ -184,9 +189,27 @@ class Layout {
 
   /** Add a page and paint its footer immediately so every page carries it. */
   newPage(): void {
+    this.suppressAutoFooter = true;
     this.doc.addPage();
+    this.suppressAutoFooter = false;
     this.paintFooter();
     this.doc.y = this.doc.page.margins.top;
+  }
+
+  /** Guard so the pageAdded hook does not double-paint the footer on pages this
+   *  class adds itself, which paint it explicitly straight after addPage(). */
+  private suppressAutoFooter = false;
+
+  /** Catch pages PDFKit adds on its own. A text() call that overflows the bottom
+   *  margin breaks the page internally, never routing through newPage(), so such
+   *  a page would carry the 'Page N of M' stamp (applied to every buffered page
+   *  in finalise) but no org name and no hairline - a footer that looks half
+   *  drawn. Hooking pageAdded gives every page the same chrome however it began. */
+  attachAutoPageFooter(): void {
+    this.doc.on('pageAdded', () => {
+      if (this.suppressAutoFooter) return;
+      this.paintFooter();
+    });
   }
 
   /** Begin the document's first page chrome (footer) without adding a page. */
@@ -406,11 +429,17 @@ function renderHeader(
     }
   }
 
+  // This block is the whole of page 1: the contents page is reserved immediately
+  // after it, so nothing else can flow in beneath. Drop it to the upper third
+  // rather than leaving it pinned under the top margin above a page of white,
+  // which reads as a rendering fault rather than a title page.
+  doc.y = Math.max(top, doc.page.height * 0.3);
+
   doc
     .font(FONT.bold)
     .fontSize(SIZE.title)
     .fillColor(COLOURS.ink)
-    .text(profile.documentTitle, left, top, { width: layout.contentWidth - 130 });
+    .text(profile.documentTitle, left, doc.y, { width: layout.contentWidth - 130 });
   doc
     .font(FONT.regular)
     .fontSize(SIZE.subHeading)
@@ -901,8 +930,20 @@ function paintQaHeader(
  *  sliver of a row chunk (roughly two lines of small text plus padding). */
 const MIN_ROW_CHUNK = 36;
 
+/** Vertical space a subject subheading occupies, including its trailing gap.
+ *  Matches the reservation subHeading() makes for itself. */
+const SUBHEADING_HEIGHT = 28;
+
 function renderSubjectTable(layout: Layout, section: ReportSection): void {
   const { doc } = layout;
+
+  // Keep the subject heading with its table. subHeading() alone only reserves
+  // its own height, so a subject landing near the foot of a page painted the
+  // heading and the column header there with no room for a row, then the row
+  // loop broke and repainted the header on the next page - an orphaned heading
+  // above a duplicated header band. Reserve heading + header + one row chunk so
+  // the three always travel together.
+  layout.ensureSpace(SUBHEADING_HEIGHT + QA_HEADER_HEIGHT + MIN_ROW_CHUNK);
   layout.subHeading(`${section.code}  ${section.title}`);
 
   const left = doc.page.margins.left;
@@ -977,9 +1018,18 @@ function renderSubjectTable(layout: Layout, section: ReportSection): void {
         segmentsHeight(doc, qSegs, qWidth - 8),
         segmentsHeight(doc, aSegs, aWidth - 8),
       ) + 10;
+    // A matrix row's grid is drawn immediately under it, so the two are reserved
+    // TOGETHER. Reserving only the row let a short row sit at the foot of a page
+    // with its grid alone at the top of the next, reading as an unattributed
+    // table. When the pair is too tall to share a page the row still wins the
+    // space and the grid breaks on its own ensureSpace, which is the safe order.
+    const matrixHeight = row.matrix
+      ? measureMatrixBlock(doc, row.matrix, row.matrixAnswer, aWidth).total
+      : 0;
+    const blockHeight = rowHeight + matrixHeight;
     const fitsWholePage =
-      rowHeight <= layout.fullPageContentHeight - QA_HEADER_HEIGHT;
-    if (rowHeight > layout.remaining && fitsWholePage) {
+      blockHeight <= layout.fullPageContentHeight - QA_HEADER_HEIGHT;
+    if (blockHeight > layout.remaining && fitsWholePage) {
       layout.newPage();
       paintQaHeader(layout, left, qWidth, aX, aWidth);
     }
@@ -988,6 +1038,7 @@ function renderSubjectTable(layout: Layout, section: ReportSection): void {
     // above the footer; the header band is repainted after every break.
     let qRem = qSegs;
     let aRem = aSegs;
+    let chunkIndex = 0;
     do {
       if (layout.remaining < MIN_ROW_CHUNK) {
         layout.newPage();
@@ -999,6 +1050,21 @@ function renderSubjectTable(layout: Layout, section: ReportSection): void {
       const a = paintCellChunk(doc, aRem, aX + 4, y + 5, aWidth - 8, available);
       qRem = q.rest;
       aRem = a.rest;
+
+      // The question text nearly always ends on the first chunk while a long
+      // observation runs on for pages, leaving the question column completely
+      // empty beside it. An unlabelled empty column reads as a rendering fault,
+      // so mark the continuation. This is table chrome, like the page number:
+      // it states where the reader is, it does not add to the record.
+      if (chunkIndex > 0 && q.height === 0) {
+        doc
+          .font(FONT.oblique)
+          .fontSize(SIZE.caption)
+          .fillColor(COLOURS.muted)
+          .text('continued', left + 4, y + 5, { width: qWidth - 8 });
+      }
+      chunkIndex += 1;
+
       const chunkHeight = Math.max(q.height, a.height) + 10;
 
       // Cell borders around exactly what this page carries of the row.
@@ -1019,6 +1085,14 @@ function renderSubjectTable(layout: Layout, section: ReportSection): void {
       }
     } while (qRem.length > 0 || aRem.length > 0);
 
+    // A matrix answer's grid is drawn AFTER the row's cell borders, not inside
+    // the answer cell: the cell painter splits its content across pages at a word
+    // boundary, and a half-drawn risk-level grid would misstate the record. It is
+    // laid out in the answer column's width so it reads as part of that column.
+    if (row.matrix) {
+      renderMatrixGrid(layout, row.matrix, row.matrixAnswer, aX, aWidth);
+    }
+
     // Answer photographs, embedded as a compact titled strip beneath the row so
     // the evidence sits with its question. Assembly has already resolved these to
     // bytes and dropped any that failed to download (brief 18.3).
@@ -1027,6 +1101,330 @@ function renderSubjectTable(layout: Layout, section: ReportSection): void {
     }
   }
   doc.moveDown(0.8);
+}
+
+// ----------------------------------------------------------------------------
+// Matrix answers - the two-axis risk-level estimator drawn as a real grid, with
+// the chosen cell marked. Used by BS 9792 (likelihood of fire crossed with
+// potential consequences) but generic: the axes, options and outcomes all come
+// from the template's grid, so any standard's estimator renders the same way.
+// ----------------------------------------------------------------------------
+
+/** Padding inside a grid cell, and the floor on a cell's height so a grid of
+ *  short labels still rules evenly rather than collapsing to text lines. */
+const MATRIX_CELL_PAD = 3;
+const MATRIX_MIN_CELL_HEIGHT = 16;
+
+/** Prefix on the chosen cell's outcome. Colour and a heavy border alone would
+ *  make colour the sole carrier of meaning (brief 18.5 / conventions 8), and a
+ *  bullet survives greyscale printing and photocopying. */
+const MATRIX_SELECTED_MARK = '• ';
+
+/** Height one piece of cell text needs, measured through the same path the row
+ *  painter uses so grid and table metrics never drift apart. */
+function matrixTextHeight(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  bold: boolean,
+  width: number,
+): number {
+  return segmentHeight(
+    doc,
+    {
+      text,
+      font: bold ? FONT.bold : FONT.regular,
+      size: SIZE.caption,
+      colour: COLOURS.ink,
+    },
+    width,
+  );
+}
+
+/** Paint one grid cell: optional panel fill, its border, then its text. */
+function paintMatrixCell(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  text: string,
+  options: { bold?: boolean; filled?: boolean; selected?: boolean },
+): void {
+  if (options.filled || options.selected) {
+    doc.save().rect(x, y, width, height).fillColor(COLOURS.panel).fill().restore();
+  }
+  doc
+    .save()
+    .lineWidth(options.selected ? 1.6 : 0.5)
+    .strokeColor(options.selected ? COLOURS.ink : COLOURS.hairline)
+    .rect(x, y, width, height)
+    .stroke()
+    .restore();
+  doc
+    .font(options.bold ? FONT.bold : FONT.regular)
+    .fontSize(SIZE.caption)
+    .fillColor(COLOURS.ink)
+    .text(text, x + MATRIX_CELL_PAD, y + MATRIX_CELL_PAD, {
+      width: width - MATRIX_CELL_PAD * 2,
+    });
+}
+
+/** Everything the grid needs to be measured and then painted identically. It is
+ *  computed once because the subject table reserves the block BEFORE painting the
+ *  question row, so the row and its grid are never separated by a page break. */
+interface MatrixMetrics {
+  /** Height of the indivisible block: grid, outcome sentence and legend. */
+  total: number;
+  labelWidth: number;
+  cellWidth: number;
+  axisWidth: number;
+  axisHeight: number;
+  headerHeight: number;
+  bodyHeights: number[];
+  outcomeText: string;
+  outcomeHeight: number;
+  legendText: string;
+  legendHeight: number;
+  /** The text of a body cell, selection mark included, so measuring and painting
+   *  can never disagree about how tall a cell is. */
+  cellText: (rowIndex: number, columnIndex: number) => string;
+  isSelected: (rowIndex: number, columnIndex: number) => boolean;
+}
+
+/** Gap above the grid and between the grid and its outcome sentence. */
+const MATRIX_BLOCK_GAP = 6;
+
+/**
+ * Measure the estimator block at the answer column's width. Definitions are NOT
+ * included: they are ordinary flowing text that may legitimately run past a page
+ * boundary, whereas the grid may not.
+ */
+function measureMatrixBlock(
+  doc: PDFKit.PDFDocument,
+  matrix: QuestionMatrix,
+  chosen: MatrixAnswer | undefined,
+  width: number,
+): MatrixMetrics {
+  // The row-label column takes a fixed share so the outcome columns stay equal
+  // and the whole grid lands exactly on the answer column's width, never wider.
+  const labelWidth = Math.max(width * 0.3, 52);
+  const cellWidth = (width - labelWidth) / matrix.columns.length;
+  const inner = (w: number): number => w - MATRIX_CELL_PAD * 2;
+
+  // Which cell to mark. Answers store labels, not indices, so a label that is no
+  // longer in the grid (a drifted snapshot) simply goes unmarked - the outcome
+  // sentence below still carries the full recorded answer.
+  const rowIndex = chosen ? matrix.rows.indexOf(chosen.row) : -1;
+  const columnIndex = chosen ? matrix.columns.indexOf(chosen.column) : -1;
+  const isMarked = rowIndex >= 0 && columnIndex >= 0;
+  const isSelected = (r: number, c: number): boolean =>
+    isMarked && r === rowIndex && c === columnIndex;
+  const cellText = (r: number, c: number): string =>
+    `${isSelected(r, c) ? MATRIX_SELECTED_MARK : ''}${matrix.cells[r][c]}`;
+
+  const bandHeight = (labelText: string, cellTexts: string[]): number =>
+    Math.max(
+      MATRIX_MIN_CELL_HEIGHT,
+      matrixTextHeight(doc, labelText, true, inner(labelWidth)) + MATRIX_CELL_PAD * 2,
+      ...cellTexts.map(
+        // Measured bold throughout: the marked cell is painted bold, and bold is
+        // the wider metric, so a band can never come out shorter than it paints.
+        (t) => matrixTextHeight(doc, t, true, inner(cellWidth)) + MATRIX_CELL_PAD * 2,
+      ),
+    );
+
+  const axisWidth = width - labelWidth;
+  const axisHeight = matrixTextHeight(doc, matrix.columnLabel, true, axisWidth) + 2;
+  const headerHeight = bandHeight(matrix.rowLabel, matrix.columns);
+  const bodyHeights = matrix.rows.map((label, r) =>
+    bandHeight(
+      label,
+      matrix.columns.map((_column, c) => cellText(r, c)),
+    ),
+  );
+
+  const outcomeText = chosen
+    ? `Selected: ${chosen.outcome} (${matrix.rowLabel}: ${chosen.row}; ${matrix.columnLabel}: ${chosen.column})`
+    : 'No cell of this estimator was selected.';
+  const outcomeHeight = matrixTextHeight(doc, outcomeText, true, width) + 2;
+  const legendText = isMarked
+    ? 'The selected cell is marked with a bullet and a heavy border.'
+    : '';
+  const legendHeight = legendText
+    ? matrixTextHeight(doc, legendText, false, width) + 2
+    : 0;
+
+  return {
+    total:
+      MATRIX_BLOCK_GAP +
+      axisHeight +
+      headerHeight +
+      bodyHeights.reduce((sum, h) => sum + h, 0) +
+      4 +
+      outcomeHeight +
+      legendHeight,
+    labelWidth,
+    cellWidth,
+    axisWidth,
+    axisHeight,
+    headerHeight,
+    bodyHeights,
+    outcomeText,
+    outcomeHeight,
+    legendText,
+    legendHeight,
+    cellText,
+    isSelected,
+  };
+}
+
+/**
+ * Draw the estimator grid at `x` for `width` points (the answer column), with the
+ * chosen cell marked and the outcome restated in words beneath it.
+ *
+ * The block is reserved with a single ensureSpace() so it moves to the next page
+ * WHOLE. It is never chunked like a table row: a grid split down the middle would
+ * show a reader a different set of cells than the assessor chose from.
+ * Definitions follow as ordinary flowing text, each line reserved on its own.
+ */
+function renderMatrixGrid(
+  layout: Layout,
+  matrix: QuestionMatrix,
+  chosen: MatrixAnswer | undefined,
+  x: number,
+  width: number,
+): void {
+  const { doc } = layout;
+  const {
+    labelWidth,
+    cellWidth,
+    axisWidth,
+    axisHeight,
+    headerHeight,
+    bodyHeights,
+    outcomeText,
+    outcomeHeight,
+    legendText,
+    legendHeight,
+    cellText,
+    isSelected,
+    total,
+  } = measureMatrixBlock(doc, matrix, chosen, width);
+  layout.ensureSpace(total);
+
+  let y = doc.y + MATRIX_BLOCK_GAP;
+
+  // Column axis heading, sitting over the outcome columns it names.
+  doc
+    .font(FONT.bold)
+    .fontSize(SIZE.caption)
+    .fillColor(COLOURS.muted)
+    .text(matrix.columnLabel, x + labelWidth, y, { width: axisWidth });
+  y += axisHeight;
+
+  // Header band: the row axis name in the corner, then the column options.
+  paintMatrixCell(doc, x, y, labelWidth, headerHeight, matrix.rowLabel, {
+    bold: true,
+    filled: true,
+  });
+  matrix.columns.forEach((column, c) => {
+    paintMatrixCell(
+      doc,
+      x + labelWidth + c * cellWidth,
+      y,
+      cellWidth,
+      headerHeight,
+      column,
+      { bold: true, filled: true },
+    );
+  });
+  y += headerHeight;
+
+  matrix.rows.forEach((label, r) => {
+    const height = bodyHeights[r];
+    paintMatrixCell(doc, x, y, labelWidth, height, label, {
+      bold: true,
+      filled: true,
+    });
+    matrix.columns.forEach((_column, c) => {
+      const selected = isSelected(r, c);
+      paintMatrixCell(
+        doc,
+        x + labelWidth + c * cellWidth,
+        y,
+        cellWidth,
+        height,
+        cellText(r, c),
+        { bold: selected, selected },
+      );
+    });
+    y += height;
+  });
+
+  y += 4;
+  doc
+    .font(FONT.bold)
+    .fontSize(SIZE.caption)
+    .fillColor(COLOURS.ink)
+    .text(outcomeText, x, y, { width });
+  y += outcomeHeight;
+  if (legendText) {
+    doc
+      .font(FONT.regular)
+      .fontSize(SIZE.caption)
+      .fillColor(COLOURS.muted)
+      .text(legendText, x, y, { width });
+    y += legendHeight;
+  }
+  doc.y = y;
+
+  if (matrix.definitions) {
+    renderMatrixDefinitions(layout, matrix.definitions, x, width);
+  }
+  doc.moveDown(0.3);
+}
+
+/** The estimator's term definitions. BS 9792 defines each likelihood and harm
+ *  level, and those definitions are part of the assessment record, so they are
+ *  printed rather than assumed known. */
+function renderMatrixDefinitions(
+  layout: Layout,
+  definitions: Record<string, string>,
+  x: number,
+  width: number,
+): void {
+  const { doc } = layout;
+  const entries = Object.entries(definitions);
+  if (entries.length === 0) {
+    return;
+  }
+
+  const headingHeight = matrixTextHeight(doc, 'Definitions', true, width) + 2;
+  layout.ensureSpace(headingHeight + MATRIX_MIN_CELL_HEIGHT);
+  let y = doc.y + 4;
+  doc
+    .font(FONT.bold)
+    .fontSize(SIZE.caption)
+    .fillColor(COLOURS.muted)
+    .text('Definitions', x, y, { width });
+  y += headingHeight;
+
+  for (const [term, meaning] of entries) {
+    const text = `${term}: ${meaning}`;
+    const height = matrixTextHeight(doc, text, false, width) + 1;
+    doc.y = y;
+    // One definition is a short, self-contained line, so it is kept whole; the
+    // list as a whole may still flow onto the next page between entries.
+    layout.ensureSpace(height);
+    y = doc.y;
+    doc
+      .font(FONT.oblique)
+      .fontSize(SIZE.caption)
+      .fillColor(COLOURS.muted)
+      .text(text, x, y, { width });
+    y += height;
+  }
+  doc.y = y;
 }
 
 // ----------------------------------------------------------------------------
@@ -1055,6 +1453,11 @@ function renderActionPlan(layout: Layout, model: ReportModel): void {
   }
 }
 
+/** Minimum space an action card needs before it may start on the current page:
+ *  the severity heading, the Life Protection line, and the Subject / Finding /
+ *  Recommendation / Responsible party label rows. */
+const ACTION_CARD_MIN_BLOCK = 150;
+
 function renderActionCard(
   layout: Layout,
   action: ReportAction,
@@ -1064,9 +1467,13 @@ function renderActionCard(
   const left = doc.page.margins.left;
   const meta = severityMeta(action.severity);
 
-  // Estimate space for the card head + body so it does not split awkwardly across
-  // a page break at the heading.
-  layout.ensureSpace(90);
+  // Keep the card head with the start of its body. 90 points covered the heading
+  // and roughly two label rows, which let a card break straight after "Finding"
+  // and strand a lone severity heading at the foot of a page. Reserving the head
+  // plus its four fixed label rows means a card either starts properly or moves
+  // whole to the next page; a card longer than this still splits, but never at
+  // the heading itself.
+  layout.ensureSpace(ACTION_CARD_MIN_BLOCK);
   const y = doc.y;
 
   // Severity flag strip down the left edge, plus a header line.
@@ -1170,14 +1577,24 @@ function renderImageStrip(
       rowMaxBottom = rowTop;
     }
 
+    // An absent image collapses to a slim marker instead of reserving the full
+    // photo frame: a large empty rectangle where a photograph should be reads as
+    // a broken graphic, while a compact rule reads as a deliberate note that the
+    // evidence could not be attached. The caption still carries the title, so
+    // nothing is lost from the record.
+    let boxHeight = imgHeight;
+    let drawn = false;
     if (image.available && image.data) {
       try {
         doc.image(image.data, x, rowTop, { fit: [imgWidth, imgHeight] });
+        drawn = true;
       } catch {
-        renderImagePlaceholder(layout, x, rowTop, imgWidth, imgHeight);
+        // A corrupt or undecodable image falls through to the marker below.
       }
-    } else {
-      renderImagePlaceholder(layout, x, rowTop, imgWidth, imgHeight);
+    }
+    if (!drawn) {
+      boxHeight = PLACEHOLDER_HEIGHT;
+      renderImagePlaceholder(layout, x, rowTop, imgWidth, boxHeight);
     }
 
     // Title beneath the image.
@@ -1185,14 +1602,18 @@ function renderImageStrip(
       .font(FONT.oblique)
       .fontSize(SIZE.caption)
       .fillColor(COLOURS.muted)
-      .text(image.title, x, rowTop + imgHeight + 2, { width: imgWidth });
+      .text(image.title, x, rowTop + boxHeight + 2, { width: imgWidth });
 
-    rowMaxBottom = Math.max(rowMaxBottom, rowTop + imgHeight + 16);
+    rowMaxBottom = Math.max(rowMaxBottom, rowTop + boxHeight + 16);
     x += imgWidth + gap;
   }
 
   doc.y = rowMaxBottom + 6;
 }
+
+/** Height of the slim marker that stands in for an image which could not be
+ *  embedded. Deliberately far shorter than a photo box - see renderImageStrip. */
+const PLACEHOLDER_HEIGHT = 30;
 
 /** A bordered "image unavailable" box, so a failed download leaves an honest,
  *  laid-out placeholder rather than a blank or a crash (brief 18.3). */
@@ -1204,21 +1625,22 @@ function renderImagePlaceholder(
   h: number,
 ): void {
   const { doc } = layout;
+  // Dashed outline, no fill: a solid filled rectangle at photo size looks like a
+  // failed image, whereas a dashed outline reads as a deliberately empty slot.
   doc
     .save()
-    .rect(x, y, w, h)
-    .fillColor(COLOURS.panel)
-    .fill()
     .lineWidth(0.5)
     .strokeColor(COLOURS.hairline)
+    .dash(2, { space: 2 })
     .rect(x, y, w, h)
     .stroke()
+    .undash()
     .restore();
   doc
     .font(FONT.oblique)
-    .fontSize(SIZE.small)
+    .fontSize(SIZE.caption)
     .fillColor(COLOURS.muted)
-    .text('Image unavailable', x, y + h / 2 - 6, { width: w, align: 'center' });
+    .text('Image unavailable', x, y + h / 2 - 4, { width: w, align: 'center' });
 }
 
 // ----------------------------------------------------------------------------
@@ -1271,8 +1693,17 @@ function titleCase(value: string): string {
  * model carries every value and image already; this function performs no I/O.
  */
 export function renderReportPdf(model: ReportModel): Promise<Buffer> {
-  // Brand accent, validated so a malformed org colour cannot break the document.
-  const brand = safeColour(model.orgProfile.brand?.primary, COLOURS.ink);
+  // Brand accent, validated so a malformed org colour cannot break the document,
+  // then darkened until it clears AA on white. The report is a legal record that
+  // is read on white paper and photocopied, so the accent is only ever used where
+  // it must be SEEN (a heading, a divider rule) and never as a fill with nothing
+  // behind it. Safentia's own gold is 1.74:1 on white, which would leave the
+  // cover subheading and every section rule effectively invisible in print; the
+  // corrected shade keeps the hue and clears 4.5:1.
+  const brand = adjustToMeetAA(
+    safeColour(model.orgProfile.brand?.primary, COLOURS.ink),
+    PAPER,
+  );
   // The standard-specific profile. Untagged/custom templates get the generic one.
   const profile = selectProfile(model.standard);
 
@@ -1302,6 +1733,7 @@ export function renderReportPdf(model: ReportModel): Promise<Buffer> {
       doc.on('error', reject);
 
       const layout = new Layout(doc, brand, model.orgProfile.name);
+      layout.attachAutoPageFooter();
       layout.beginFirstPage();
 
       renderHeader(layout, model, brand, profile);

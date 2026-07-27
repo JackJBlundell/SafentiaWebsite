@@ -30,10 +30,13 @@ vi.mock('../../auth/AuthProvider', () => ({
     ({
       status: mocks.status,
       user: null,
+      emailVerified: false,
+      refreshEmailVerification: vi.fn(),
       claims: null,
       paths: null,
       signInWithEmail: mocks.signInWithEmail,
       signInWithGoogle: mocks.signInWithGoogle,
+      signInWithCustomToken: vi.fn(),
       sendReset: vi.fn(),
       changePassword: vi.fn(),
       updateDisplayName: vi.fn(),

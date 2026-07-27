@@ -65,7 +65,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   font-weight: 600;
 }
 
@@ -87,7 +87,7 @@
 }
 
 .filterSelect:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
 }
 
@@ -101,6 +101,47 @@
   font-size: 0.875rem;
   color: var(--color-text-muted);
   max-width: 70ch;
+}
+
+/* Shared list furniture, so the five platform list pages read as one designed
+   system rather than three teams' separate takes on the same controls. */
+
+/* The polite result count between the toolbar and the table; muted so it
+   informs without competing with the data. Given a touch-target height so its
+   band lines up with the toolbar controls it sits beneath. */
+.resultCount {
+  margin: 0;
+  min-height: var(--min-touch-target);
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+/* The "your search and filters matched nothing" state, distinct from "none
+   exist at all": a bordered card carrying a plain-English line and its own
+   reset, so the operator always has a one-click way back to the full list. */
+.noMatch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+/* One search-field width across the list pages so their toolbars line up: full
+   width on a phone, a comfortable fixed width once there is room beside it. */
+.searchInput {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .searchInput {
+    width: 20rem;
+  }
 }
 
 .activityList {

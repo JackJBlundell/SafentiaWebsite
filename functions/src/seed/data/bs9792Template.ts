@@ -27,6 +27,7 @@ import type {
   TemplateSection,
   SectionCode,
   QuestionType,
+  QuestionMatrix,
 } from '../../shared/types';
 import { BS9792_TEMPLATE_VERSION } from '../ids';
 
@@ -37,6 +38,7 @@ import { BS9792_TEMPLATE_VERSION } from '../ids';
 
 interface QuestionOpts {
   options?: string[];
+  matrix?: QuestionMatrix;
   required?: boolean;
   allowsFlagLocation?: boolean;
   allowsPhotos?: boolean;
@@ -57,6 +59,7 @@ function makeQuestion(
     guidance,
   };
   if (opts.options) q.options = opts.options;
+  if (opts.matrix) q.matrix = opts.matrix;
   if (opts.required) q.required = true;
   if (opts.allowsFlagLocation) q.allowsFlagLocation = true;
   if (opts.allowsPhotos) q.allowsPhotos = true;
@@ -1773,39 +1776,63 @@ const SECTION_33 = section('33', 'Engagement with Residents', [
 ]);
 
 // --- 34 Fire Risk Evaluation and Assessor Summary ----------------------------
+// The source form's "Fire risk (life risk) evaluation" is a risk level estimator:
+// likelihood of fire against potential consequences of fire, the intersection
+// giving the risk to life. It is transcribed VERBATIM from the client's document
+// because this is a regulated form; the definitions below are part of the record,
+// not help text.
+//
+// Modelled as a single `matrix` question rather than three separate selects so
+// the outcome cannot contradict the two axes an assessor actually chose - the
+// server can re-derive it from `cells`, which a free-choice select can never
+// guarantee.
+//
+// WORDING: the client's grid image labels the cells "Trivial risk", "Tolerable
+// risk" and so on, but the document's own tick-list and its risk-based control
+// plan table use the bare names. The bare names are used here so a recorded
+// outcome matches the control plan verbatim and needs no re-mapping downstream.
+const LIFE_RISK_ESTIMATOR: QuestionMatrix = {
+  rowLabel: 'Likelihood of fire',
+  columnLabel: 'Potential consequences of fire',
+  rows: ['Low', 'Medium', 'High'],
+  columns: ['Slight harm', 'Moderate harm', 'Extreme harm'],
+  cells: [
+    ['Trivial', 'Tolerable', 'Moderate'],
+    ['Tolerable', 'Moderate', 'Substantial'],
+    ['Moderate', 'Substantial', 'Intolerable'],
+  ],
+  definitions: {
+    Low: 'Unusually low likelihood of fire as a result of negligible potential sources of ignition.',
+    Medium:
+      'Normal fire hazards (e.g., potential ignition sources) for this type of occupancy, with fire hazards generally subject to appropriate controls (other than minor shortcomings).',
+    High: 'Lack of adequate controls applied to one or more significant fire hazards, such as to result in significant increase in likelihood of fire.',
+    'Slight harm':
+      'Outbreak of fire unlikely to result in serious injury or death of any occupant.',
+    'Moderate harm':
+      'Outbreak of fire could foreseeably result in injury (including serious injury) of one or more occupants but is unlikely to result in multiple fatalities.',
+    'Extreme harm':
+      'Significant potential for serious injury or death of one or more occupants.',
+  },
+};
+
 const SECTION_34 = section('34', 'Fire Risk Evaluation and Summary', [
   makeQuestion(
     '34',
-    'likelihood-of-fire',
-    'select',
-    'Taking account of the fire prevention measures observed, the hazard from fire (likelihood of fire) at these premises is:',
-    'Low: unusually low likelihood of fire from negligible potential ignition sources. Medium: normal fire hazards for this occupancy, generally under appropriate control (bar minor shortcomings). High: lack of adequate controls on one or more significant hazards, significantly increasing the likelihood of fire.',
-    { options: ['Low', 'Medium', 'High'], required: true },
-  ),
-  makeQuestion(
-    '34',
-    'consequence-for-life',
-    'select',
-    'Considering the premises, occupants and fire protection and procedural arrangements, the consequences for life safety in the event of fire would be:',
-    'Slight harm: outbreak unlikely to result in serious injury or death. Moderate harm: could foreseeably cause injury (including serious injury) to one or more occupants but is unlikely to result in multiple fatalities. Extreme harm: significant potential for serious injury or death of one or more occupants.',
-    { options: ['Slight harm', 'Moderate harm', 'Extreme harm'], required: true },
-  ),
-  makeQuestion(
-    '34',
     'risk-to-life',
-    'select',
+    'matrix',
     'Accordingly, the risk to life from fire at these premises is considered to be:',
-    'The overall risk level combines the likelihood of fire with the potential consequences for life safety. This approach is subjective and for guidance only; all hazards and deficiencies identified should be addressed via the action plan, and the assessment repeated regularly.',
-    {
-      options: [
-        'Trivial',
-        'Tolerable',
-        'Moderate',
-        'Substantial',
-        'Intolerable',
-      ],
-      required: true,
-    },
+    'Taking into account the fire prevention measures observed at the time of this risk assessment, select the hazard from fire (likelihood of fire) at these premises. Then, considering the nature of the premises and the occupants as well as the fire protection and procedural arrangements observed, select the consequences for life safety in the event of fire. The intersection gives the risk to life. Although the purpose of this section is to place the fire risk in context, this approach to risk assessment is subjective and for guidance only. All hazards and deficiencies identified in this report should be addressed by implementing all recommendations contained in the following action plan, and the fire risk assessment should be repeated regularly.',
+    { matrix: LIFE_RISK_ESTIMATOR, required: true },
+  ),
+  // The paper form pairs the estimator with a free-text comments box directly
+  // beneath it, so it sits here rather than at the end of the section.
+  makeQuestion(
+    '34',
+    'assessor-comments',
+    'longtext',
+    'Risk assessor comments',
+    'Provide concluding comments on the fire risk and the priority/timescale for the recommended actions in the action plan.',
+    { required: true },
   ),
   makeQuestion(
     '34',
@@ -1814,14 +1841,6 @@ const SECTION_34 = section('34', 'Fire Risk Evaluation and Summary', [
     'The action plan should reduce fire risk to, or maintain it at, the following level:',
     'A suitable risk-based control plan should involve effort and urgency proportional to the risk.',
     { options: ['Trivial', 'Tolerable'] },
-  ),
-  makeQuestion(
-    '34',
-    'assessor-comments',
-    'longtext',
-    'Risk assessor comments',
-    'Provide concluding comments on the fire risk and the priority/timescale for the recommended actions in the action plan.',
-    { required: true },
   ),
 ]);
 

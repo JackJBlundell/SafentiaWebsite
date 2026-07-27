@@ -1,0 +1,67 @@
+/* PlatformActivity - the platform-wide audit trail as one unified, filterable
+   table. Filter controls sit on a wrapping Toolbar; the table itself is the
+   shared DataTable inside a flush Card, so this screen reads like the tenant
+   activity feed and the sibling admin list pages. 44px touch targets throughout
+   come from the shared form primitives; only the layout and cell tone live here. */
+
+/* A single filter control (label above input/select). min-width:0 lets a field
+   shrink inside the flex Toolbar so long option text never forces overflow. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+/* The search box earns more of the row than the selects. */
+.searchField {
+  flex: 2 1 18rem;
+}
+
+/* The pushed group: result count and the clear affordance, on the fields'
+   baseline so the row reads as one band. */
+.summary {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+/* --- Table cell content ------------------------------------------------------ */
+
+.time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+/* Underlined so the drill-down link is never signalled by colour alone. */
+.orgLink {
+  color: var(--color-text);
+  font-weight: 600;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.orgLink:hover,
+.orgLink:focus-visible {
+  color: var(--brand-ink);
+}
+
+.actor {
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.action {
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* Targets are bare ids that can run long; break rather than push the row wide. */
+.target {
+  color: var(--color-text-secondary);
+  word-break: break-word;
+}

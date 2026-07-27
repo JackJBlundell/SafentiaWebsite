@@ -19,7 +19,11 @@
 //      linked responsibleParty contact, name-matched). Responsible parties are
 //      customer contacts, not org members: they have no in-app inbox and no
 //      preferences node, so the IN-APP notice goes to the org's active admins,
-//      who are the people who can actually chase it inside Safentia.
+//      who are the people who can actually chase it inside Safentia. Admins get
+//      ONE digest per morning covering every action that matched, not one notice
+//      per action: a per-action fan-out would flood the inbox on a ladder day
+//      and could exhaust the org's monthly notification quota, which
+//      sendNotification enforces by silently dropping everything after the cap.
 //
 // Reminder ladders differ because the deadlines do. An information request runs
 // for INFO_REQUEST_DUE_DAYS (7) by default, so a 60/30/7 ladder would never
@@ -312,6 +316,18 @@ async function sweepInfoRequests(
 // 2. Open actions on a building's action plan.
 // ----------------------------------------------------------------------------
 
+/** One matched action, held until the org's whole estate has been walked so the
+ *  org's admins can be told ONCE rather than once per action (see the digest
+ *  note in sweepActions). */
+interface MatchedAction {
+  buildingName: string;
+  stage: DeadlineStage;
+  dueBy: number;
+  severity: Severity;
+  excerpt: string;
+  url: string;
+}
+
 async function sweepActions(
   env: Environment,
   paths: EnvPaths,
@@ -329,6 +345,16 @@ async function sweepActions(
   for (const [orgId, buildings] of Object.entries(byOrg)) {
     let audience: OrgAudience | null = null;
     let estate: Record<string, Record<string, Building>> | null = null;
+    // The org's admins hear ONCE per morning, however many actions matched.
+    // Emailing them per action would put a whole estate's worth of messages in
+    // one inbox on a ladder day, and - worse - each in-app notice consumes a
+    // slot of the org's monthly notification quota, which sendNotification
+    // enforces by SILENTLY ABORTING once the cap is reached. A daily per-action
+    // fan-out could therefore exhaust the cap and suppress unrelated
+    // notifications (a submitted assessment, a cancelled job) for the rest of
+    // the month. The responsible-party emails below stay per action: each goes
+    // to a different person about their own building.
+    const matched: MatchedAction[] = [];
 
     for (const [buildingId, actions] of Object.entries(buildings ?? {})) {
       for (const [actionId, action] of Object.entries(actions ?? {})) {
@@ -393,49 +419,16 @@ async function sweepActions(
             ? `${WEB_ORIGIN}/app/customers/${located.building.customerId}/sites/${located.siteId}/buildings/${buildingId}`
             : `${WEB_ORIGIN}/app/customers`;
 
-        // In-app to the org's admins: the responsible party is a customer
-        // contact with no Safentia inbox, so the people who can act on a
-        // slipping action inside the product are the ones told here.
-        for (const admin of audience.admins) {
-          await sendNotification(
-            paths,
-            orgId,
-            admin.uid,
-            {
-              type: 'reminder',
-              title: stage === 'lapsed' ? 'Action overdue' : 'Action due',
-              body,
-              link: 'safentia://jobs',
-            },
-            logger,
-          );
-          if (admin.email && admin.emailDeadlines) {
-            await dispatchEmail(
-              {
-                to: admin.email,
-                subject:
-                  stage === 'lapsed'
-                    ? `Action overdue: ${buildingName}`
-                    : `Action ${stagePhrase(stage)}: ${buildingName}`,
-                body,
-                html: renderBrandedEmail({
-                  brand: audience.brand,
-                  preheader: body,
-                  heading: `${audience.name}: action plan`,
-                  paragraphs: [
-                    body,
-                    'Please check the remedial work is arranged, and sign the action off once it is complete.',
-                  ],
-                  detailRows,
-                  cta: { label: 'View the action plan', url: buildingUrl },
-                  footerNote: `You are receiving this because you are an administrator of ${audience.name} on Safentia.`,
-                }),
-              },
-              logger,
-              { orgId, env, category: 'deadline-reminder' },
-            );
-          }
-        }
+        // Held for the org's single admin digest, sent once the estate walk is
+        // done (see the note on `matched`).
+        matched.push({
+          buildingName,
+          stage,
+          dueBy: action.dueBy,
+          severity: action.severity,
+          excerpt,
+          url: buildingUrl,
+        });
 
         // The responsible party themselves, by email, resolved the way
         // manageAction resolves an assignment: the building's LINKED party
@@ -496,6 +489,81 @@ async function sweepActions(
           }
         }
         sent += 1;
+      }
+    }
+
+    // ONE notice per admin for the whole org, whatever matched today. `audience`
+    // is non-null exactly when something did.
+    if (matched.length === 0 || audience === null) {
+      continue;
+    }
+    const overdue = matched.filter((item) => item.stage === 'lapsed').length;
+    const summary =
+      matched.length === 1
+        ? `A ${SEVERITY_LABELS[matched[0].severity].toLowerCase()} fire-safety action at ${matched[0].buildingName} is ${stagePhrase(matched[0].stage)}.`
+        : `${matched.length} fire-safety actions on your action plans need attention${overdue > 0 ? `, ${overdue} of them overdue` : ''}.`;
+    const subject =
+      matched.length === 1
+        ? matched[0].stage === 'lapsed'
+          ? `Action overdue: ${matched[0].buildingName}`
+          : `Action ${stagePhrase(matched[0].stage)}: ${matched[0].buildingName}`
+        : `${matched.length} fire-safety actions need attention`;
+    // One row per action for a digest; the fuller single-action detail when
+    // there is only one, so nothing is lost in the common case.
+    const digestRows =
+      matched.length === 1
+        ? [
+            { label: 'Building', value: matched[0].buildingName },
+            { label: 'Observation', value: matched[0].excerpt },
+            {
+              label: 'Severity',
+              value: SEVERITY_LABELS[matched[0].severity],
+            },
+            { label: 'Due by', value: formatDueDate(matched[0].dueBy) },
+          ]
+        : matched.map((item) => ({
+            label: item.buildingName,
+            value: `${SEVERITY_LABELS[item.severity]} severity, ${stagePhrase(item.stage)} (${formatDueDate(item.dueBy)})`,
+          }));
+    const html = renderBrandedEmail({
+      brand: audience.brand,
+      preheader: summary,
+      heading: `${audience.name}: action plan`,
+      paragraphs: [
+        summary,
+        'Please check the remedial work is arranged, and sign each action off once it is complete.',
+      ],
+      detailRows: digestRows,
+      // A single match deep-links to its own building; a digest can only point
+      // at the customer list, which is where the reader picks one.
+      cta:
+        matched.length === 1
+          ? { label: 'View the action plan', url: matched[0].url }
+          : { label: 'View your customers', url: `${WEB_ORIGIN}/app/customers` },
+      footerNote: `You are receiving this because you are an administrator of ${audience.name} on Safentia.`,
+    });
+    for (const admin of audience.admins) {
+      await sendNotification(
+        paths,
+        orgId,
+        admin.uid,
+        {
+          type: 'reminder',
+          title:
+            matched.length === 1 && matched[0].stage === 'lapsed'
+              ? 'Action overdue'
+              : 'Actions due',
+          body: summary,
+          link: 'safentia://jobs',
+        },
+        logger,
+      );
+      if (admin.email && admin.emailDeadlines) {
+        await dispatchEmail(
+          { to: admin.email, subject, body: summary, html },
+          logger,
+          { orgId, env, category: 'deadline-reminder' },
+        );
       }
     }
   }

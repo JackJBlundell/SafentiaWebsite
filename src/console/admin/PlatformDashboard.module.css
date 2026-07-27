@@ -48,7 +48,7 @@
   align-items: center;
   min-height: 44px;
   padding-inline: var(--space-md);
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   font-weight: 600;
 }
 
@@ -80,7 +80,7 @@
 }
 
 .statLink:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
 }
 

@@ -98,11 +98,24 @@ function buildColumns(
     {
       header: 'Organisation',
       cell: (row) => (
-        <span className={styles.orgCell}>
-          <span className={styles.cellName}>{row.customer.name}</span>
-          {row.customer.address && (
-            <span className={styles.cellMeta}>{row.customer.address}</span>
+        <span className={styles.orgRow}>
+          {row.customer.photoUrl ? (
+            // Decorative: the name sits immediately beside it, so an alt would
+            // only repeat what is already read out.
+            <img src={row.customer.photoUrl} alt="" className={styles.orgThumb} />
+          ) : (
+            // A quiet initial keeps the column aligned for the many customers
+            // with no image, without reading as a missing-image error.
+            <span className={styles.orgThumbFallback} aria-hidden="true">
+              {row.customer.name.charAt(0).toUpperCase()}
+            </span>
           )}
+          <span className={styles.orgCell}>
+            <span className={styles.cellName}>{row.customer.name}</span>
+            {row.customer.address && (
+              <span className={styles.cellMeta}>{row.customer.address}</span>
+            )}
+          </span>
         </span>
       ),
     },

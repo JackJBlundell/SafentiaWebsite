@@ -23,7 +23,7 @@ import {
 } from '../lib/guards';
 import {
   assertObject,
-  requireString,
+  requireDbKey,
   optionalString,
   clearableString,
   requireEnum,
@@ -90,7 +90,7 @@ export const manageSite = onCall<ManageSiteInput>(callableOptions, (request) =>
       // 2. Validate the action, the owning customer and the fields.
       const input = assertObject(request.data);
       const action = requireEnum(input, 'action', ACTIONS);
-      const customerId = requireString(input, 'customerId', TEXT_LIMITS.shortText);
+      const customerId = requireDbKey(input, 'customerId', TEXT_LIMITS.shortText);
       const payload = assertObject(input.site);
       for (const key of Object.keys(payload)) {
         if (!(SITE_FIELDS as readonly string[]).includes(key)) {
@@ -178,7 +178,7 @@ export const manageSite = onCall<ManageSiteInput>(callableOptions, (request) =>
       }
 
       // 3b. Update: the site must exist; only present fields change.
-      const siteId = requireString(input, 'siteId', TEXT_LIMITS.shortText);
+      const siteId = requireDbKey(input, 'siteId', TEXT_LIMITS.shortText);
       const sitePath = paths.db.site(orgId, customerId, siteId);
       const existingSnap = await db.ref(sitePath).get();
       if (!existingSnap.exists()) {

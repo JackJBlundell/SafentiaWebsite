@@ -30,7 +30,7 @@
 }
 
 .trigger:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
   border-color: transparent;
 }
@@ -65,7 +65,7 @@
 }
 
 .list:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: -2px;
 }
 
@@ -85,7 +85,7 @@
 }
 
 .option[aria-selected='true'] .optionName {
-  color: var(--brand-primary);
+  color: var(--brand-ink);
 }
 
 .optionName {

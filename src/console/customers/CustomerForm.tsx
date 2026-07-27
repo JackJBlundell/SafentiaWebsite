@@ -21,6 +21,7 @@ import type {
 import { AddressSearch } from '../ui/AddressSearch';
 import { ErrorNotice, PageHeader, type Crumb } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
+import { CustomerImageField, useCustomerImage } from './CustomerImageField';
 import { isValidEmail, LoadingNote, urls, useOrgScope } from './shared';
 import shared from './shared.module.css';
 import styles from './CustomerForm.module.css';
@@ -28,7 +29,7 @@ import styles from './CustomerForm.module.css';
 export function CustomerForm() {
   const { customerId } = useParams<{ customerId: string }>();
   const navigate = useNavigate();
-  const { ready, orgId, db } = useOrgScope();
+  const { ready, orgId, db, isAdmin } = useOrgScope();
   const manageCustomer = useCallable<ManageCustomerInput, ManageCustomerResult>(
     'manageCustomer',
   );
@@ -38,6 +39,8 @@ export function CustomerForm() {
     path: ready && customerId ? db!.customer(orgId, customerId) : '',
     enabled: ready && Boolean(customerId),
   });
+
+  const image = useCustomerImage(existing.data?.photoUrl ?? null);
 
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -84,6 +87,16 @@ export function CustomerForm() {
     const trimmedPhone = phone.trim();
     if (trimmedPhone) customer.phone = trimmedPhone;
     else if (record?.phone) customer.phone = null;
+
+    // Upload any freshly cropped image and fold its URL (or a clearing null)
+    // into the same payload; a failed upload aborts before any write.
+    const imageChange = await image.resolve();
+    if (imageChange === 'error') {
+      return;
+    }
+    if ('photoUrl' in imageChange) {
+      customer.photoUrl = imageChange.photoUrl;
+    }
 
     const result = await manageCustomer.call({
       action: 'update',
@@ -167,14 +180,28 @@ export function CustomerForm() {
               onChange={(event) => setPhone(event.target.value)}
             />
           </div>
+          {isAdmin && (
+            <CustomerImageField
+              image={image}
+              name={name.trim() || existing.data?.name || 'this customer'}
+              disabled={manageCustomer.pending || image.uploading}
+            />
+          )}
         </fieldset>
 
         {fieldError && <ErrorNotice message={fieldError} />}
         {manageCustomer.error && <ErrorNotice message={manageCustomer.error} />}
 
         <div className={shared.formActions}>
-          <Button type="submit" disabled={manageCustomer.pending}>
-            {manageCustomer.pending ? 'Saving' : 'Save changes'}
+          <Button
+            type="submit"
+            disabled={manageCustomer.pending || image.uploading}
+          >
+            {image.uploading
+              ? 'Uploading image'
+              : manageCustomer.pending
+                ? 'Saving'
+                : 'Save changes'}
           </Button>
           <Button
             variant="secondary"

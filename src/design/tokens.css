@@ -57,9 +57,20 @@
   --status-on-info: #ffffff;
   --status-info-surface: #e7f0fb;
 
-  /* --- Brand (DEFAULT_BRAND). Overridden per-org by the ThemeProvider. ----- */
-  --brand-primary: #2563eb;
-  --brand-on-primary: #ffffff;
+  /* --- Brand (DEFAULT_BRAND). Overridden per-org by the ThemeProvider. -----
+   * Two roles, deliberately separate tokens:
+   *   --brand-primary is a FILL only. Safentia's gold is 1.74:1 on white, so it
+   *     can carry a button face or a rule, but never a glyph or a word.
+   *   --brand-ink is the same brand corrected to AA (BRAND_INK) and is what every
+   *     link, active label, focus ring and meaningful border uses. Reaching for
+   *     --brand-primary in a `color:` or an `outline:` is a review failure.
+   * ------------------------------------------------------------------------ */
+  --brand-primary: #d9c554;
+  /* Neutral, not the blue-leaning near-black this used to be: a cool black on
+     the warm gold read as muddy. Kept in step with ON_FILL.dark in
+     tokens/palette.ts, which is what ThemeProvider computes at runtime. */
+  --brand-on-primary: #1a1a1a;
+  --brand-ink: #776c2e;
   --brand-secondary: #1e3a8a;
   --brand-on-secondary: #ffffff;
 
@@ -151,6 +162,10 @@
     --status-on-info: #0a1a2e;
     --status-info-surface: #13243a;
 
+    /* The gold needs no correction on a dark surface (10.8:1), so ink is the
+     * raw brand here. See BRAND_INK.dark. */
+    --brand-ink: #d9c554;
+
     --shadow-color: #000000;
 
     color-scheme: dark;
@@ -193,6 +208,9 @@
   --status-info: #74a8e8;
   --status-on-info: #0a1a2e;
   --status-info-surface: #13243a;
+
+  /* See BRAND_INK.dark - the gold already clears AA on the dark surfaces. */
+  --brand-ink: #d9c554;
 
   --shadow-color: #000000;
 

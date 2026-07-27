@@ -2,6 +2,25 @@
   margin-block-end: var(--space-xxl);
 }
 
+/* The one-level-up control. Uses --brand-ink (the AA-corrected brand value),
+   never the gold fill, and clears the minimum touch target so it is easy to
+   hit on a phone. A real link, so it is keyboard reachable and focus-visible. */
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--min-touch-target);
+  margin-block-end: var(--space-xs);
+  color: var(--brand-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
 .breadcrumbs {
   margin-block-end: var(--space-sm);
 }

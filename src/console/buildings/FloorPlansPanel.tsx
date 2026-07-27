@@ -40,11 +40,36 @@ const EMPTY_STATE_BODY =
 const REMOVE_CONFIRM_COPY =
   'Remove this floor plan? Past assessments keep their annotated copies.';
 
+/** The single ordering rule used EVERYWHERE plans are listed (story 2021):
+ *  ascending by the admin-set `order`; a plan without one (predating the field)
+ *  sorts after every ordered plan; ties, and two unordered plans, fall back to
+ *  the name. Kept as one function so the list, the reorder maths and any future
+ *  reader agree on exactly one order. */
+export function compareFloorPlans(a: FloorPlan, b: FloorPlan): number {
+  const ao = a.order;
+  const bo = b.order;
+  if (ao !== undefined && bo !== undefined && ao !== bo) return ao - bo;
+  if (ao !== undefined && bo === undefined) return -1;
+  if (ao === undefined && bo !== undefined) return 1;
+  return a.name.localeCompare(b.name);
+}
+
 export function FloorPlansPanel({ buildingId }: { buildingId: string }) {
   const { claims, paths } = useAuth();
   const orgId = claims?.orgId ?? '';
   const isAdmin = claims?.roles.admin === true;
   const enabled = Boolean(orgId && paths);
+
+  // Reorder is a whole-list operation, so it lives at the panel (which holds the
+  // full ordered list) rather than in a row. The list reflects the new order via
+  // the live RTDB listener once the callable writes it, so a failed reorder
+  // leaves both the data and the UI as the server has them, never a lie.
+  const reorder = useCallable<ManageFloorPlanInput, ManageFloorPlanResult>(
+    'manageFloorPlan',
+  );
+  // Announced politely after a successful move so a screen-reader user hears the
+  // plan's new position (visual users see the row jump).
+  const [reorderMessage, setReorderMessage] = useState('');
 
   const plansQuery = useRtdbQuery<Record<string, FloorPlan> | null>({
     key: keys.floorPlans(orgId, buildingId),
@@ -53,8 +78,30 @@ export function FloorPlansPanel({ buildingId }: { buildingId: string }) {
   });
 
   const plans = Object.entries(plansQuery.data ?? {}).sort(([, a], [, b]) =>
-    a.name.localeCompare(b.name),
+    compareFloorPlans(a, b),
   );
+
+  // Swap a plan with its neighbour and send the FULL id list in the new order;
+  // the callable validates it against the current set and rejects a stale one.
+  const movePlan = async (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= plans.length || reorder.pending) {
+      return;
+    }
+    const ids = plans.map(([id]) => id);
+    const moved = plans[index][1].name;
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    const result = await reorder.call({
+      action: 'reorder',
+      buildingId,
+      order: ids,
+    });
+    if (result) {
+      setReorderMessage(
+        `${moved} moved to position ${target + 1} of ${plans.length}.`,
+      );
+    }
+  };
 
   return (
     <section className={styles.panel} aria-labelledby="floor-plans-heading">
@@ -66,23 +113,34 @@ export function FloorPlansPanel({ buildingId }: { buildingId: string }) {
         <ErrorNotice message="Could not load floor plans. Please try again." />
       )}
 
+      {reorder.error && <ErrorNotice message={reorder.error} />}
+
       {plans.length === 0 && !plansQuery.isLoading && !plansQuery.isError && (
         <EmptyState title="No floor plans" body={EMPTY_STATE_BODY} />
       )}
 
       {plans.length > 0 && (
         <ul className={styles.list}>
-          {plans.map(([planId, plan]) => (
+          {plans.map(([planId, plan], index) => (
             <PlanRow
               key={planId}
               buildingId={buildingId}
               planId={planId}
               plan={plan}
               isAdmin={isAdmin}
+              index={index}
+              count={plans.length}
+              reordering={reorder.pending}
+              onMove={(direction) => void movePlan(index, direction)}
             />
           ))}
         </ul>
       )}
+
+      {/* Polite live region: position feedback for assistive tech, off-screen. */}
+      <p aria-live="polite" className={styles.visuallyHidden}>
+        {reorderMessage}
+      </p>
 
       {isAdmin && <AddPlanForm buildingId={buildingId} />}
     </section>
@@ -96,11 +154,23 @@ function PlanRow({
   planId,
   plan,
   isAdmin,
+  index,
+  count,
+  reordering,
+  onMove,
 }: {
   buildingId: string;
   planId: string;
   plan: FloorPlan;
   isAdmin: boolean;
+  /** This row's position in the ordered list, and the list length, so the move
+   *  controls can disable at the ends. */
+  index: number;
+  count: number;
+  /** A reorder is in flight, so the move controls lock to avoid overlapping
+   *  writes. */
+  reordering: boolean;
+  onMove: (direction: -1 | 1) => void;
 }) {
   const manage = useCallable<ManageFloorPlanInput, ManageFloorPlanResult>(
     'manageFloorPlan',
@@ -239,10 +309,35 @@ function PlanRow({
             )}
             {isAdmin && !confirmingRemove && (
               <div className={styles.rowActions}>
-                <Button variant="ghost" onClick={startEdit}>
+                {/* Move controls: keyboard-operable buttons are the accessible
+                    baseline for reordering. The off-screen plan name gives each
+                    button a distinct accessible name that still CONTAINS its
+                    visible text (WCAG 2.5.3). Disabled at the list ends and while
+                    a reorder is being saved. */}
+                <Button
+                  variant="ghost"
+                  onClick={() => onMove(-1)}
+                  disabled={index === 0 || reordering}
+                >
+                  Move up
+                  <span className={styles.visuallyHidden}> {plan.name}</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => onMove(1)}
+                  disabled={index === count - 1 || reordering}
+                >
+                  Move down
+                  <span className={styles.visuallyHidden}> {plan.name}</span>
+                </Button>
+                <Button variant="ghost" onClick={startEdit} disabled={reordering}>
                   Edit
                 </Button>
-                <Button variant="ghost" onClick={() => setConfirmingRemove(true)}>
+                <Button
+                  variant="ghost"
+                  onClick={() => setConfirmingRemove(true)}
+                  disabled={reordering}
+                >
                   Remove
                 </Button>
               </div>

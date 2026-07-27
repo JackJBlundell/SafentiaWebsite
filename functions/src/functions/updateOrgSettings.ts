@@ -25,6 +25,11 @@ import {
 import { assertObject } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
+import {
+  isValidReviewReminderDays,
+  MAX_REVIEW_REMINDER_DAY,
+  MAX_REVIEW_REMINDER_DAYS,
+} from '../lib/reviewWindows';
 import type {
   RagConfig,
   UpdateOrgSettingsInput,
@@ -55,6 +60,20 @@ function requireBoolean(input: Record<string, unknown>, field: string): boolean 
   return value;
 }
 
+/** Validate a supplied reminder schedule against the SAME rules the sweep uses
+ *  (isValidReviewReminderDays), so the callable can never store a config the
+ *  sweep would then reject and silently ignore. A trusted, in-range value is
+ *  returned; anything else is refused, never coerced (brief 18.4). */
+function requireReviewReminderDays(value: unknown): number[] {
+  if (!isValidReviewReminderDays(value)) {
+    throw fail.invalidArgument(
+      `The reviewReminderDays field must be a descending list of up to ${MAX_REVIEW_REMINDER_DAYS} whole numbers of days, each between 1 and ${MAX_REVIEW_REMINDER_DAY}.`,
+      { field: 'reviewReminderDays' },
+    );
+  }
+  return value;
+}
+
 export const updateOrgSettings = onCall<UpdateOrgSettingsInput>(
   callableOptions,
   (request) =>
@@ -70,33 +89,74 @@ export const updateOrgSettings = onCall<UpdateOrgSettingsInput>(
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
 
-        // 2. Validate the full RagConfig; it is replaced whole so the stored
-        // config is always a complete, internally-consistent set.
+        // 2. Validate whichever settings the caller supplied. Both fields are
+        // optional and independent: the risk-scoring page saves ragConfig on its
+        // own, the reminders page saves reviewReminderDays on its own, so each is
+        // written only when present and the other is left untouched.
         const input = assertObject(request.data);
-        const configInput = assertObject(input.ragConfig);
-        const ragConfig: RagConfig = {
-          redShareForHigh: requireShare(configInput, 'redShareForHigh'),
-          amberRedShareForMedium: requireShare(configInput, 'amberRedShareForMedium'),
-          openHighActionForcesHigh: requireBoolean(
-            configInput,
-            'openHighActionForcesHigh',
-          ),
-          overdueActionEscalates: requireBoolean(configInput, 'overdueActionEscalates'),
-        };
+        const orgSettingsPath = paths.db.orgSettings(orgId);
+        const writes: Record<string, unknown> = {};
+        const actions: string[] = [];
 
-        // 3. Atomic write: the settings change and the audit entry together.
-        const update: Record<string, unknown> = {
-          [`${paths.db.orgSettings(orgId)}/ragConfig`]: ragConfig,
-          ...activityUpdate(paths, orgId, {
-            actorUid: uid,
-            action: 'orgSettings.ragConfig.updated',
-            target: orgId,
-          }),
-        };
+        if (input.ragConfig !== undefined) {
+          // The RAG config is replaced whole so the stored config is always a
+          // complete, internally-consistent set.
+          const configInput = assertObject(input.ragConfig);
+          const ragConfig: RagConfig = {
+            redShareForHigh: requireShare(configInput, 'redShareForHigh'),
+            amberRedShareForMedium: requireShare(
+              configInput,
+              'amberRedShareForMedium',
+            ),
+            openHighActionForcesHigh: requireBoolean(
+              configInput,
+              'openHighActionForcesHigh',
+            ),
+            overdueActionEscalates: requireBoolean(
+              configInput,
+              'overdueActionEscalates',
+            ),
+          };
+          writes[`${orgSettingsPath}/ragConfig`] = ragConfig;
+          actions.push('orgSettings.ragConfig.updated');
+        }
+
+        // Story 2046 AC1: an explicit null clears the reminder schedule back to
+        // the built-in default (writing null removes the RTDB node); a supplied
+        // array is validated against the sweep's own rules and stored; an absent
+        // field leaves the stored value alone.
+        if (input.reviewReminderDays !== undefined) {
+          writes[`${orgSettingsPath}/reviewReminderDays`] =
+            input.reviewReminderDays === null
+              ? null
+              : requireReviewReminderDays(input.reviewReminderDays);
+          actions.push('orgSettings.reviewReminderDays.updated');
+        }
+
+        // Reject an empty call rather than writing a lone audit entry for a
+        // change that touches nothing.
+        if (actions.length === 0) {
+          throw fail.invalidArgument('Provide at least one setting to update.');
+        }
+
+        // 3. Atomic write: every settings change and one audit entry per changed
+        // setting land in ONE update, so the trail can never show a change
+        // without its entry or vice versa (the reason this is a callable).
+        const update: Record<string, unknown> = { ...writes };
+        for (const action of actions) {
+          Object.assign(
+            update,
+            activityUpdate(paths, orgId, {
+              actorUid: uid,
+              action,
+              target: orgId,
+            }),
+          );
+        }
         await db.ref().update(update);
 
         const logger = createLogger({ fn: 'updateOrgSettings', orgId });
-        logger.info('RAG configuration updated');
+        logger.info('Organisation settings updated', { changed: actions });
         return { updated: true };
       },
     ),

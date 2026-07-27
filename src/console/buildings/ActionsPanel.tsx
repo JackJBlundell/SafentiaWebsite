@@ -26,20 +26,30 @@ import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import type {
   Action,
+  ActionStatus,
+  ActionStatusChange,
   ManageActionInput,
   ManageActionResult,
   Severity,
 } from '../../types';
 import { ErrorNotice } from '../ui/Page';
-import { DataTable, type Column } from '../ui/DataTable';
+import { DataTable, type Column, type RowExpansion } from '../ui/DataTable';
 import { useCallable } from '../ui/useCallable';
 import { isActionOverdue } from '../reports/orgMetrics';
 import styles from './ActionsPanel.module.css';
 
 const SEVERITY_ORDER: Record<Severity, number> = { H: 0, M: 1, L: 2 };
 
-type StatusFilter = 'all' | 'open' | 'signedOff';
+type StatusFilter = 'all' | 'open' | 'inProgress' | 'signedOff';
 type SeverityFilter = 'all' | Severity;
+
+/** The full lifecycle wording, so a status is never carried by colour alone. */
+const STATUS_LABELS: Record<ActionStatus, string> = {
+  open: 'Open',
+  inProgress: 'In progress',
+  signedOff: 'Signed off',
+  archived: 'Archived',
+};
 
 /** The Responsible filter's value encoding: fixed options plus one prefixed
  *  entry per distinct responsible name, so a name can never collide with the
@@ -74,6 +84,77 @@ function fromDateInputValue(value: string): number | undefined {
   }
   const [year, month, day] = value.split('-').map(Number);
   return Date.UTC(year, month - 1, day);
+}
+
+/** Date and time of a status change, in UTC to match the stored day (the panel
+ *  shows time as well as date because several moves can happen on one day). */
+function formatDateTime(epochMillis: number): string {
+  return new Date(epochMillis).toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  });
+}
+
+/** Resolve who made a change to a name the viewer can read. The panel does not
+ *  load the member directory (and story 2044 forbids adding a per-row read), so
+ *  we can only recognise the viewer's own uid; anyone else is a neutral label. */
+function actorLabel(byUid: string, viewerUid: string | undefined): string {
+  return byUid === viewerUid ? 'you' : 'a team member';
+}
+
+/** The status column's chip: label-led (colour is only a supporting cue), one
+ *  tone per lifecycle state so in-progress reads distinctly from open and
+ *  signed-off. */
+const STATUS_CLASS: Record<ActionStatus, string> = {
+  open: styles.statusOpen,
+  inProgress: styles.statusInProgress,
+  signedOff: styles.statusSignedOff,
+  archived: styles.statusArchived,
+};
+function StatusChip({ status }: { status: ActionStatus }) {
+  return (
+    <span className={`${styles.statusChip} ${STATUS_CLASS[status]}`}>
+      {STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+/** The compact per-action lifecycle trail (story 2044 AC3): what changed, when,
+ *  by whom, and the completion note captured at sign-off. Oldest first, as the
+ *  server appends it. */
+function StatusHistory({
+  history,
+  viewerUid,
+}: {
+  history: readonly ActionStatusChange[];
+  viewerUid: string | undefined;
+}) {
+  if (history.length === 0) {
+    return (
+      <p className={styles.historyEmpty}>
+        No status changes have been recorded yet.
+      </p>
+    );
+  }
+  return (
+    <ol className={styles.historyList}>
+      {history.map((entry, index) => (
+        <li key={index} className={styles.historyItem}>
+          <StatusChip status={entry.status} />
+          <span className={styles.historyMeta}>
+            {formatDateTime(entry.at)} by {actorLabel(entry.byUid, viewerUid)}
+          </span>
+          {entry.note && (
+            <span className={styles.historyNote}>{entry.note}</span>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 function SeverityCell({ severity }: { severity: Severity }) {
@@ -164,7 +245,7 @@ const EMPTY_DRAFT: Draft = {
 };
 
 export function ActionsPanel({ buildingId }: { buildingId: string }) {
-  const { claims, paths } = useAuth();
+  const { claims, paths, user } = useAuth();
   const orgId = claims?.orgId ?? '';
   const isAdmin = claims?.roles.admin === true;
 
@@ -191,6 +272,9 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
     id: string;
     verb: 'signOff' | 'reopen';
   } | null>(null);
+  // The optional completion note captured while a sign-off is being confirmed
+  // (story 2044 AC2). Kept beside `confirming` so cancelling clears it.
+  const [completionNote, setCompletionNote] = useState('');
 
   // The Responsible filter's options: every distinct name present in the plan
   // (story 2042), plus Unassigned when any action carries no responsible. The
@@ -256,7 +340,13 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
     setFormTarget(target);
     setDraft(seed);
     setConfirming(null);
+    setCompletionNote('');
     manage.clearError();
+  };
+
+  const disarm = () => {
+    setConfirming(null);
+    setCompletionNote('');
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -302,11 +392,97 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
     }
   };
 
+  // Start needs no confirmation: moving open work to in progress is not a
+  // legally significant close the way sign-off and reopen are.
+  const onStart = async (id: string) => {
+    await manage.call({ action: 'start', buildingId, actionId: id });
+  };
+
   const onConfirmVerb = async (id: string, verb: 'signOff' | 'reopen') => {
-    const result = await manage.call({ action: verb, buildingId, actionId: id });
+    const note = completionNote.trim();
+    const result = await manage.call({
+      action: verb,
+      buildingId,
+      actionId: id,
+      // The completion note only rides along with a sign-off, and only when the
+      // admin actually wrote one.
+      ...(verb === 'signOff' && note ? { completionNote: note } : {}),
+    });
     if (result) {
-      setConfirming(null);
+      disarm();
     }
+  };
+
+  // Sign-off is a two-step press-then-confirm because it changes the legal
+  // reading of the plan; the confirm step also offers the optional completion
+  // note. Shared by open and in-progress rows.
+  const signOffControl = (id: string) => {
+    const armed = confirming?.id === id && confirming.verb === 'signOff';
+    if (!armed) {
+      return (
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setConfirming({ id, verb: 'signOff' });
+            setCompletionNote('');
+          }}
+        >
+          Sign off
+        </Button>
+      );
+    }
+    return (
+      <span className={styles.signOffConfirm}>
+        <label className={styles.field}>
+          <span className={styles.fieldLabel}>Completion note (optional)</span>
+          <textarea
+            className={styles.textarea}
+            rows={2}
+            value={completionNote}
+            onChange={(event) => setCompletionNote(event.target.value)}
+          />
+        </label>
+        <span className={styles.rowActions}>
+          <Button
+            onClick={() => void onConfirmVerb(id, 'signOff')}
+            disabled={manage.pending}
+          >
+            Confirm sign off
+          </Button>
+          <Button variant="secondary" onClick={disarm}>
+            Cancel
+          </Button>
+        </span>
+      </span>
+    );
+  };
+
+  // Reopen is likewise two-step. Shared by signed-off and in-progress rows.
+  const reopenControl = (id: string) => {
+    const armed = confirming?.id === id && confirming.verb === 'reopen';
+    if (!armed) {
+      return (
+        <Button
+          variant="secondary"
+          onClick={() => setConfirming({ id, verb: 'reopen' })}
+        >
+          Reopen
+        </Button>
+      );
+    }
+    return (
+      <>
+        <Button
+          onClick={() => void onConfirmVerb(id, 'reopen')}
+          disabled={manage.pending}
+        >
+          Confirm reopen
+        </Button>
+        <Button variant="secondary" onClick={disarm}>
+          Cancel
+        </Button>
+      </>
+    );
   };
 
   const columns: Array<Column<ActionRow>> = [
@@ -329,10 +505,14 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
         </span>
       ),
     },
+    // Every column but Observation asks for a token 1% so the browser sizes it
+    // to its own content and hands the whole surplus to the free text, rather
+    // than sharing width evenly and leaving the observation a sliver.
     {
       header: 'Responsible',
       cell: (row) => row.action.responsible ?? 'Unassigned',
       desktopOnly: true,
+      width: '1%',
     },
     {
       header: 'Due',
@@ -356,29 +536,25 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
             )}
           </span>
         ),
+      width: '1%',
     },
     {
       header: 'Status',
-      cell: (row) =>
-        row.action.status === 'signedOff'
-          ? 'Signed off'
-          : row.action.status === 'archived'
-            ? 'Archived'
-            : 'Open',
+      cell: (row) => <StatusChip status={row.action.status} />,
+      width: '1%',
     },
   ];
   if (isAdmin) {
     columns.push({
       header: 'Manage',
       align: 'end',
+      width: '1%',
       cell: (row) => {
-        const pendingHere = confirming?.id === row.id;
         if (row.action.status === 'open') {
           return (
             <span className={styles.rowActions}>
               <Button
                 variant="secondary"
-               
                 onClick={() =>
                   openForm(row.id, {
                     observation: row.action.observation,
@@ -391,71 +567,45 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
               >
                 Edit
               </Button>
-              {pendingHere && confirming?.verb === 'signOff' ? (
-                <>
-                  <Button
-                   
-                    onClick={() => void onConfirmVerb(row.id, 'signOff')}
-                    disabled={manage.pending}
-                  >
-                    Confirm sign off
-                  </Button>
-                  <Button
-                    variant="secondary"
-                   
-                    onClick={() => setConfirming(null)}
-                  >
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  variant="secondary"
-                 
-                  onClick={() => setConfirming({ id: row.id, verb: 'signOff' })}
-                >
-                  Sign off
-                </Button>
-              )}
+              <Button
+                variant="secondary"
+                onClick={() => void onStart(row.id)}
+                disabled={manage.pending}
+              >
+                Start
+              </Button>
+              {signOffControl(row.id)}
+            </span>
+          );
+        }
+        if (row.action.status === 'inProgress') {
+          return (
+            <span className={styles.rowActions}>
+              {signOffControl(row.id)}
+              {reopenControl(row.id)}
             </span>
           );
         }
         if (row.action.status === 'signedOff') {
-          return (
-            <span className={styles.rowActions}>
-              {pendingHere && confirming?.verb === 'reopen' ? (
-                <>
-                  <Button
-                   
-                    onClick={() => void onConfirmVerb(row.id, 'reopen')}
-                    disabled={manage.pending}
-                  >
-                    Confirm reopen
-                  </Button>
-                  <Button
-                    variant="secondary"
-                   
-                    onClick={() => setConfirming(null)}
-                  >
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  variant="secondary"
-                 
-                  onClick={() => setConfirming({ id: row.id, verb: 'reopen' })}
-                >
-                  Reopen
-                </Button>
-              )}
-            </span>
-          );
+          return <span className={styles.rowActions}>{reopenControl(row.id)}</span>;
         }
         return null;
       },
     });
   }
+
+  // The lifecycle trail is a per-row disclosure, available to every viewer (not
+  // just admins) so a building owner can see how an action progressed.
+  const historyExpansion: RowExpansion<ActionRow> = {
+    header: 'History',
+    label: (row) => `status history for ${row.action.observation}`,
+    content: (row) => (
+      <StatusHistory
+        history={row.action.statusHistory ?? []}
+        viewerUid={user?.uid}
+      />
+    ),
+  };
 
   return (
     <section className={styles.panel} aria-labelledby="actions-panel-heading">
@@ -489,6 +639,7 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
           >
             <option value="all">All statuses</option>
             <option value="open">Open</option>
+            <option value="inProgress">In progress</option>
             <option value="signedOff">Signed off</option>
           </select>
         </label>
@@ -665,6 +816,7 @@ export function ActionsPanel({ buildingId }: { buildingId: string }) {
           rows={rows}
           rowKey={(row) => row.id}
           label="Action plan"
+          expansion={historyExpansion}
         />
       )}
     </section>

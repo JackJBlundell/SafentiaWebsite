@@ -355,8 +355,18 @@ export function CustomerDetail() {
       <PageGrid
         aside={
           <>
+            {/* The organisation's facts and the actions that act on them live in
+                one card: they are the same subject, and splitting them left a
+                near-empty second card pushing everything below it further down. */}
             <Card>
               <CardHeader title="Organisation" />
+              {record.photoUrl && (
+                <img
+                  src={record.photoUrl}
+                  alt={`${record.name} logo`}
+                  className={styles.orgImage}
+                />
+              )}
               <DescriptionList
                 items={[
                   { label: 'Address', value: record.address },
@@ -365,13 +375,7 @@ export function CustomerDetail() {
                   { label: 'Status', value: <StatusBadge status={record.status} /> },
                 ]}
               />
-            </Card>
-
-            <ContactsPanel customerId={customerId} />
-
-            {isAdmin && (
-              <Card>
-                <CardHeader title="Actions" />
+              {isAdmin && (
                 <div className={styles.actions}>
                   <Button variant="secondary" to={urls.customerEdit(customerId)}>
                     Edit organisation
@@ -382,8 +386,10 @@ export function CustomerDetail() {
                     <ArchiveControl customerId={customerId} name={record.name} />
                   )}
                 </div>
-              </Card>
-            )}
+              )}
+            </Card>
+
+            <ContactsPanel customerId={customerId} />
           </>
         }
       >

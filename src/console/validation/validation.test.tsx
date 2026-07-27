@@ -513,6 +513,56 @@ describe('ReleasedList', () => {
       .toHaveAttribute('href', '/app/validation/job-2');
   });
 
+  it('names the template each release was carried out under', () => {
+    seedReview('released');
+    mocks.rtdb['assessments/org-1/status/released'] = {
+      'job-1': released(Date.UTC(2026, 6, 4, 10, 0)),
+    };
+    renderValidationAt('/released');
+    // The PINNED snapshot, with its version and declared standard.
+    expect(
+      screen.getByText('PAS 79 Fire Risk Assessment v3 · PAS 79'),
+    ).toBeInTheDocument();
+  });
+
+  it('offers the report from the row, labelled with the building it covers', async () => {
+    seedReview('released');
+    mocks.rtdb['assessments/org-1/status/released'] = {
+      'job-1': released(Date.UTC(2026, 6, 4, 10, 0)),
+    };
+    mocks.rtdb['reports/org-1/building/b-1'] = {
+      'rep-1': {
+        pdfPath: 'orgs/org-1/reports/rep-1.pdf',
+        generatedAt: Date.UTC(2026, 6, 4, 10, 5),
+        assessmentId: 'job-1',
+      },
+    };
+    renderValidationAt('/released');
+    const link = await screen.findByRole('link', {
+      name: 'Download PDF for Meridian Tower A',
+    });
+    expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
+  });
+
+  it('says the report is not ready rather than offering a dead download', () => {
+    seedReview('released');
+    mocks.rtdb['assessments/org-1/status/released'] = {
+      'job-1': released(Date.UTC(2026, 6, 4, 10, 0)),
+    };
+    // The building has an older report, but none for THIS assessment yet:
+    // generation is asynchronous and trails the release.
+    mocks.rtdb['reports/org-1/building/b-1'] = {
+      'rep-old': {
+        pdfPath: 'orgs/org-1/reports/rep-old.pdf',
+        generatedAt: Date.UTC(2026, 1, 1),
+        assessmentId: 'job-0',
+      },
+    };
+    renderValidationAt('/released');
+    expect(screen.getByText(/Report not ready/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Download PDF/ })).toBeNull();
+  });
+
   it('shows the honest empty state when nothing has been released', () => {
     mocks.rtdb = { orgMembers: members };
     renderValidationAt('/released');

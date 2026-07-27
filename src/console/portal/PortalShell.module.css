@@ -1,3 +1,7 @@
+/* PortalShell - the customer portal chrome. One brand rule, one header row,
+ * a bounded reading column and a quiet footer. Every interactive control
+ * clears the 44px minimum target. */
+
 .root {
   min-height: 100dvh;
   display: flex;
@@ -5,11 +9,19 @@
   background: var(--color-background);
 }
 
+/* The organisation's accent, used as a FILL (never as text or an outline - the
+ * default Safentia gold is 1.74:1 and would be illegible as ink). */
+.brandRule {
+  height: 4px;
+  background: var(--brand-primary);
+}
+
 .chrome {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-md);
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
   padding: var(--space-sm) var(--space-lg);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -19,16 +31,42 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
   min-height: var(--min-touch-target);
   justify-content: center;
   text-decoration: none;
   color: var(--color-text);
 }
 
+.brandIdentity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+/* Bounded by height so any aspect ratio of uploaded logo behaves, and by width
+ * so a very wide lockup cannot crowd out the name beside it. */
+.brandLogo {
+  height: 28px;
+  max-width: 10rem;
+  width: auto;
+  object-fit: contain;
+  flex: none;
+}
+
+/* Organisation names run long. The line truncates rather than wrapping the
+ * chrome onto a second row; the full name stays available as the link's
+ * accessible name and as the element's title. */
 .brandName {
   font-weight: 700;
   font-size: 1.0625rem;
   line-height: 1.2;
+  min-width: 0;
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .poweredBy {
@@ -40,6 +78,35 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  min-width: 0;
+}
+
+/* Which customer account is being viewed. Quiet by design: it is context, not
+ * a control, so it never competes with the organisation's mark. */
+.accountBadge {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 14rem;
+  padding-inline-end: var(--space-sm);
+  border-inline-end: 1px solid var(--color-border);
+}
+
+.accountBadgeLabel {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.accountBadgeName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .accountLink {
@@ -60,9 +127,49 @@
 .main {
   flex: 1;
   width: 100%;
-  max-width: 64rem;
+  max-width: 68rem;
   margin: 0 auto;
   padding: var(--space-xl) var(--space-lg) var(--space-xxl);
+}
+
+.footer {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.footerInner {
+  width: 100%;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: var(--space-lg);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-lg);
+}
+
+.footerCopy {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+/* The contact line sits beside the sentence on a wide footer and wraps below it
+   on a narrow one. Links use --brand-ink, the AA-corrected brand value, never
+   the gold fill. */
+.footerContact {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.footerLink {
+  color: var(--brand-ink);
+  text-decoration: none;
+}
+
+.footerLink:hover {
+  text-decoration: underline;
 }
 
 .notFound {
@@ -80,4 +187,16 @@
 .notFoundCopy {
   margin: 0;
   color: var(--color-text-secondary);
+}
+
+/* Narrow screens: the account badge would halve the room the controls need, so
+ * it steps aside. The customer's name still leads the home page. */
+@media (max-width: 40rem) {
+  .accountBadge {
+    display: none;
+  }
+
+  .brandName {
+    max-width: 12rem;
+  }
 }

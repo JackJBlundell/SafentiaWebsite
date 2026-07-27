@@ -21,6 +21,12 @@ export function buildOrganisation(logoUrl: string): Organisation {
         // A clean, confident medium blue with a deep-navy accent - reads as a
         // serious safety brand while staying clearly distinct from the RAG
         // semantic colours, which brand tokens must never override (brief 9.1).
+        //
+        // Deliberately NOT the platform default. This org is a demo TENANT, and
+        // the point of the demo is to show whitelabel theming actually taking
+        // effect; if it wore the Safentia accent you could not tell a branded org
+        // from an unbranded one. Track the platform default and this stays
+        // different from it on purpose.
         primary: '#2563EB',
         secondary: '#1E3A8A',
       },

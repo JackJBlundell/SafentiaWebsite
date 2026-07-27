@@ -64,7 +64,7 @@
 }
 
 .reviewLink:hover {
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   text-decoration: underline;
 }
 
@@ -136,7 +136,78 @@
 
 .activityTargetLink:hover,
 .activityTargetLink:focus-visible {
-  color: var(--brand-primary);
+  color: var(--brand-ink);
+}
+
+/* --- Recent releases -------------------------------------------------------
+   Each row carries three lines (building, customer + template, attribution) and
+   a trailing report affordance, so it needs more room than an activity row. */
+
+.releaseList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.releaseRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding-block: var(--space-md);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.releaseRow:last-child {
+  border-block-end: none;
+  padding-block-end: 0;
+}
+
+.releaseRow:first-child {
+  padding-block-start: 0;
+}
+
+.releaseText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Building name: the row's headline, and its link into the building record.
+   Underlined on interaction so the affordance is never colour alone. */
+.releaseLink,
+.releaseName {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.releaseLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+}
+
+.releaseLink:hover,
+.releaseLink:focus-visible {
+  color: var(--brand-ink);
+  text-decoration: underline;
+}
+
+/* Customer, template and attribution lines. Long names wrap rather than
+   pushing the card wider than its column. */
+.releaseMeta {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.releaseAction {
+  flex: none;
+  padding-block-start: 2px;
 }
 
 .activityTime {

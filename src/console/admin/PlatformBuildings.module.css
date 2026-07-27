@@ -4,3 +4,68 @@
   font-size: 0.8125rem;
   color: var(--color-text-muted);
 }
+
+/* Building name over its address, so a long address wraps instead of pushing
+   the table wider than its container. */
+.buildingCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.buildingName {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.buildingMeta {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The risk filter: a label above a wrapping row of single-select segments. */
+.riskFilter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.riskOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.riskChip,
+.riskChipActive {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* The active neutral ("All levels") segment; the per-risk active segments take
+   their RAG surface/colour from an inline style so the fixed pairing is reused,
+   never redefined here. */
+.riskChipActive {
+  border-color: var(--brand-ink);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.riskChip:focus-visible,
+.riskChipActive:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+}

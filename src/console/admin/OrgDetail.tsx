@@ -24,6 +24,7 @@ import { DataTable, type Column } from '../ui/DataTable';
 import { DescriptionList, type DescriptionItem } from '../ui/Grid';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { usePlatformEnv } from './platformEnv';
+import { useRecordPlatformAccess } from './useRecordPlatformAccess';
 import styles from './admin.module.css';
 
 const ACTIVITY_WINDOW = 20;
@@ -54,6 +55,10 @@ export function OrgDetail() {
   // read from the URL; only the org id comes from the route.
   const { env } = usePlatformEnv();
   const paths = forEnv(env);
+
+  // Story 2069 AC2: viewing a tenant is itself an audited event. Best-effort,
+  // once per mount; a failed note never blocks this read-only view.
+  useRecordPlatformAccess('organisation', orgId, orgId);
 
   const orgQuery = useRtdbQuery<Organisation | null>({
     key: ['platformOrg', env, orgId],
@@ -185,14 +190,13 @@ export function OrgDetail() {
             label="Recent activity"
           />
         )}
-        {/* Honest disclosure, not a placeholder: /activity writes are
-            server-only (callables and triggers), so this read-only console
-            cannot append a "platform operator viewed this organisation" row
-            itself. Recording platform access needs a dedicated callable -
-            tracked in FUTURE_WORK.md. */}
+        {/* Story 2069 AC2: opening this oversight view records a
+            `platform.access` entry in the organisation's own trail (via the
+            recordPlatformAccess callable), so a tenant can see when the platform
+            operator looked. The note is written on mount and appears here on the
+            next refresh. */}
         <p className={styles.footnote}>
-          Platform access is not currently recorded in organisation activity
-          logs.
+          Opening this view is recorded in the organisation&rsquo;s activity log.
         </p>
       </section>
     </div>

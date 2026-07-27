@@ -39,10 +39,14 @@ import type {
   OrgProfile,
 } from '../shared/types';
 
-/** Platform-default brand for a fresh org (the design system's accent pair).
+/** Platform-default brand for a fresh org. This mirrors DEFAULT_BRAND in the
+ *  design system's palette and is not an independent choice: a new org has not
+ *  branded itself yet, its console still says "Powered by Safentia", and the
+ *  honest pre-branding state is the product's own accent. Pinning a colour the
+ *  palette no longer contains would leave a stale copy behind instead.
  *  The admin re-brands via updateOrgProfile; a default means the themed report
  *  and portal are never left without valid colours. */
-const DEFAULT_BRAND = { primary: '#2563EB', secondary: '#1E3A8A' } as const;
+const DEFAULT_BRAND = { primary: '#D9C554', secondary: '#1E3A8A' } as const;
 
 export const createOrganisation = onCall<CreateOrganisationInput>(
   callableOptions,

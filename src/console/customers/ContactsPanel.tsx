@@ -5,6 +5,11 @@
 // /orgInvitations summaries, filtered client-side to this customer + contact)
 // decides Invited / Expired / Revoked; no email means no invitation possible.
 //
+// The panel lives in the page's narrow aside column, so each contact is a CARD
+// rather than a table row: a table of six columns in that width is either
+// cramped or scrolls sideways, and neither is readable. Cards stack, wrap and
+// keep long emails inside their own box.
+//
 // Mutations go through manageCustomerContact / createInvitation /
 // resendInvitation / revokeInvitation; the live listeners reflect the result.
 // Destructive steps (revoke, remove, make primary) sit behind inline confirms.
@@ -16,6 +21,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../../components/Button';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
+import { CUSTOMER_ROLES } from '../../types';
 import type {
   ClearableFields,
   CreateInvitationInput,
@@ -30,9 +36,9 @@ import type {
   RevokeInvitationResult,
 } from '../../types';
 import { Card, CardHeader } from '../ui/Card';
-import { DataTable, type Column } from '../ui/DataTable';
 import { ErrorNotice } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
+import { CUSTOMER_ROLE_LABELS, ContactCreateDialog } from './ContactCreateDialog';
 import { isValidEmail, sortByName, toEntries, useOrgScope } from './shared';
 import shared from './shared.module.css';
 import styles from './ContactsPanel.module.css';
@@ -122,8 +128,10 @@ export function ContactsPanel({ customerId }: { customerId: string }) {
     enabled: ready && isAdmin,
   });
 
-  // Editor state: null closed, 'new' adding, otherwise the contactId editing.
+  // Editing an existing contact happens inline beneath its card; creating one
+  // happens in the dialog, where the invitation consequence is spelled out.
   const [editing, setEditing] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   // A minute tick so time-derived states (an invite crossing its expiry) update
   // while the page stays open, rather than freezing at first render.
@@ -152,64 +160,14 @@ export function ContactsPanel({ customerId }: { customerId: string }) {
     }));
   }, [contacts.data, customerInvitations, isAdmin, now]);
 
-  const columns: Array<Column<ContactRow>> = [
-    {
-      header: 'Name',
-      cell: (row) => (
-        <span className={styles.nameCell}>
-          <span className={styles.name}>{row.contact.name}</span>
-          {row.contact.isPrimary && <span className={styles.primaryBadge}>Primary</span>}
-          {row.contact.jobTitle && (
-            <span className={styles.jobTitle}>{row.contact.jobTitle}</span>
-          )}
-        </span>
-      ),
-    },
-    { header: 'Email', cell: (row) => row.contact.email ?? '' },
-    { header: 'Phone', desktopOnly: true, cell: (row) => row.contact.phone ?? '' },
-    {
-      header: 'Portal',
-      cell: (row) => (
-        <span
-          className={
-            row.portal === 'active' || row.portal === 'invited'
-              ? styles.portalLive
-              : styles.portalMuted
-          }
-        >
-          {PORTAL_LABELS[row.portal]}
-        </span>
-      ),
-    },
-    ...(isAdmin
-      ? [
-          {
-            header: 'Actions',
-            align: 'end',
-            width: '1%',
-            cell: (row: ContactRow) => (
-              <ContactActions
-                customerId={customerId}
-                row={row}
-                editing={editing === row.id}
-                onEdit={() => setEditing(editing === row.id ? null : row.id)}
-              />
-            ),
-          } as Column<ContactRow>,
-        ]
-      : []),
-  ];
-
-  const editingRow = rows.find((row) => row.id === editing);
-
   return (
-    <Card flush={rows.length > 0}>
+    <Card>
       <CardHeader
         title="Contacts"
         hint="The people at this organisation. Portal access is granted per contact."
         action={
           isAdmin ? (
-            <Button variant="secondary" onClick={() => setEditing(editing === 'new' ? null : 'new')}>
+            <Button variant="secondary" onClick={() => setAdding(true)}>
               Add contact
             </Button>
           ) : undefined
@@ -220,40 +178,115 @@ export function ContactsPanel({ customerId }: { customerId: string }) {
           No contacts yet. Add the people you deal with at this organisation.
         </p>
       ) : (
-        <DataTable
-          label="Contacts"
-          columns={columns}
-          rows={rows}
-          rowKey={(row) => row.id}
+        <ul className={styles.cards}>
+          {rows.map((row) => (
+            <li key={row.id} className={styles.contactCard}>
+              <ContactCardBody row={row} />
+              {isAdmin && (
+                <ContactActions
+                  customerId={customerId}
+                  row={row}
+                  editing={editing === row.id}
+                  onEdit={() => setEditing(editing === row.id ? null : row.id)}
+                />
+              )}
+              {isAdmin && editing === row.id && (
+                <div className={styles.editorWrap}>
+                  <ContactEditor
+                    key={row.id}
+                    customerId={customerId}
+                    contactId={row.id}
+                    contact={row.contact}
+                    onDone={() => setEditing(null)}
+                  />
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {isAdmin && adding && (
+        <ContactCreateDialog
+          customerId={customerId}
+          onClose={() => setAdding(false)}
         />
-      )}
-      {isAdmin && editing === 'new' && (
-        <div className={styles.editorWrap}>
-          <ContactEditor
-            key="new"
-            customerId={customerId}
-            onDone={() => setEditing(null)}
-          />
-        </div>
-      )}
-      {isAdmin && editingRow && (
-        <div className={styles.editorWrap}>
-          <ContactEditor
-            key={editingRow.id}
-            customerId={customerId}
-            contactId={editingRow.id}
-            contact={editingRow.contact}
-            onDone={() => setEditing(null)}
-          />
-        </div>
       )}
     </Card>
   );
 }
 
 // ----------------------------------------------------------------------------
-// Row actions: the contextual portal action (Invite / Resend / Revoke), plus
-// Edit which opens the editor beneath the table.
+// One contact, as a card: who they are, how to reach them, and where they stand
+// with the portal. Every value is labelled, so a card read aloud or read in a
+// narrow column still says what each line is.
+// ----------------------------------------------------------------------------
+
+function ContactCardBody({ row }: { row: ContactRow }) {
+  const { contact } = row;
+  const roleLabels = CUSTOMER_ROLES.filter(
+    (role) => contact.portalRoles?.[role] === true,
+  ).map((role) => CUSTOMER_ROLE_LABELS[role]);
+
+  return (
+    <div className={styles.cardBody}>
+      <div className={styles.identity}>
+        <span className={styles.name}>{contact.name}</span>
+        {contact.isPrimary && (
+          <span className={styles.primaryBadge}>Primary contact</span>
+        )}
+        {contact.jobTitle && (
+          <span className={styles.jobTitle}>{contact.jobTitle}</span>
+        )}
+      </div>
+      <dl className={styles.details}>
+        <dt className={styles.term}>Email</dt>
+        <dd className={styles.value}>
+          {contact.email ? (
+            <a className={styles.link} href={`mailto:${contact.email}`}>
+              {contact.email}
+            </a>
+          ) : (
+            <span className={styles.absent}>Not recorded</span>
+          )}
+        </dd>
+        <dt className={styles.term}>Phone</dt>
+        <dd className={styles.value}>
+          {contact.phone ? (
+            <a className={styles.link} href={`tel:${contact.phone}`}>
+              {contact.phone}
+            </a>
+          ) : (
+            <span className={styles.absent}>Not recorded</span>
+          )}
+        </dd>
+        <dt className={styles.term}>Portal</dt>
+        <dd className={styles.value}>
+          <span
+            className={
+              row.portal === 'active' || row.portal === 'invited'
+                ? styles.portalLive
+                : styles.portalMuted
+            }
+          >
+            {PORTAL_LABELS[row.portal]}
+          </span>
+        </dd>
+        <dt className={styles.term}>Portal roles</dt>
+        <dd className={styles.value}>
+          {roleLabels.length > 0 ? (
+            roleLabels.join(', ')
+          ) : (
+            <span className={styles.absent}>None</span>
+          )}
+        </dd>
+      </dl>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Card actions: the contextual portal action (Invite / Resend / Revoke), plus
+// Edit which opens the editor beneath the card.
 // ----------------------------------------------------------------------------
 
 function ContactActions({
@@ -367,9 +400,9 @@ function ContactActions({
 }
 
 // ----------------------------------------------------------------------------
-// The editor: create a contact, or edit one with the clear protocol (an emptied
-// optional that WAS set sends the explicit null). Editing also carries Make
-// primary and Remove behind their own confirms.
+// The editor: edit an existing contact with the clear protocol (an emptied
+// optional that WAS set sends the explicit null). Creating is the dialog's job.
+// Editing also carries Make primary and Remove behind their own confirms.
 // ----------------------------------------------------------------------------
 
 function ContactEditor({
@@ -379,20 +412,18 @@ function ContactEditor({
   onDone,
 }: {
   customerId: string;
-  contactId?: string;
-  contact?: CustomerContact;
+  contactId: string;
+  contact: CustomerContact;
   onDone: () => void;
 }) {
-  const creating = !contactId;
   const manage = useCallable<ManageCustomerContactInput, ManageCustomerContactResult>(
     'manageCustomerContact',
   );
 
-  const [name, setName] = useState(contact?.name ?? '');
-  const [email, setEmail] = useState(contact?.email ?? '');
-  const [phone, setPhone] = useState(contact?.phone ?? '');
-  const [jobTitle, setJobTitle] = useState(contact?.jobTitle ?? '');
-  const [portalAccess, setPortalAccess] = useState(false);
+  const [name, setName] = useState(contact.name);
+  const [email, setEmail] = useState(contact.email ?? '');
+  const [phone, setPhone] = useState(contact.phone ?? '');
+  const [jobTitle, setJobTitle] = useState(contact.jobTitle ?? '');
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<'primary' | 'remove' | null>(null);
 
@@ -411,18 +442,20 @@ function ContactEditor({
 
     const payload: ClearableFields<CustomerContact> = { name: trimmedName };
     if (trimmedEmail) payload.email = trimmedEmail;
-    else if (contact?.email) payload.email = null;
+    else if (contact.email) payload.email = null;
     const trimmedPhone = phone.trim();
     if (trimmedPhone) payload.phone = trimmedPhone;
-    else if (contact?.phone) payload.phone = null;
+    else if (contact.phone) payload.phone = null;
     const trimmedJob = jobTitle.trim();
     if (trimmedJob) payload.jobTitle = trimmedJob;
-    else if (contact?.jobTitle) payload.jobTitle = null;
-    if (creating && portalAccess) payload.portalRoles = { viewer: true };
+    else if (contact.jobTitle) payload.jobTitle = null;
 
-    const result = creating
-      ? await manage.call({ action: 'create', customerId, contact: payload })
-      : await manage.call({ action: 'update', customerId, contactId, contact: payload });
+    const result = await manage.call({
+      action: 'update',
+      customerId,
+      contactId,
+      contact: payload,
+    });
     if (result) {
       onDone();
     }
@@ -449,11 +482,9 @@ function ContactEditor({
     }
   };
 
-  const heading = creating ? 'Add contact' : `Edit ${contact?.name ?? 'contact'}`;
-
   return (
     <div className={styles.editor}>
-      <h3 className={styles.editorTitle}>{heading}</h3>
+      <h3 className={styles.editorTitle}>Edit {contact.name}</h3>
       <div className={shared.fieldRow}>
         <div className={shared.field}>
           <label className={shared.label} htmlFor="contact-editor-name">
@@ -509,25 +540,13 @@ function ContactEditor({
           />
         </div>
       </div>
-      {creating && (
-        <label className={shared.checkboxRow}>
-          <input
-            type="checkbox"
-            className={shared.checkbox}
-            checked={portalAccess}
-            onChange={(event) => setPortalAccess(event.target.checked)}
-          />
-          <span className={shared.label}>Portal access (viewer)</span>
-        </label>
-      )}
-
       {fieldError && <ErrorNotice message={fieldError} />}
       {manage.error && <ErrorNotice message={manage.error} />}
 
       {confirm === 'primary' ? (
         <div className={styles.confirmBox}>
           <p className={styles.confirmCopy}>
-            Make {contact?.name} the primary contact? The current primary keeps
+            Make {contact.name} the primary contact? The current primary keeps
             their record and portal access.
           </p>
           <div className={styles.confirmButtons}>
@@ -542,7 +561,7 @@ function ContactEditor({
       ) : confirm === 'remove' ? (
         <div className={styles.confirmBox}>
           <p className={styles.confirmCopy}>
-            Remove {contact?.name} from this organisation? Their record is
+            Remove {contact.name} from this organisation? Their record is
             deleted; any portal account is not.
           </p>
           <div className={styles.confirmButtons}>
@@ -558,39 +577,37 @@ function ContactEditor({
         <div className={styles.editorActions}>
           <div className={shared.formActions}>
             <Button disabled={manage.pending} onClick={() => void save()}>
-              {manage.pending ? 'Saving' : creating ? 'Add contact' : 'Save changes'}
+              {manage.pending ? 'Saving' : 'Save changes'}
             </Button>
             <Button variant="ghost" disabled={manage.pending} onClick={onDone}>
               Cancel
             </Button>
           </div>
-          {!creating && (
-            <div className={shared.formActions}>
-              {!contact?.isPrimary && (
-                <Button variant="secondary" onClick={() => setConfirm('primary')}>
-                  Make primary
-                </Button>
-              )}
-              <Button
-                variant="secondary"
-                disabled={contact?.isPrimary === true}
-                title={
-                  contact?.isPrimary
-                    ? 'The primary contact cannot be removed. Make another contact primary first.'
-                    : undefined
-                }
-                onClick={() => setConfirm('remove')}
-              >
-                Remove
+          <div className={shared.formActions}>
+            {!contact.isPrimary && (
+              <Button variant="secondary" onClick={() => setConfirm('primary')}>
+                Make primary
               </Button>
-              {contact?.isPrimary && (
-                <p className={shared.note}>
-                  The primary contact cannot be removed. Make another contact
-                  primary first.
-                </p>
-              )}
-            </div>
-          )}
+            )}
+            <Button
+              variant="secondary"
+              disabled={contact.isPrimary === true}
+              title={
+                contact.isPrimary
+                  ? 'The primary contact cannot be removed. Make another contact primary first.'
+                  : undefined
+              }
+              onClick={() => setConfirm('remove')}
+            >
+              Remove
+            </Button>
+            {contact.isPrimary && (
+              <p className={shared.note}>
+                The primary contact cannot be removed. Make another contact
+                primary first.
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

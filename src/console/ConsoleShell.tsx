@@ -499,8 +499,10 @@ function PlatformBrandMark() {
       className={styles.brandLink}
       aria-label="Safentia Platform, dashboard"
     >
+      {/* The mark carries the product name here, so no typeset name beside it.
+          The link's own aria-label is what assistive technology announces. */}
       <span className={styles.brandIdentity}>
-        <span className={styles.brandName}>Safentia</span>
+        <Wordmark size="sm" />
       </span>
       <span className={styles.platformTag}>Platform console</span>
     </Link>

@@ -68,7 +68,7 @@
 .input:focus-visible,
 .select:focus-visible,
 .textarea:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
   border-color: transparent;
 }
@@ -92,7 +92,7 @@
 .checkbox {
   width: 1.125rem;
   height: 1.125rem;
-  accent-color: var(--brand-primary);
+  accent-color: var(--brand-ink);
 }
 
 .toggleRow {
@@ -170,7 +170,7 @@
 }
 
 .questionSummary:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
 }
 
@@ -200,7 +200,7 @@
   flex: none;
   font-size: 0.75rem;
   font-weight: 650;
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   white-space: nowrap;
 }
 
@@ -251,6 +251,76 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+}
+
+/* --- Matrix grid editor ---------------------------------------------------------- */
+
+.matrixGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+/* A wide grid scrolls inside its own box rather than widening the whole editor. */
+.matrixScroll {
+  overflow-x: auto;
+}
+
+.matrixTable {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+
+.matrixTable th,
+.matrixTable td {
+  border: 1px solid var(--color-border);
+  padding: var(--space-sm);
+  vertical-align: top;
+  text-align: left;
+}
+
+.matrixCorner {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.matrixHead {
+  min-width: 12rem;
+  font-weight: 500;
+}
+
+.matrixCell {
+  min-width: 10rem;
+}
+
+.matrixActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.definitionRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.matrixIssues {
+  list-style: disc;
+  margin: 0;
+  padding-left: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
 }
 
 /* --- Standardised finding group ------------------------------------------------ */
@@ -360,7 +430,7 @@
 }
 
 .validationJump:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
 }
 
@@ -386,7 +456,7 @@
   margin: 0;
   padding: var(--space-md) var(--space-lg);
   border: 1px solid var(--color-border-strong);
-  border-left: 4px solid var(--brand-primary);
+  border-left: 4px solid var(--brand-ink);
   border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
   color: var(--color-text);

@@ -28,7 +28,9 @@ import type {
   Building,
   Job,
   Keyed,
+  MatrixAnswer,
   OrgProfile,
+  QuestionMatrix,
   QuestionType,
   ReportStandard,
   Severity,
@@ -68,6 +70,14 @@ export interface ReportQuestionRow {
   /** For select / multiselect: the choices the template offered, so the report
    *  can show the answer in the context of what was available. */
   options?: string[];
+  /** For a `matrix` question: the grid the template defined, validated as a
+   *  complete rectangle here so the renderer can draw it without re-checking.
+   *  Absent when the question is not a matrix or its grid is malformed. */
+  matrix?: QuestionMatrix;
+  /** The cell the assessor chose, so the renderer can mark it inside the grid.
+   *  Absent when the question was not answered or the stored value is malformed;
+   *  `answerText` still carries the standard "Not answered" phrase in that case. */
+  matrixAnswer?: MatrixAnswer;
   /** Optional guidance the template attached to the question (shown muted). */
   guidance?: string;
   /** Answer photographs, resolved to embeddable bytes (a failed download is
@@ -188,12 +198,100 @@ function responsiblePartyLine(building: Building | undefined): string | undefine
 }
 
 /**
+ * Narrow an answer `value` to a MatrixAnswer. The contract types `value` as
+ * `unknown` because one field carries every question type's stored shape, so a
+ * matrix answer is shape-checked at runtime rather than trusted: drifted or
+ * partially-written data must degrade to "not answered", never print a
+ * stringified object into a legally-significant document (brief 18.3).
+ */
+function asMatrixAnswer(value: unknown): MatrixAnswer | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const candidate = value as { row?: unknown; column?: unknown; outcome?: unknown };
+  const row = clean(candidate.row);
+  const column = clean(candidate.column);
+  const outcome = clean(candidate.outcome);
+  if (!row || !column || !outcome) {
+    return undefined;
+  }
+  return { row, column, outcome };
+}
+
+/**
+ * Accept a template's grid definition only when it is a COMPLETE rectangle:
+ * every axis option a non-empty string, and one outcome per row per column. The
+ * renderer draws a fixed grid of cells and would otherwise have to reason about
+ * ragged data mid-layout, so the shape decision is made once, here, and a
+ * malformed grid simply degrades to the answer's display text alone.
+ */
+function asQuestionMatrix(value: unknown): QuestionMatrix | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const candidate = value as Partial<QuestionMatrix>;
+  const isLabelList = (list: unknown): list is string[] =>
+    Array.isArray(list) &&
+    list.length > 0 &&
+    list.every((entry) => Boolean(clean(entry)));
+  if (!isLabelList(candidate.rows) || !isLabelList(candidate.columns)) {
+    return undefined;
+  }
+  const rows = candidate.rows.map((r) => r.trim());
+  const columns = candidate.columns.map((c) => c.trim());
+  const rawCells = candidate.cells;
+  if (!Array.isArray(rawCells) || rawCells.length !== rows.length) {
+    return undefined;
+  }
+  const cells: string[][] = [];
+  for (const rawRow of rawCells) {
+    if (!Array.isArray(rawRow) || rawRow.length !== columns.length) {
+      return undefined;
+    }
+    // A blank outcome is tolerated as an empty cell; a non-string is not, since
+    // it would print as "[object Object]" inside the grid.
+    if (!rawRow.every((cell) => typeof cell === 'string')) {
+      return undefined;
+    }
+    cells.push(rawRow.map((cell) => cell.trim()));
+  }
+
+  // Definitions are optional and free-form; keep only string entries so the
+  // renderer never has to guard the values it prints.
+  const definitions: Record<string, string> = {};
+  const rawDefinitions = candidate.definitions;
+  if (typeof rawDefinitions === 'object' && rawDefinitions !== null) {
+    for (const [term, meaning] of Object.entries(rawDefinitions)) {
+      const cleanTerm = clean(term);
+      const cleanMeaning = clean(meaning);
+      if (cleanTerm && cleanMeaning) {
+        definitions[cleanTerm] = cleanMeaning;
+      }
+    }
+  }
+
+  return {
+    rowLabel: orNotRecorded(candidate.rowLabel),
+    columnLabel: orNotRecorded(candidate.columnLabel),
+    rows,
+    columns,
+    cells,
+    ...(Object.keys(definitions).length > 0 ? { definitions } : {}),
+  };
+}
+
+/**
  * Render a typed answer value as human-readable display text. The answer's
  * `value` is deliberately `unknown` in the contract (callers narrow by question
  * type); here we narrow by JS shape, which covers every question type's stored
- * form without needing the template type for each question.
+ * form without needing the template type for each question. The template's grid
+ * is passed for matrix questions only, so the sentence can name the two axes the
+ * assessor actually chose between.
  */
-function answerToText(answer: AssessmentAnswer | undefined): string {
+function answerToText(
+  answer: AssessmentAnswer | undefined,
+  matrix?: QuestionMatrix,
+): string {
   if (!answer) {
     // Distinct from "not applicable": the assessor did not record an answer.
     return 'Not answered';
@@ -215,6 +313,14 @@ function answerToText(answer: AssessmentAnswer | undefined): string {
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
     return String(value);
+  }
+  // A matrix answer is an object, so without this branch it fell through to
+  // "Not answered" and the recorded risk level vanished from the report.
+  const chosen = asMatrixAnswer(value);
+  if (chosen) {
+    return matrix
+      ? `${chosen.outcome} (${matrix.rowLabel}: ${chosen.row}; ${matrix.columnLabel}: ${chosen.column})`
+      : `${chosen.outcome} (${chosen.row} / ${chosen.column})`;
   }
   return 'Not answered';
 }
@@ -324,10 +430,21 @@ async function buildSections(
     const rows: ReportQuestionRow[] = await Promise.all(
       questions.map(async (question) => {
         const answer = question?.id ? answers[question.id] : undefined;
+        // The grid belongs to a matrix question only; validating it up front lets
+        // both the answer sentence and the drawn grid share one checked shape.
+        const matrix =
+          question?.type === 'matrix' ? asQuestionMatrix(question.matrix) : undefined;
         const row: ReportQuestionRow = {
           questionText: orNotRecorded(question?.text),
-          answerText: answerToText(answer),
+          answerText: answerToText(answer, matrix),
         };
+        if (matrix) {
+          row.matrix = matrix;
+          const chosen = asMatrixAnswer(answer?.value);
+          if (chosen) {
+            row.matrixAnswer = chosen;
+          }
+        }
         // Carry the template's declared type + options so the renderer can present
         // the answer richly; unknown/absent types fall back to the plain text above.
         if (question?.type) {

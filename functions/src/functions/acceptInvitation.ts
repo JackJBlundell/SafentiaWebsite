@@ -4,17 +4,24 @@
 // A recipient accepts a tokenised invite. This is the one callable that does NOT
 // require an existing org session (the whole point is to JOIN an org), but it
 // still enforces App Check (brief 4.6) so only a genuine app build can call it,
-// and it is gated entirely by possession of a valid, unexpired, single-use token.
+// and it is gated by possession of a valid, unexpired, single-use token.
+//
+// The token alone is authority to CREATE the invited account, not to act as one
+// that already exists - see step 4. previewInvitation tells /invite which of the
+// two cases applies before it asks the recipient for anything.
 //
 // Flow, done atomically so the database is never left half-joined (brief 18.3):
 //   1. App Check + validate the token shape.
 //   2. Locate the pending invite by token across both env roots (the invite is
 //      env-scoped; the token is the only thing the recipient holds).
 //   3. Verify it is pending and unexpired; expire it in place if stale.
-//   4. Create-or-get the Auth user for the invited email (idempotent: a returning
-//      invitee already has an account).
+//   4. Resolve the Auth user for the invited email: create it from the chosen
+//      password when there is none, or - when an account already exists -
+//      require the CALLER to be signed in as it.
 //   5. Atomically write the membership, the reverse login index, mark the invite
 //      accepted - one multi-location update so all three land together.
+//   6. For a just-created account, return a custom token so the client signs in
+//      straight away rather than re-entering the password it just set.
 // onMembershipChange then computes the user's claims from the new membership.
 //
 // Customer-portal invites (invitation carries customerId) join the recipient to
@@ -22,12 +29,16 @@
 // /customerMembers record (roles from the linked contact's portalRoles, viewer
 // by default), the /customerUserIndex login-routing entry and - when the invite
 // names a contact - the account uid back onto that CustomerContact, instead of
-// the staff orgMember/userOrgs pair.
+// the staff orgMember/userOrgs pair. One account may hold several portal spaces
+// (a managing agent acting for more than one customer): the index is a
+// collection keyed by portalSpaceKey, and setActiveOrganisation is how the
+// person moves between the spaces they hold.
 //
 // We never log the token or the email (brief 18.4).
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
+import type { UserRecord } from 'firebase-admin/auth';
 import { auth, db } from '../admin';
 import { callableOptions } from '../lib/callable';
 import { createLogger } from '../lib/logging';
@@ -35,53 +46,33 @@ import { fail, runCallable } from '../lib/errors';
 import { assertAppCheck } from '../lib/guards';
 import { assertRateLimit } from '../lib/rateLimit';
 import { rateLimitKeyFor } from './registerInterest';
-import { paths } from '../lib/paths';
+import { locateInviteByToken } from '../lib/invitations';
+import { paths, portalSpaceKey } from '../lib/paths';
 import {
   assertObject,
   requireString,
   optionalString,
   TEXT_LIMITS,
 } from '../lib/validate';
-import { ENVIRONMENTS } from '../shared/types';
 import type {
   AcceptInvitationInput,
   AcceptInvitationResult,
   CustomerContact,
+  InviteFailureReason,
   CustomerMember,
   CustomerUserIndexEntry,
   Invitation,
   OrgMember,
 } from '../shared/types';
 
-/** An invite located in a specific env root, with its db key. */
-interface LocatedInvite {
-  env: (typeof ENVIRONMENTS)[number];
-  inviteId: string;
-  invitation: Invitation;
-}
-
 /**
- * Find the pending invite carrying this token. Invitations are env-scoped, and the
- * recipient holds only the token, so we query each env root's /invitations by the
- * indexed `token` child (the rules declare .indexOn token). The first match wins;
- * a token is unique by construction (crypto-random 32 bytes).
+ * Refuse an acceptance with a machine-readable reason. Every refusal below is a
+ * failed-precondition on the wire, so /invite cannot tell "already used" from
+ * "expired" by code alone; the reason rides in `details` so the page can offer
+ * the right next step (sign in, versus ask for a fresh invitation).
  */
-async function locateInviteByToken(token: string): Promise<LocatedInvite | null> {
-  for (const env of ENVIRONMENTS) {
-    const envPaths = paths.forEnv(env);
-    const snap = await db
-      .ref(envPaths.db.invitations())
-      .orderByChild('token')
-      .equalTo(token)
-      .limitToFirst(1)
-      .get();
-    if (snap.exists()) {
-      const value = snap.val() as Record<string, Invitation>;
-      const [inviteId, invitation] = Object.entries(value)[0];
-      return { env, inviteId, invitation };
-    }
-  }
-  return null;
+function failInvite(reason: InviteFailureReason, message: string) {
+  return fail.failedPrecondition(message, { reason });
 }
 
 export const acceptInvitation = onCall<AcceptInvitationInput>(
@@ -123,7 +114,7 @@ export const acceptInvitation = onCall<AcceptInvitationInput>(
         // 3. Status + expiry. A revoked or already-accepted invite is rejected; an
         // expired-but-still-pending one is marked expired so its state is truthful.
         if (invitation.status !== 'pending') {
-          throw fail.failedPrecondition('This invitation is no longer available.');
+          throw failInvite('used', 'This invitation is no longer available.');
         }
         if (invitation.expiresAt <= Date.now()) {
           // Flip the record AND its admin-facing summary together, so the org's
@@ -133,25 +124,67 @@ export const acceptInvitation = onCall<AcceptInvitationInput>(
             [`${envPaths.db.orgInvitation(invitation.orgId, inviteId)}/status`]:
               'expired',
           });
-          throw fail.failedPrecondition('This invitation has expired.');
+          throw failInvite('expired', 'This invitation has expired.');
         }
 
         // 4. Create-or-get the Auth user for the invited email. Idempotent so a
         // returning invitee (already has an account) is reused, never duplicated.
-        let uid: string;
+        // Reaching this line means the caller presented a single-use token that
+        // was emailed ONLY to invitation.email, so control of that address is
+        // already proven - the account is recorded as verified rather than
+        // sending a second, redundant confirmation the invitee has effectively
+        // already completed. Nothing else about an existing account is touched.
+        // Only the LOOKUP may fall through to creation. A failure of the
+        // verified-flag update below must not be mistaken for "no such user"
+        // and send us into createUser, which would then fail on a duplicate
+        // email, so that update sits outside this try.
+        let existing: UserRecord | null = null;
         try {
-          const existing = await auth.getUserByEmail(invitation.email);
-          uid = existing.uid;
+          existing = await auth.getUserByEmail(invitation.email);
         } catch {
-          // No user yet: create one. A password is required for email/password
-          // accounts; Google sign-ins create the user out-of-band, so password is
-          // optional. We do not over-validate here - Auth enforces its own rules.
+          existing = null;
+        }
+        let uid: string;
+        let createdAccount = false;
+        if (existing) {
+          // The token proves control of the MAILBOX, which is enough to create a
+          // brand-new account for that address, but it is NOT enough to act as
+          // an account that already exists: anyone who intercepted or was
+          // forwarded the link could otherwise bind a stranger's established
+          // account into an org, and (via the customer-portal branch) consume
+          // its one portal slot. So an existing account must prove itself the
+          // ordinary way - sign in first, then accept - and we check the
+          // caller's own session against it here.
+          if (!request.auth || request.auth.uid !== existing.uid) {
+            throw failInvite(
+              'sign-in-required',
+              'An account already exists for this email address. Sign in with it to accept this invitation.',
+            );
+          }
+          uid = existing.uid;
+          if (!existing.emailVerified) {
+            await auth.updateUser(uid, { emailVerified: true });
+          }
+        } else {
+          // No user yet: create one, with the password the recipient just chose.
+          // A password is required on this branch. The Google route never
+          // reaches it: signing in with Google creates the account out-of-band
+          // first, so by the time such a recipient accepts, the branch above
+          // handles them. We do not over-validate the password itself - Auth
+          // enforces its own strength rules and reports them.
+          if (!password) {
+            throw fail.invalidArgument(
+              'Choose a password to create your account.',
+            );
+          }
           const created = await auth.createUser({
             email: invitation.email,
-            ...(password ? { password } : {}),
+            emailVerified: true,
+            password,
             ...(displayName ? { displayName } : {}),
           });
           uid = created.uid;
+          createdAccount = true;
         }
 
         // 5. Atomic join. One multi-location update writes the membership, the
@@ -180,41 +213,22 @@ export const acceptInvitation = onCall<AcceptInvitationInput>(
           // leave one live). Accepting would mint a membership for a person the
           // customer deleted, so refuse - the token stays unconsumed.
           if (!contact) {
-            throw fail.failedPrecondition('This invitation is no longer valid.');
+            throw failInvite(
+              'contact-removed',
+              'This invitation is no longer valid.',
+            );
           }
           // The contact is already linked to a DIFFERENT account: silently
           // re-linking would hijack the existing member's record, so refuse.
           // (The same person re-accepting with their own account is harmless
           // and idempotent, so it passes.)
           if (contact.uid && contact.uid !== uid) {
-            throw fail.failedPrecondition('This invitation is no longer valid.');
-          }
-        }
-        if (invitation.customerId) {
-          // /customerUserIndex holds ONE slot per uid (CustomerUserIndexEntry is
-          // a single {orgId, customerId} - login routing reads it as such), so an
-          // account can belong to exactly one customer portal. Joining a SECOND
-          // customer would silently overwrite the first link and strand that
-          // membership, so it fails loudly instead. Re-accepting into the SAME
-          // customer is idempotent and passes. NOTE for the contract owner:
-          // supporting multi-portal accounts needs CustomerUserIndexEntry to
-          // become a multi-entry map plus a routing-reader change - a contract
-          // change deliberately not smuggled in here.
-          const indexSnap = await db.ref(envPaths.db.customerUserIndex(uid)).get();
-          const existingIndex = indexSnap.exists()
-            ? (indexSnap.val() as CustomerUserIndexEntry)
-            : null;
-          if (
-            existingIndex &&
-            (existingIndex.orgId !== invitation.orgId ||
-              existingIndex.customerId !== invitation.customerId)
-          ) {
-            throw fail.failedPrecondition(
-              'This account already belongs to a customer portal.',
+            throw failInvite(
+              'contact-linked',
+              'This invitation is no longer valid.',
             );
           }
         }
-
         // CLAIM the invitation first, transactionally. The earlier status check
         // is a fast-path courtesy; between it and this write an administrator
         // may have REVOKED the invite, and a plain update here would overwrite
@@ -242,7 +256,20 @@ export const acceptInvitation = onCall<AcceptInvitationInput>(
             return { ...current, status: 'accepted' as const };
           });
         if (!claim.committed) {
-          throw fail.failedPrecondition('This invitation is no longer available.');
+          // The transaction aborted, so the record changed under us between the
+          // fast-path check and the claim. Read the value the transaction saw to
+          // report the SAME reason the fast path would have: still pending means
+          // it timed out mid-flight, anything else means it was revoked or
+          // accepted elsewhere.
+          const contended = claim.snapshot.val() as Invitation | null;
+          const reason: InviteFailureReason =
+            contended && contended.status === 'pending' ? 'expired' : 'used';
+          throw failInvite(
+            reason,
+            reason === 'expired'
+              ? 'This invitation has expired.'
+              : 'This invitation is no longer available.',
+          );
         }
 
         const update: Record<string, unknown> = {
@@ -277,8 +304,16 @@ export const acceptInvitation = onCall<AcceptInvitationInput>(
             envPaths.db.customerMember(invitation.orgId, invitation.customerId, uid)
           ] = customerMember;
           // Reverse index for portal login routing (the portal's userOrgs
-          // counterpart): which customer, at which org, this uid belongs to.
-          update[envPaths.db.customerUserIndex(uid)] = indexEntry;
+          // counterpart), one entry per space so an account can hold several.
+          // The key is derived from the pair, so re-accepting an invitation to a
+          // customer this person already belongs to overwrites its own entry
+          // rather than adding a duplicate the space picker would show twice.
+          update[
+            envPaths.db.customerUserIndexEntry(
+              uid,
+              portalSpaceKey(invitation.orgId, invitation.customerId),
+            )
+          ] = indexEntry;
           // Link the account back onto its CustomerContact, so the contact and
           // the portal account can never drift apart. A missing or already
           // differently-linked contact was refused above, before the claim, so
@@ -333,7 +368,31 @@ export const acceptInvitation = onCall<AcceptInvitationInput>(
           customerJoin: Boolean(invitation.customerId),
         });
 
-        return { orgId: invitation.orgId, uid };
+        // Hand the brand-new account a custom token so the page can sign it in
+        // immediately, instead of sending someone who chose a password five
+        // seconds ago to a sign-in form to type it again. Minted ONLY for the
+        // uid this call itself created - never for an arbitrary or
+        // caller-supplied one - so it can never be turned into a way to
+        // impersonate an existing account. Accounts that already existed get no
+        // token: they had to be signed in as themselves to reach this line, so
+        // they already have a session.
+        const customToken = createdAccount
+          ? await auth.createCustomToken(uid)
+          : undefined;
+
+        return {
+          orgId: invitation.orgId,
+          uid,
+          // Name the customer a PORTAL acceptance joined, so the page can make
+          // that space the active one. Someone accepting while already signed
+          // in to another space would otherwise land back in the previous one
+          // and see no sign the acceptance did anything. Absent for a staff
+          // join, which has no customer to switch to.
+          ...(invitation.customerId
+            ? { customerId: invitation.customerId }
+            : {}),
+          ...(customToken ? { customToken } : {}),
+        };
       },
     ),
 );

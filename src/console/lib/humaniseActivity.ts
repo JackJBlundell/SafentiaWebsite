@@ -36,6 +36,11 @@ const PHRASES: Record<string, string> = {
   'customerContact.created': 'added a customer contact',
   'customerContact.updated': 'updated a customer contact',
   'customerContact.removed': 'removed a customer contact',
+  // Written by the portalInviteTeammate callable. The actor is a customer-portal
+  // admin rather than a staff member, which the feed already handles: an unknown
+  // uid renders as the plain actor. Distinct from customerContact.created so the
+  // org can tell a self-service portal invite from a staff-added contact.
+  'customerContact.invited': 'invited a colleague to the portal',
   'site.created': 'created a site',
   'site.updated': 'updated a site',
   'building.created': 'created a building',
@@ -69,6 +74,12 @@ const PHRASES: Record<string, string> = {
   // contact rather than a staff member, which the feed already handles: it
   // renders an unknown uid as the plain actor, never a broken staff lookup.
   'report.accepted': 'accepted an assessment report',
+  // Written by the recordPlatformAccess callable when a Safentia super admin
+  // opens this org's read-only oversight view (story 2069 AC2). The actor is a
+  // platform operator, not a member of this org, so the feed renders the unknown
+  // uid as the plain actor; the phrase names it honestly as a platform view. The
+  // target carries the scope ("organisation", "customer:<id>", "building:<id>").
+  'platform.access': 'viewed this organisation as a platform administrator',
 };
 
 /** assessment.stage.<status> phrases, keyed by the AssessmentStatus vocabulary

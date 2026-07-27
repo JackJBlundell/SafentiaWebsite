@@ -21,9 +21,13 @@ import type {
   Building,
   Customer,
   CustomerContact,
+  OrgSettings,
   RiskLevel,
   Site,
 } from '../../types';
+import { RAG_CONFIG_DEFAULTS } from '../settings/ragDerivation';
+import { RiskReasonBadge } from '../ui/RiskExplanation';
+import { buildRiskExplanation } from '../ui/riskReasons';
 import { Card, CardHeader } from '../ui/Card';
 import { ComplianceGlance } from '../ui/ComplianceGlance';
 import { DescriptionList, PageGrid, type DescriptionItem } from '../ui/Grid';
@@ -129,6 +133,13 @@ export function SiteDetail() {
   const actionsNode = useRtdbQuery<ActionsRootNode | null>({
     key: keys.actionsRoot(orgId),
     path: ready ? db!.actionsRoot(orgId) : '',
+    enabled: ready,
+  });
+  // The organisation's own RAG thresholds, so each row's explanation quotes the
+  // bands this org actually configured rather than the proposed defaults.
+  const orgSettings = useRtdbQuery<OrgSettings | null>({
+    key: keys.orgSettings(orgId),
+    path: ready ? db!.orgSettings(orgId) : '',
     enabled: ready,
   });
 
@@ -358,8 +369,40 @@ export function SiteDetail() {
                   const overdue = perBuilding
                     ? countOverdueActions(perBuilding, Date.now())
                     : undefined;
+                  // The row's own account of its status. The action plan IS
+                  // read here (the org-root node above), so only the release
+                  // record is missing; buildRiskExplanation says so rather than
+                  // implying it saw everything.
+                  const level = building.riskLevel ?? 'pending';
+                  const explanation = buildRiskExplanation({
+                    level,
+                    distribution: building.ragDistribution,
+                    lastAssessedAt: building.lastAssessedAt,
+                    config: orgSettings.data?.ragConfig ?? RAG_CONFIG_DEFAULTS,
+                    actions:
+                      perBuilding === undefined
+                        ? undefined
+                        : {
+                            hasOpenHighAction: perBuilding.some(
+                              (action) =>
+                                action.status === 'open' &&
+                                (action.severity === 'H' ||
+                                  action.lifeProtection === true),
+                            ),
+                            // releaseAssessment's own overdue test, not the
+                            // dashboards' one-day grace, so the account matches
+                            // the calculation that ran.
+                            hasOverdueAction: perBuilding.some(
+                              (action) =>
+                                action.status === 'open' &&
+                                typeof action.dueBy === 'number' &&
+                                action.dueBy < Date.now(),
+                            ),
+                          },
+                    formatDate,
+                  });
                   return (
-                    <li key={buildingId}>
+                    <li key={buildingId} className={styles.rowShell}>
                       <Link
                         to={urls.building(customerId, siteId, buildingId)}
                         className={styles.row}
@@ -388,8 +431,23 @@ export function SiteDetail() {
                             </span>
                           )}
                         </span>
-                        <RagChip level={building.riskLevel ?? 'pending'} />
                       </Link>
+                      {/* The chip sits OUTSIDE the row link: it is a disclosure
+                          button in its own right, and a button nested inside an
+                          anchor is neither valid nor operable. Until the org's
+                          thresholds have loaded there is nothing honest to
+                          explain, so the plain chip stands in. */}
+                      <span className={styles.rowStatus}>
+                        {orgSettings.data === undefined ? (
+                          <RagChip level={level} />
+                        ) : (
+                          <RiskReasonBadge
+                            level={level}
+                            explanation={explanation}
+                            buildingName={building.name}
+                          />
+                        )}
+                      </span>
                     </li>
                   );
                 })}

@@ -79,14 +79,26 @@ export async function mergeCertificate(
   try {
     const file = storage.bucket().file(objectPath);
     const [metadata] = await file.getMetadata();
-    const size = Number(metadata.size ?? 0);
-    if (size > MAX_CERTIFICATE_BYTES) {
-      logger.warn('Report certificate skipped: object exceeds the size ceiling', {
-        size,
+    // An unreadable or absent size is treated as OVER the ceiling, not under it:
+    // the point of the check is to refuse to pull an unbounded object into memory
+    // beside the rendered report, and a missing figure is no assurance of size.
+    const size = Number(metadata.size);
+    if (!Number.isFinite(size) || size <= 0 || size > MAX_CERTIFICATE_BYTES) {
+      logger.warn('Report certificate skipped: object size is not within the ceiling', {
+        size: metadata.size ?? null,
       });
       return report;
     }
     const [bytes] = await file.download();
+    // The metadata is a separate read from the download, so re-check what
+    // actually arrived: an object replaced between the two calls must not slip
+    // past the ceiling the metadata read cleared.
+    if (bytes.length > MAX_CERTIFICATE_BYTES) {
+      logger.warn('Report certificate skipped: downloaded object exceeds the ceiling', {
+        size: bytes.length,
+      });
+      return report;
+    }
 
     // Lazy-loaded at first use, exactly as onAssessmentStageChange lazy-loads
     // this report core: every deployed function pays the cold-start cost of the

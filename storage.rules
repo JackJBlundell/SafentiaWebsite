@@ -96,20 +96,16 @@ service firebase.storage {
     // OWNING customer, e.g. by writing the customerId into the object's metadata
     // and checking `resource.metadata.customerId == request.auth.token.customerId`
     // (Storage rules cannot read RTDB), alongside an env/owner check.
-    // Helper: an organisation asset - the whitelabel logo (an image <=10MB) OR a
-    // template certificate (a PDF <=25MB, merged verbatim into every report the
-    // template renders). PDFs are bounded to the document ceiling because a
-    // certificate is a scanned, print-resolution document, not a web image.
-    function validOrgAsset() {
-      return validImage()
-        || (request.resource.contentType == 'application/pdf'
-          && request.resource.size <= 25 * 1024 * 1024);
-    }
-
     // Organisation-level assets: the whitelabel logo. Image-bounded like photos;
     // written by admins from the settings screen (role enforcement lives in the
     // updateOrgProfile callable that records the URL - rules here hold the
     // tenant, env and content boundaries).
+    //
+    // This match stays IMAGE-ONLY. Template certificates are PDFs and live one
+    // segment deeper (assets/certificates/{id}, below) precisely so this ceiling
+    // does not have to be widened: updateOrgProfile validates logoUrl for tenancy
+    // but not for content type, so admitting PDFs here would let a PDF be set as
+    // the org logo, and the report header would then silently render no logo.
     match /{env}/orgs/{orgId}/assets/{assetId} {
       allow read: if envMatches(env) && ownOrg(orgId);
       // Admin-only: the logo renders on branded reports sent to clients, and a
@@ -118,7 +114,20 @@ service firebase.storage {
       // role rides in the custom claims, the one signal Storage rules can read.
       allow write: if envMatches(env) && ownOrg(orgId)
         && request.auth.token.roles.admin == true
-        && validOrgAsset();
+        && validImage();
+    }
+
+    // Template certificates: a PDF (<=25MB) merged verbatim into every report the
+    // owning template renders. Same admin-only, same tenant and env boundaries as
+    // the logo above; the content type is pinned to PDF because that is the only
+    // thing report/certificate.ts can splice. The 25MB ceiling matches the
+    // MAX_CERTIFICATE_BYTES the merge refuses to exceed.
+    match /{env}/orgs/{orgId}/assets/certificates/{certificateId} {
+      allow read: if envMatches(env) && ownOrg(orgId);
+      allow write: if envMatches(env) && ownOrg(orgId)
+        && request.auth.token.roles.admin == true
+        && request.resource.contentType == 'application/pdf'
+        && request.resource.size <= 25 * 1024 * 1024;
     }
 
     match /{env}/orgs/{orgId}/reports/{reportFile} {

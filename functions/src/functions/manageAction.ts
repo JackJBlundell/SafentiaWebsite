@@ -32,6 +32,7 @@ import {
 import {
   assertObject,
   requireString,
+  optionalString,
   clearableString,
   requireEnum,
   requireTimestamp,
@@ -46,12 +47,15 @@ import {
   createActionRecord,
   reopenFragment,
   signOffFragment,
+  startFragment,
+  statusHistoryAppendFragment,
   UPDATABLE_ACTION_FIELDS,
 } from '../lib/actionPlan';
 import type { EnvPaths } from '../shared/paths';
 import type { Logger } from '../lib/logging';
 import type {
   Action,
+  ActionStatusChange,
   Building,
   CustomerContact,
   ManageActionInput,
@@ -60,7 +64,7 @@ import type {
   Severity,
 } from '../shared/types';
 
-const ACTIONS = ['create', 'update', 'signOff', 'reopen'] as const;
+const ACTIONS = ['create', 'update', 'start', 'signOff', 'reopen'] as const;
 const SEVERITIES: readonly Severity[] = ['L', 'M', 'H'] as const;
 
 /** Human severity wording for customer-facing copy. */
@@ -360,6 +364,12 @@ export const manageAction = onCall<ManageActionInput>(
         // edit (severity tweak, due-date move, re-save of the same name)
         // must never re-email.
         let assignment: AssignedActionView | undefined;
+        // The status move to record in the action's history (story 2044 AC3).
+        // `update` never moves status, so it leaves this undefined and appends
+        // nothing. One `now` for the whole change so the sign-off stamp and the
+        // history entry name the same instant.
+        let historyEntry: ActionStatusChange | undefined;
+        const now = Date.now();
 
         if (action === 'update') {
           // A signed-off action is a frozen record with provenance attached;
@@ -426,18 +436,64 @@ export const manageAction = onCall<ManageActionInput>(
             };
           }
           activityAction = 'action.updated';
-        } else if (action === 'signOff') {
+        } else if (action === 'start') {
+          // Only an open action can be started; an in-progress or closed one is
+          // already past this point, and re-starting would rewrite its lifecycle.
           if (existing.status !== 'open') {
+            throw fail.failedPrecondition('Only open actions can be started.');
+          }
+          Object.assign(update, startFragment(actionPath));
+          historyEntry = { status: 'inProgress', byUid: uid, at: now };
+          activityAction = 'action.started';
+        } else if (action === 'signOff') {
+          // Work can be signed off straight from open or from in progress; there
+          // is no need to step back to open first.
+          if (existing.status !== 'open' && existing.status !== 'inProgress') {
             throw fail.failedPrecondition('This action is not open to sign off.');
           }
-          Object.assign(update, signOffFragment(actionPath, uid, Date.now()));
+          // The completion note (AC2) is optional free text, length-capped and
+          // trimmed; an empty note reads as no note at all.
+          const completionNote = optionalString(
+            input,
+            'completionNote',
+            TEXT_LIMITS.freeText,
+          );
+          Object.assign(
+            update,
+            signOffFragment(actionPath, uid, now, completionNote),
+          );
+          historyEntry = {
+            status: 'signedOff',
+            byUid: uid,
+            at: now,
+            // The note lives on both the record and this history entry, so the
+            // trail keeps it even after a later reopen clears the record field.
+            ...(completionNote !== undefined ? { note: completionNote } : {}),
+          };
           activityAction = 'action.signedOff';
         } else {
-          if (existing.status !== 'signedOff') {
-            throw fail.failedPrecondition('Only signed-off actions can be reopened.');
+          // Reopen returns a signed-off OR in-progress action to open.
+          if (
+            existing.status !== 'signedOff' &&
+            existing.status !== 'inProgress'
+          ) {
+            throw fail.failedPrecondition(
+              'Only signed-off or in-progress actions can be reopened.',
+            );
           }
           Object.assign(update, reopenFragment(actionPath));
+          historyEntry = { status: 'open', byUid: uid, at: now };
           activityAction = 'action.reopened';
+        }
+
+        // Append the status move to the per-action history, by index, within
+        // this SAME atomic multi-location update (see actionPlan for why the
+        // index write is lost-update-safe).
+        if (historyEntry) {
+          Object.assign(
+            update,
+            statusHistoryAppendFragment(actionPath, existing, historyEntry),
+          );
         }
 
         Object.assign(

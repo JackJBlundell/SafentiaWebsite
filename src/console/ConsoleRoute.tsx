@@ -14,12 +14,15 @@
 // expects.
 // ============================================================================
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { startFirebase } from '../firebase';
 import { AuthProvider, useAuth } from '../auth/AuthProvider';
-import type { SessionClaims } from '../auth/claims';
+import { useUserSpaces } from '../auth/useUserSpaces';
+import { useSuperAdminClaim } from './admin/useSuperAdminClaim';
+import { hasChosenSpace } from '../auth/spaceChoice';
+import { SpacePicker } from './SpacePicker';
 import type { EnvPaths } from '../paths';
 import { queryClient } from '../query/queryClient';
 import { keys } from '../query/keys';
@@ -28,6 +31,7 @@ import { ThemeProvider } from '../design/ThemeProvider';
 import { Seo } from '../seo/Seo';
 import { Wordmark } from '../components/Wordmark';
 import { HoldingScreen } from './HoldingScreen';
+import { EmailVerificationScreen } from './EmailVerificationScreen';
 import { ConsoleShell } from './ConsoleShell';
 import { PortalShell } from './portal/PortalShell';
 import type { OrgProfile } from '../types';
@@ -109,8 +113,38 @@ function ConsoleRoot() {
  * overwritten by a plain parent's effect re-running with the defaults.
  */
 function ConsoleGate() {
-  const { status, claims, paths } = useAuth();
+  const { status, claims, paths, emailVerified, user } = useAuth();
   const location = useLocation();
+  // Both halves of the account's spaces. The hook is inert until there is a
+  // session, so calling it here costs nothing on the signed-out branches below.
+  const spaces = useUserSpaces();
+  // Whether this account holds the platform grant, so a super admin can reach
+  // /app/admin from any space (including a portal one). 'loading' reads as not
+  // granted, so a portal super admin at /app/admin sees the portal briefly
+  // until the claim resolves, then the platform shell - never a hard denial.
+  const isSuperAdmin = useSuperAdminClaim() === 'granted';
+  // Set when the picker on THIS mount has been answered; sessionStorage carries
+  // the same answer across a reload. Read during render deliberately: it is a
+  // synchronous, stable value, and deferring it to an effect would flash the
+  // picker at somebody who has already chosen.
+  const [pickedHere, setPickedHere] = useState(false);
+  const uid = user?.uid ?? null;
+  const spaceSettled = pickedHere || (uid !== null && hasChosenSpace(uid));
+
+  // The picker is a convenience, never a permission: the claims already name a
+  // space the session may use. So the wait for the two indexes is BOUNDED - a
+  // browser that cannot reach the database (offline, a blocked socket) would
+  // otherwise leave the console on its splash indefinitely, which is a far worse
+  // outcome than not being asked the question. Anyone who missed the question
+  // can still move between spaces from the switcher.
+  const [waitedForSpaces, setWaitedForSpaces] = useState(false);
+  useEffect(() => {
+    if (spaceSettled || !spaces.loading) {
+      return;
+    }
+    const timer = setTimeout(() => setWaitedForSpaces(true), 4_000);
+    return () => clearTimeout(timer);
+  }, [spaceSettled, spaces.loading]);
 
   if (status === 'initialising') {
     return (
@@ -125,6 +159,26 @@ function ConsoleGate() {
     // to it instead of dumping them on the console home.
     const returnTo = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?returnTo=${returnTo}`} replace />;
+  }
+
+  // Hard gate, ABOVE the staff/portal split so it covers BOTH landings: an
+  // unconfirmed email address never reaches ConsoleShell or PortalShell.
+  //
+  // DEPLOYMENT ORDER, DO NOT REORDER: acceptInvitation only started stamping
+  // emailVerified recently, so every account created before that - including the
+  // live field-test assessor accounts - is still recorded as unverified and this
+  // gate WILL lock them out. Run
+  // functions/src/scripts/backfillEmailVerified.ts (dry, then --apply) against
+  // the target project BEFORE shipping this gate. EmailVerificationScreen
+  // re-reads the account record on mount, so an account repaired by that script
+  // is admitted on the next reload rather than being stranded behind a stale
+  // client-side snapshot.
+  if (!emailVerified) {
+    return (
+      <ThemeProvider>
+        <EmailVerificationScreen />
+      </ThemeProvider>
+    );
   }
 
   if (status === 'noMembership') {
@@ -145,37 +199,83 @@ function ConsoleGate() {
     );
   }
 
-  // The third landing (story 2005): a customer-portal session gets the portal
-  // shell, never the staff console. Default theme deliberately - a portal token
-  // cannot read the org profile that drives the whitelabel brand (staff-only
-  // rule); PortalShell documents the limitation and brands with the customer's
-  // own name instead.
-  if (claims.kind === 'portal') {
-    return (
-      <ThemeProvider>
-        <PortalShell />
-      </ThemeProvider>
-    );
+  // The two-half question, asked once per tab session and ONLY of the minority
+  // who hold more than one space: signing in must not silently drop somebody
+  // into whichever space their last claims happened to name. It sits below the
+  // verification and membership gates (an unverified or membership-less account
+  // has nothing to choose between) and above the staff/portal split, because the
+  // choice is precisely which of those two the session becomes.
+  //
+  // Rendered in place rather than redirected to, so a deep link into the console
+  // survives the choice and resolves the moment it is made.
+  if (!spaceSettled && !waitedForSpaces) {
+    if (spaces.loading) {
+      return (
+        <ThemeProvider>
+          <ConsoleSplash />
+        </ThemeProvider>
+      );
+    }
+    if (spaces.hasMultiple) {
+      return (
+        <ThemeProvider>
+          <SpacePicker
+            spaces={spaces.spaces}
+            onChosen={() => setPickedHere(true)}
+          />
+        </ThemeProvider>
+      );
+    }
+    // Exactly one space (the overwhelming majority): no question to ask, and
+    // nothing recorded - there is nothing they could be asked next time either.
   }
 
-  return <BrandedConsole claims={claims} paths={paths} />;
+  // The platform console lives inside ConsoleShell (it swaps its own chrome
+  // under /app/admin). A super admin can hold a PORTAL claim - the two are not
+  // exclusive - and would then land in PortalShell, where /app/admin is not a
+  // route, so a switch to the dashboard showed "nothing here" over the portal
+  // UI. So a super admin who is actually AT /app/admin gets ConsoleShell
+  // whatever their space claim is; AdminRoutes reads platform data off the
+  // superAdmin claim, not the org claim, so the portal claim is irrelevant there.
+  const inPlatform = location.pathname.startsWith('/app/admin');
+  const usePlatformShell = isSuperAdmin && inPlatform;
+
+  // The third landing (story 2005): a customer-portal session gets the portal
+  // shell, never the staff console. Both landings wear the SAME whitelabel
+  // brand: a portal token reads /organisations/{orgId}/profile through the
+  // portalOrgId arm of that node's rule, so a customer sees the identity of the
+  // organisation that assessed their buildings rather than bare Safentia.
+  return (
+    <BrandedShell orgId={claims.orgId} paths={paths}>
+      {claims.kind === 'portal' && !usePlatformShell ? (
+        <PortalShell />
+      ) : (
+        <ConsoleShell />
+      )}
+    </BrandedShell>
+  );
 }
 
 /**
- * The authenticated console under the organisation's whitelabel theme. The org
- * profile arrives live via the RTDB bridge; until it resolves, the default
- * brand from tokens.css applies, and the swap is a repaint rather than a remount.
+ * The authenticated app under the organisation's whitelabel theme, staff or
+ * portal. The org profile arrives live via the RTDB bridge; until it resolves,
+ * the default brand from tokens.css applies, and the swap is a repaint rather
+ * than a remount. Chrome that needs the profile's own fields (name, logo)
+ * subscribes to `keys.orgProfile` too, which is the same cache entry and the
+ * same single listener, never a second one.
  */
-function BrandedConsole({
-  claims,
+function BrandedShell({
+  orgId,
   paths,
+  children,
 }: {
-  claims: SessionClaims;
+  orgId: string;
   paths: EnvPaths;
+  children: ReactNode;
 }) {
   const profile = useRtdbQuery<OrgProfile | null>({
-    key: keys.orgProfile(claims.orgId),
-    path: paths.db.orgProfile(claims.orgId),
+    key: keys.orgProfile(orgId),
+    path: paths.db.orgProfile(orgId),
   });
 
   return (
@@ -184,7 +284,7 @@ function BrandedConsole({
       logoUrl={profile.data?.logoUrl}
       fontFamily={profile.data?.fontFamily}
     >
-      <ConsoleShell />
+      {children}
     </ThemeProvider>
   );
 }

@@ -70,6 +70,12 @@ export interface SafentiaClaims {
   /** true routes the user to `/test`; absent/false routes to `/live`. Set
    *  server-side from the member record only - never trusted from the client. */
   testMode?: boolean;
+  /** Platform super-admin (FR-E24). Carried ACROSS every claim shape because a
+   *  super admin is also an org member and/or portal user, and their claims are
+   *  re-minted on membership changes and space switches. writeClaims re-derives
+   *  it from the durable /platform/superAdmins marker on every write, so an
+   *  ordinary membership change can never silently strip platform access. */
+  superAdmin?: true;
 }
 
 // ----------------------------------------------------------------------------
@@ -223,6 +229,11 @@ export interface RagConfig {
 /** Organisation-level configuration, distinct from the public profile. */
 export interface OrgSettings {
   ragConfig?: RagConfig;
+  /** How many days ahead of a building's FRA review date the reminder sweep
+   *  warns (story 2046 AC1). Descending, e.g. [60, 30, 7]. Absent falls back to
+   *  the built-in default in lib/reviewWindows, so an org that never configures
+   *  this still gets sensible reminders. */
+  reviewReminderDays?: number[];
 }
 
 export interface Organisation {
@@ -296,6 +307,11 @@ export interface Customer {
   address?: string;
   email?: string;
   phone?: string;
+  /** The customer's logo or a representative photo, uploaded by org staff. A
+   *  tenant-scoped Storage URL, validated by requireTenantStorageRef exactly as
+   *  Building.photoUrl and OrgProfile.logoUrl are. Shown where the customer is
+   *  identified: the org's customer list and the portal chrome. */
+  photoUrl?: string;
   /** Customer-level risk score (rolls up from buildings). */
   score?: number;
   status: MemberStatus;
@@ -433,6 +449,10 @@ export interface FloorPlan {
   /** Source kind: 'image' (photo/screenshot, supports flattened composites) or
    *  'pdf' (annotated with pins only). Absent defaults to 'image'. */
   kind?: 'image' | 'pdf';
+  /** Display order within a building (story 2021), ascending. Absent sorts
+   *  after ordered plans, then by name, so plans predating this field keep a
+   *  stable position until an admin reorders them. */
+  order?: number;
 }
 
 // ----------------------------------------------------------------------------
@@ -446,7 +466,8 @@ export type QuestionType =
   | 'select'
   | 'multiselect'
   | 'photo'
-  | 'nonConformity';
+  | 'nonConformity'
+  | 'matrix';
 export const QUESTION_TYPES = [
   'text',
   'longtext',
@@ -455,6 +476,7 @@ export const QUESTION_TYPES = [
   'multiselect',
   'photo',
   'nonConformity',
+  'matrix',
 ] as const;
 
 export type TemplateStatus = 'draft' | 'published' | 'archived';
@@ -469,12 +491,62 @@ export const TEMPLATE_STATUSES = ['draft', 'published', 'archived'] as const;
 export type ReportStandard = 'pas79' | 'bs9792' | 'custom';
 export const REPORT_STANDARDS = ['pas79', 'bs9792', 'custom'] as const;
 
+/**
+ * A two-axis grid the assessor answers by choosing ONE cell (`matrix` questions).
+ *
+ * Modelled on the BS 9792 / PAS 79 "simple risk level estimator", where
+ * likelihood of fire is crossed with potential consequences to give a risk
+ * level. It is deliberately GENERIC - the axes, their options and the outcome in
+ * every cell come from the template - so any standard can define its own grid
+ * rather than this being one hard-coded fire-risk table.
+ *
+ * One cell fixes all three facts at once (row, column, and that cell's outcome),
+ * which is why entry is a single choice rather than three. The paper form ticks
+ * the three separately and so permits a combination the grid does not support
+ * (High likelihood + Extreme harm recorded as "Tolerable"); reading the outcome
+ * off the chosen cell makes that unrepresentable.
+ */
+export interface QuestionMatrix {
+  /** Heading for the row axis, e.g. "Likelihood of fire". */
+  rowLabel: string;
+  /** Heading for the column axis, e.g. "Potential consequences of fire". */
+  columnLabel: string;
+  /** Row options, top to bottom. */
+  rows: string[];
+  /** Column options, left to right. */
+  columns: string[];
+  /** The outcome recorded for each cell, indexed `cells[rowIndex][columnIndex]`.
+   *  The grid must be rectangular: one entry per row, each `columns.length` long. */
+  cells: string[][];
+  /** Optional definitions for the axis options, keyed by the option label. The
+   *  BS 9792 estimator defines each of Low/Medium/High and each harm level, and
+   *  those definitions are part of the assessment record, not decoration. */
+  definitions?: Record<string, string>;
+}
+
+/**
+ * The stored value of a `matrix` answer (`AssessmentAnswer.value`).
+ *
+ * Labels rather than indices: the assessment pins its `templateSnapshot` at
+ * start, so labels are stable for its lifetime, and storing them keeps the
+ * answer self-describing in the report and the audit trail without a lookup back
+ * into the template. `outcome` is copied from the chosen cell, never chosen
+ * independently.
+ */
+export interface MatrixAnswer {
+  row: string;
+  column: string;
+  outcome: string;
+}
+
 export interface TemplateQuestion {
   id: string;
   text: string;
   type: QuestionType;
   /** For select / multiselect. */
   options?: string[];
+  /** Required for `matrix` questions; ignored for every other type. */
+  matrix?: QuestionMatrix;
   /** When true, the assessor may pin this answer's location on a floor plan. */
   allowsFlagLocation?: boolean;
   allowsPhotos?: boolean;
@@ -740,8 +812,8 @@ export interface AssessmentAnswer {
 // Actions / action plan (section 6) - "LTP" = Life Protection
 // ----------------------------------------------------------------------------
 
-export type ActionStatus = 'open' | 'signedOff' | 'archived';
-export const ACTION_STATUSES = ['open', 'signedOff', 'archived'] as const;
+export type ActionStatus = 'open' | 'inProgress' | 'signedOff' | 'archived';
+export const ACTION_STATUSES = ['open', 'inProgress', 'signedOff', 'archived'] as const;
 
 /** Default due windows by severity (story 1045). High = 7 days, Medium = 30
  *  days, Low = 3 months; all editable by the assessor. */
@@ -767,6 +839,22 @@ export interface Action {
   status: ActionStatus;
   signedOffBy?: string;
   signedOffAt?: number;
+  /** A note captured when the action is closed (signed off), recording HOW it
+   *  was resolved (story 2044 AC2). Absent on open/in-progress actions. */
+  completionNote?: string;
+  /** Append-only status-change trail (story 2044 AC3), oldest first, so a
+   *  building owner can see when an action moved through its lifecycle without
+   *  digging through the org-wide activity log. */
+  statusHistory?: ActionStatusChange[];
+}
+
+/** One entry in an action's status history: what it moved to, who moved it, and
+ *  when. `note` carries the completion note on the move to `signedOff`. */
+export interface ActionStatusChange {
+  status: ActionStatus;
+  byUid: string;
+  at: number;
+  note?: string;
 }
 
 // ----------------------------------------------------------------------------
@@ -984,6 +1072,30 @@ export interface CreateInvitationResult {
   expiresAt: number;
 }
 
+// --- previewInvitation (public, token-bearing) ---
+/**
+ * What /invite needs to know BEFORE it can ask the recipient for anything. The
+ * page cannot read /invitations (it holds bearer tokens and is closed to
+ * clients), so without this it can only guess which of "create an account" or
+ * "sign in to the account you already have" applies, and it cannot name the
+ * address the invitation was sent to.
+ */
+export interface PreviewInvitationInput {
+  token: string;
+}
+export interface PreviewInvitationResult {
+  /** The invited address. Safe to return only because the caller already holds
+   *  the single-use token that was emailed to it (see previewInvitation.ts). */
+  email: string;
+  /** The inviting organisation's display name, for "join <org>" copy. */
+  orgName: string;
+  /** Present only for a customer-portal invitation: the customer being joined. */
+  customerName?: string;
+  /** Whether an account already exists for `email`, which decides whether the
+   *  page offers sign-up or sign-in. */
+  accountExists: boolean;
+}
+
 // --- acceptInvitation (public, token-bearing) ---
 export interface AcceptInvitationInput {
   token: string;
@@ -994,7 +1106,40 @@ export interface AcceptInvitationInput {
 export interface AcceptInvitationResult {
   orgId: string;
   uid: string;
+  /** A Firebase custom token for the account this call just CREATED, so the
+   *  page can sign the new member straight in instead of asking them to retype
+   *  the password they chose seconds ago. Absent when the account already
+   *  existed: those callers had to be signed in as it to get this far. */
+  customToken?: string;
+  /** The customer whose portal space this invitation joined, absent for a staff
+   *  invitation. Returned so the page can make the space it just joined the
+   *  ACTIVE one: accepting while already signed in elsewhere otherwise lands the
+   *  member back in their previous space, looking as though nothing happened. */
+  customerId?: string;
 }
+/**
+ * Why an acceptInvitation call was refused. Every case below leaves the wire as
+ * the same 'failed-precondition' code, so the reason travels in the error's
+ * `details.reason` instead: /invite is the first screen a new customer ever
+ * sees, and it must be able to tell "already used" from "expired" to offer the
+ * right way forward rather than one raw message.
+ */
+export const INVITE_FAILURE_REASONS = [
+  /** Already accepted, or revoked by an administrator. */
+  'used',
+  /** Still pending, but past its expiry. */
+  'expired',
+  /** The customer contact the invite was issued for has since been removed. */
+  'contact-removed',
+  /** That contact is already linked to a different account. */
+  'contact-linked',
+  /** An account already exists for the invited address, and the caller has not
+   *  proved they are it. Possession of the token alone must not bind someone
+   *  else's existing account, so acceptInvitation requires the caller to be
+   *  signed in as that account first. */
+  'sign-in-required',
+] as const;
+export type InviteFailureReason = (typeof INVITE_FAILURE_REASONS)[number];
 
 // --- createJob (admin only) ---
 export interface CreateJobInput {
@@ -1037,11 +1182,59 @@ export interface SubmitAssessmentResult {
 // so org/roles/environment all follow the new claim.
 export interface SetActiveOrganisationInput {
   orgId: string;
+  /** Present to enter a PORTAL space at `orgId` rather than the staff console.
+   *  The two halves are mutually exclusive in the token by design (a portal
+   *  token carries `portalOrgId` and never `orgId`), so switching between them
+   *  is a re-mint of the claims, not a second set held alongside. */
+  customerId?: string;
 }
 export interface SetActiveOrganisationResult {
   orgId: string;
-  /** The role names the user holds in the newly active org. */
+  /** The role names the user holds in the newly active org. Empty for a portal
+   *  space, whose permissions come from the contact's `portalRoles` instead. */
   roles: OrgRole[];
+  /** Echoes the customer entered, so the caller can confirm which half it
+   *  landed in without re-reading its own request. */
+  customerId?: string;
+}
+
+/** Which half of the product a space belongs to. */
+export type SpaceKind = 'staff' | 'portal';
+export const SPACE_KINDS = ['staff', 'portal'] as const;
+
+/**
+ * One switchable space in the picker: an organisation this account works FOR
+ * (staff) or a customer whose records it can see (portal).
+ *
+ * Assembled client-side by merging `/userOrgs/{uid}` with
+ * `/customerUserIndex/{uid}` and resolving display names, so it is a view model
+ * rather than a stored record. Most people hold exactly one and never see the
+ * picker; it exists because a person can legitimately be staff at the firm they
+ * work for and a contact at a customer elsewhere.
+ */
+export interface UserSpace {
+  kind: SpaceKind;
+  orgId: string;
+  /** Portal spaces only; absent on a staff space. */
+  customerId?: string;
+  /** What the person will recognise: the customer's name for a portal space,
+   *  the organisation's for a staff one. */
+  name: string;
+  /** The assessing organisation behind a portal space, shown as context so a
+   *  contact can tell two customers of different firms apart. */
+  orgName?: string;
+  /** The assessing organisation's logo, where the profile is readable and one is
+   *  set, so the picker wears each space's own identity rather than a generic
+   *  monogram. Readable for every org the user staffs and for the active portal
+   *  org; absent otherwise, and the picker falls back to a monogram. */
+  logoUrl?: string;
+  /** The organisation's brand colour (its `brand.primary`), used as a FILL for
+   *  the space's mark. Never painted as text or a border: an arbitrary org
+   *  colour can be any contrast, so the picker computes a readable ink to sit on
+   *  it rather than using it as ink itself. */
+  brandColor?: string;
+  /** True for the space the current claims already point at. */
+  isCurrent: boolean;
 }
 
 // --- generateReport (admin / auditor only) ---
@@ -1110,7 +1303,14 @@ export interface UpdateOrgProfileResult {
 
 // --- updateOrgSettings (admin) ---
 export interface UpdateOrgSettingsInput {
-  ragConfig: RagConfig;
+  /** The full RAG config, replaced whole when present. Optional so a caller can
+   *  save the reminder schedule on its own without resending scoring thresholds
+   *  (and vice versa); each field written only when supplied. */
+  ragConfig?: RagConfig;
+  /** FRA-review reminder schedule (story 2046 AC1): descending positive day
+   *  offsets, e.g. [60, 30, 7]. Explicit null clears it back to the built-in
+   *  default; absent leaves the stored value unchanged. */
+  reviewReminderDays?: number[] | null;
 }
 export interface UpdateOrgSettingsResult {
   updated: true;
@@ -1274,11 +1474,15 @@ export interface ImportRecordsResult {
 
 // --- manageFloorPlan (admin; file already uploaded via Storage rules) ---
 export interface ManageFloorPlanInput {
-  action: 'create' | 'update' | 'remove';
+  action: 'create' | 'update' | 'remove' | 'reorder';
   buildingId: string;
   /** Required for update/remove. */
   planId?: string;
   plan?: ClearableFields<FloorPlan>;
+  /** Required for `reorder` (story 2021): every plan id for this building in the
+   *  intended order. The callable rejects a list that is not exactly the current
+   *  set, so a stale reorder can never drop or invent a plan. */
+  order?: string[];
 }
 export interface ManageFloorPlanResult {
   planId: string;
@@ -1308,12 +1512,15 @@ export interface UpdateMyPreferencesResult {
 // --- manageAction (admin; the action plan between assessments, story 2043) ---
 export interface ManageActionInput {
   buildingId: string;
-  /** Required for update/signOff/reopen. */
+  /** Required for update/signOff/reopen/start. */
   actionId?: string;
-  action: 'create' | 'update' | 'signOff' | 'reopen';
+  /** `start` moves an open action to in progress (story 2044); `signOff` closes
+   *  it (optionally with a completion note); `reopen` returns it to open. Status
+   *  moves ONLY via these verbs so the provenance fields and the history trail
+   *  can never be forged by a plain field edit. */
+  action: 'create' | 'update' | 'start' | 'signOff' | 'reopen';
   /** create: observation + severity required. update: whitelisted fields only
-   *  (responsible, dueBy, observation); status moves ONLY via signOff/reopen so
-   *  the sign-off provenance fields can never be forged by an edit. */
+   *  (responsible, dueBy, observation). */
   fields?: {
     observation?: string;
     severity?: Severity;
@@ -1321,6 +1528,9 @@ export interface ManageActionInput {
     dueBy?: number | null;
     lifeProtection?: boolean;
   };
+  /** A note recorded on `signOff`, describing how the action was resolved
+   *  (story 2044 AC2). Optional; ignored for every other verb. */
+  completionNote?: string;
 }
 export interface ManageActionResult {
   actionId: string;
@@ -1389,6 +1599,45 @@ export interface AcceptReportInput {
 }
 export interface AcceptReportResult {
   acceptedAt: number;
+}
+
+// --- portalInviteTeammate (portal; a customer admin invites a colleague) ---
+// The first WRITE a portal admin can make beyond accepting a report. The org
+// and customer are taken from the caller's verified portal claims, NEVER the
+// payload, so an admin can only ever invite into their OWN customer. Roles are
+// CUSTOMER roles only; the callable rejects anything else, so no org-staff
+// access can ride a portal invite. Gated on customerRoles.admin - the first
+// place the product enforces a customer role rather than merely carrying it.
+export interface PortalInviteTeammateInput {
+  email: string;
+  /** The teammate's name, for the CustomerContact the invitation links to. */
+  name: string;
+  /** Customer-portal roles to grant on acceptance. Must be non-empty and may
+   *  only contain CustomerRole keys. */
+  roles: CustomerRoleSet;
+}
+export interface PortalInviteTeammateResult {
+  contactId: string;
+  inviteId?: string;
+}
+
+// --- recordPlatformAccess (super admin only) ---
+// Story 2069 AC2: a super admin viewing a tenant's data is itself an audited
+// event. Called when a platform operator opens an organisation's drill-down, it
+// writes a `platform.access` entry into THAT org's own activity trail (from the
+// verified superAdmin claim, never client input) so the tenant can see that the
+// platform looked. Idempotent-friendly: a repeated view in the same session is
+// fine to record; the org sees an honest access log.
+export interface RecordPlatformAccessInput {
+  /** The organisation whose data the super admin is viewing. */
+  orgId: string;
+  /** What was opened, for the trail (e.g. 'organisation', 'customer', 'building'). */
+  scope: string;
+  /** The specific record id opened, where applicable. */
+  targetId?: string;
+}
+export interface RecordPlatformAccessResult {
+  recorded: true;
 }
 
 export interface ReleaseAssessmentInput {

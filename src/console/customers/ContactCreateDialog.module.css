@@ -1,0 +1,147 @@
+/* ContactCreateDialog - a narrow form modal over a dimmed page. Narrower than
+   ImportDialog because it carries one short form rather than tables. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background: var(--color-overlay);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 34rem;
+  max-height: calc(100vh - var(--space-xl) * 2);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-xl) var(--space-xl) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  font-size: 1.125rem;
+  color: var(--color-text);
+  letter-spacing: -0.012em;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 4px;
+}
+
+.copy {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* The one scrolling region, so the title and the actions stay put. */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  padding: var(--space-lg) var(--space-xl);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.sectionTitle {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.roles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* The invitation notice. The wording carries the meaning; the border and the
+   label are reinforcement, never the signal on their own. */
+.noticeSend,
+.noticeQuiet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.noticeSend {
+  border: 1px solid var(--status-info);
+  background: var(--status-info-surface);
+  color: var(--color-text);
+}
+
+.noticeQuiet {
+  border: 1px dashed var(--color-border-strong);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+}
+
+.noticeLabel {
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text);
+}
+
+.noticeCopy {
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding: var(--space-md) var(--space-xl) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 40rem) {
+  .overlay {
+    padding: 0;
+  }
+
+  .dialog {
+    max-width: none;
+    max-height: 100vh;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+  }
+
+  .head,
+  .body,
+  .footer {
+    padding-inline: var(--space-lg);
+  }
+}

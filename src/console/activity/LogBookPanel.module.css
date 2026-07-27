@@ -52,12 +52,12 @@
 }
 
 .chip:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
 }
 
 .chipActive {
-  border-color: var(--brand-primary);
+  border-color: var(--brand-ink);
   background: var(--color-surface-sunken);
   color: var(--color-text);
 }
@@ -92,7 +92,7 @@
 }
 
 .dateInput:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
   border-color: transparent;
 }

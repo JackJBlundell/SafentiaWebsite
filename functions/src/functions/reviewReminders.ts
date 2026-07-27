@@ -36,6 +36,7 @@ import {
 } from '../lib/emailTemplates';
 import {
   reviewReminderStage,
+  resolveReviewReminderDays,
   utcDayKey,
   type ReminderStage,
 } from '../lib/reviewWindows';
@@ -45,6 +46,7 @@ import type {
   Environment,
   OrgMember,
   OrgProfile,
+  OrgSettings,
 } from '../shared/types';
 
 const ENVIRONMENTS: Environment[] = ['live', 'test'];
@@ -93,6 +95,22 @@ export const reviewReminders = onSchedule(
       >;
 
       for (const [orgId, sites] of Object.entries(byOrg)) {
+        // Story 2046 AC1: the reminder schedule is org-configurable, and it
+        // decides which buildings match today, so it must be resolved BEFORE
+        // the building walk - it cannot be read lazily on first match the way
+        // admins/profile are. One settings read per org (not per building) keeps
+        // the sweep linear; a malformed or absent config repairs to the built-in
+        // default rather than skipping or crashing the org.
+        const settingsSnap = await db.ref(paths.db.orgSettings(orgId)).get();
+        const settings = settingsSnap.val() as OrgSettings | null;
+        const reminderDays = resolveReviewReminderDays(
+          settings?.reviewReminderDays,
+        );
+        // The largest (earliest) mark is the "planning noise" one withheld from
+        // customers; with the default schedule this is the 60-day mark, as
+        // before. Element zero because the schedule is validated descending.
+        const farthestMark = reminderDays[0];
+
         // The org's active admins and display name are read at most once per
         // org, and only when a building in it actually matched today.
         let admins: Array<{
@@ -114,7 +132,7 @@ export const reviewReminders = onSchedule(
             if (typeof nextDue !== 'number') {
               continue;
             }
-            const stage = reviewReminderStage(nextDue, now);
+            const stage = reviewReminderStage(nextDue, now, reminderDays);
             if (stage === null) {
               continue;
             }
@@ -213,49 +231,81 @@ export const reviewReminders = onSchedule(
               }
             }
 
-            // Story 2060: the customer hears when the review has LAPSED, via
-            // their primary contact when one is recorded with an email. The
-            // 60/30/7-day countdown notices are deliberately NOT sent to the
-            // customer: arranging the review is the organisation's job, and
-            // three advance nudges per building would be noise from a service
-            // they do not operate - one honest overdue notice is the signal
-            // that matters to the duty-holder. Contacts have no preferences
-            // node (emailPreferences is an OrgMember field), so there is no
-            // choice to respect yet; revisit with portal settings.
-            if (stage === 'lapsed' && building.customerId) {
+            // Story 2060: the customer hears about their review too, at the
+            // NEARER approach marks and when it has LAPSED. Every customer
+            // contact with an email is told, not just the primary. The
+            // FARTHEST (earliest) mark is deliberately withheld from the
+            // customer: the earliest reminder is planning noise to a duty-
+            // holder, whereas the near marks and the overdue notice are the
+            // ones they need to see. With the default schedule this is the
+            // 60-day mark, as before; with a configured schedule it is whatever
+            // the org set as its earliest offset. Contacts have no preferences node
+            // (emailPreferences is an OrgMember field), so there is no choice
+            // to respect yet; revisit with portal settings.
+            //
+            // Idempotency: this block sits INSIDE the per-building per-day
+            // marker claimed above, and a building earns exactly one stage per
+            // day, so a scheduler redelivery cannot reach here twice - each
+            // contact is emailed at most once per stage per day without a
+            // second marker node.
+            if (stage !== farthestMark && building.customerId) {
               const contactsSnap = await db
                 .ref(paths.db.customerContacts(orgId, building.customerId))
                 .get();
               const contacts =
                 (contactsSnap.val() as Record<string, CustomerContact> | null) ??
                 {};
-              const contactEmail = Object.values(contacts).find(
-                (contact) => contact?.isPrimary === true,
-              )?.email;
-              if (contactEmail) {
-                const customerBody = `The fire risk assessment review for ${buildingName} is now overdue. Please contact ${orgName ?? 'your fire safety provider'} to arrange the review.`;
+              const customerSubject =
+                stage === 'lapsed'
+                  ? `FRA review overdue: ${buildingName}`
+                  : `FRA review due in ${stage} days: ${buildingName}`;
+              const customerBody =
+                stage === 'lapsed'
+                  ? `The fire risk assessment review for ${buildingName} is now overdue. Please contact ${orgName ?? 'your fire safety provider'} to arrange the review.`
+                  : `The fire risk assessment review for ${buildingName} is due in ${stage} days. ${orgName ?? 'Your fire safety provider'} arranges this; there is nothing you need to do unless they ask you to.`;
+              // The message is the same for every contact, so it is rendered
+              // once and sent to each de-duplicated address.
+              const customerHtml = renderBrandedEmail({
+                brand: orgBrand ?? undefined,
+                preheader: customerBody,
+                heading:
+                  stage === 'lapsed'
+                    ? 'Fire risk assessment review overdue'
+                    : 'Fire risk assessment review due',
+                paragraphs: [customerBody],
+                detailRows: [
+                  { label: 'Building', value: buildingName },
+                  { label: 'Review due', value: formatDueDate(nextDue) },
+                ],
+                // The customer's own portal building page, never the staff
+                // console - the console would only show them a permission wall.
+                cta: {
+                  label: 'View your building',
+                  url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
+                },
+                footerNote: `You are receiving this because you are a contact for ${buildingName} on Safentia.`,
+              });
+              const seen = new Set<string>();
+              for (const contact of Object.values(contacts)) {
+                const email = contact?.email?.trim();
+                if (!email) {
+                  continue;
+                }
+                // Collapse a person listed twice (or a shared inbox) so no one
+                // is emailed twice; the first spelling seen is used to send.
+                const key = email.toLowerCase();
+                if (seen.has(key)) {
+                  continue;
+                }
+                seen.add(key);
+                // Best-effort per recipient: dispatchEmail never throws, so one
+                // contact's provider failure cannot abort the sweep.
                 await dispatchEmail(
                   {
-                    to: contactEmail,
-                    subject: `FRA review overdue: ${buildingName}`,
+                    to: email,
+                    subject: customerSubject,
                     body: customerBody,
-                    html: renderBrandedEmail({
-                      brand: orgBrand ?? undefined,
-                      preheader: customerBody,
-                      heading: 'Fire risk assessment review overdue',
-                      paragraphs: [customerBody],
-                      detailRows: [
-                        { label: 'Building', value: buildingName },
-                        { label: 'Review due', value: formatDueDate(nextDue) },
-                      ],
-                      // The customer's own portal, never the staff console -
-                      // the console would only show them a permission wall.
-                      cta: {
-                        label: 'View your building',
-                        url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
-                      },
-                      footerNote: `You are receiving this because you are the primary contact for ${buildingName} on Safentia.`,
-                    }),
+                    html: customerHtml,
                   },
                   logger,
                   { orgId, env, category: 'review-reminder' },

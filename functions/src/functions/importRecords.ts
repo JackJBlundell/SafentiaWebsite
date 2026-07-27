@@ -33,6 +33,7 @@ import {
 import {
   assertObject,
   requireString,
+  requireDbKey,
   optionalString,
   requireEnum,
   TEXT_LIMITS,
@@ -101,14 +102,26 @@ const DETAIL_LIMITS = {
  *  second, thinner way to set statutory dates. */
 const IMPORTABLE_SCHEDULE_KEYS = ['fraReview'] as const;
 
+/** The one message the row ceiling is reported with, so every place that can
+ *  trip it says the same thing. */
+function tooManyRows(field: string): never {
+  throw fail.invalidArgument(
+    `An import may carry at most ${MAX_ROWS} rows. Split the file and import it in parts.`,
+    { field, max: MAX_ROWS },
+  );
+}
+
 /** Reject unknown and derived keys by name, so the failure says WHY. `where`
- *  locates the offending record for an admin reading a 400-row file. */
+ *  locates the offending record for an admin reading a 400-row file. Null is
+ *  rejected outright: an import only ever CREATES, so the clear-a-field intent
+ *  the update callables read from null is meaningless here, and letting it
+ *  through would reach the object validators as a bare "malformed body". */
 function assertFields(
   payload: Record<string, unknown>,
   allowed: readonly string[],
   where: string,
 ): void {
-  for (const key of Object.keys(payload)) {
+  for (const [key, value] of Object.entries(payload)) {
     if ((DERIVED_FIELDS as readonly string[]).includes(key)) {
       throw fail.invalidArgument(
         `${where}: the ${key} field is derived by the platform and cannot be imported.`,
@@ -119,6 +132,12 @@ function assertFields(
       throw fail.invalidArgument(`${where}: unknown field ${key}.`, {
         field: key,
       });
+    }
+    if (value === null) {
+      throw fail.invalidArgument(
+        `${where}: the ${key} field cannot be null in an import.`,
+        { field: key },
+      );
     }
   }
 }
@@ -301,7 +320,7 @@ function optionalSchedule(
         key,
       });
     }
-    schedule.fraReview = { nextDue };
+    schedule[key as (typeof IMPORTABLE_SCHEDULE_KEYS)[number]] = { nextDue };
   }
   return Object.keys(schedule).length > 0 ? schedule : undefined;
 }
@@ -342,11 +361,15 @@ function readBuilding(
   };
 }
 
-/** The buildings list on a site row, validated but not yet keyed. */
+/** The buildings list on a site row, validated but not yet keyed. `remaining`
+ *  is what is left of the whole-import row ceiling: the LENGTH is checked
+ *  before a single entry is validated, so an oversized payload is refused
+ *  without this Function first materialising every record it names. */
 function readBuildingList(
   value: unknown,
   customerId: string,
   where: string,
+  remaining: number,
 ): Building[] {
   if (value === undefined) {
     return [];
@@ -355,6 +378,9 @@ function readBuildingList(
     throw fail.invalidArgument(`${where}: buildings must be a list.`, {
       field: 'buildings',
     });
+  }
+  if (value.length > remaining) {
+    tooManyRows('buildings');
   }
   return value.map((entry, index) =>
     readBuilding(entry, customerId, `${where}, building ${index + 1}`),
@@ -379,7 +405,7 @@ export const importRecords = onCall<ImportRecordsInput>(
         // 2. Validate the shape and the owning records.
         const input = assertObject(request.data);
         const mode = requireEnum(input, 'mode', MODES);
-        const customerId = requireString(
+        const customerId = requireDbKey(
           input,
           'customerId',
           TEXT_LIMITS.shortText,
@@ -426,7 +452,14 @@ export const importRecords = onCall<ImportRecordsInput>(
             });
           }
           // The cap counts ROWS as the file holds them (a site plus each of its
-          // buildings), matching the number the dialog states.
+          // buildings), matching the number the dialog states. It is applied
+          // BEFORE any validation work: a site row costs at least one row, so a
+          // list longer than the ceiling can never pass, and refusing it here
+          // means a hostile payload naming a million records is rejected on its
+          // length rather than after this Function has built a million objects.
+          if (rows.length > MAX_ROWS) {
+            tooManyRows('sites');
+          }
           let rowCount = 0;
           const sites = rows.map((entry, index) => {
             const where = `Site ${index + 1}`;
@@ -451,16 +484,14 @@ export const importRecords = onCall<ImportRecordsInput>(
               payload.buildings,
               customerId,
               where,
+              MAX_ROWS - rowCount,
             );
             rowCount += Math.max(buildings.length, 1);
+            if (rowCount > MAX_ROWS) {
+              tooManyRows('sites');
+            }
             return { site, buildings };
           });
-          if (rowCount > MAX_ROWS) {
-            throw fail.invalidArgument(
-              `An import may carry at most ${MAX_ROWS} rows. Split the file and import it in parts.`,
-              { field: 'sites', max: MAX_ROWS },
-            );
-          }
 
           for (const { site, buildings } of sites) {
             const siteId = db.ref(paths.db.sites(orgId, customerId)).push()
@@ -480,7 +511,7 @@ export const importRecords = onCall<ImportRecordsInput>(
             }
           }
         } else {
-          const siteId = requireString(input, 'siteId', TEXT_LIMITS.shortText);
+          const siteId = requireDbKey(input, 'siteId', TEXT_LIMITS.shortText);
           const siteSnap = await db
             .ref(paths.db.site(orgId, customerId, siteId))
             .get();
@@ -497,10 +528,7 @@ export const importRecords = onCall<ImportRecordsInput>(
             });
           }
           if (rows.length > MAX_ROWS) {
-            throw fail.invalidArgument(
-              `An import may carry at most ${MAX_ROWS} rows. Split the file and import it in parts.`,
-              { field: 'buildings', max: MAX_ROWS },
-            );
+            tooManyRows('buildings');
           }
           const buildings = rows.map((entry, index) =>
             readBuilding(entry, customerId, `Building ${index + 1}`),

@@ -1,22 +1,55 @@
-/* ContactsPanel - contact table cells, the inline editor, confirm boxes. */
+/* ContactsPanel - contact cards, the inline editor, confirm boxes. The panel
+   sits in the page's narrow aside, so nothing here may set a minimum width:
+   every value wraps inside its own card rather than pushing the column wider. */
 
-.nameCell {
+.cards {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-md);
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contactCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  align-items: flex-start;
+  min-width: 0;
 }
 
 .name {
   font-weight: 600;
   color: var(--color-text);
+  overflow-wrap: anywhere;
 }
 
 .primaryBadge {
-  align-self: flex-start;
   padding: 1px var(--space-sm);
   border-radius: var(--radius-md);
-  border: 1px solid var(--brand-primary);
-  color: var(--brand-primary);
+  border: 1px solid var(--brand-ink);
+  color: var(--brand-ink);
   font-size: 0.6875rem;
   font-weight: 650;
   text-transform: uppercase;
@@ -25,6 +58,44 @@
 
 .jobTitle {
   font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Term above value rather than beside it: at this column width a two-column
+   definition list leaves the values a few characters wide. */
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+  margin: 0;
+}
+
+.term {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.value {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  min-width: 0;
+  /* Long addresses break inside the card instead of widening the column. */
+  overflow-wrap: anywhere;
+}
+
+.link {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.absent {
   color: var(--color-text-muted);
 }
 
@@ -55,15 +126,15 @@
 .actionsCell {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: var(--space-sm);
+  min-width: 0;
 }
 
 .actionButtons {
   display: flex;
   gap: var(--space-xs);
   flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .confirmBox {
@@ -91,10 +162,11 @@
   flex-wrap: wrap;
 }
 
-/* The editor sits inside a flush Card, so it restores its own padding. */
+/* The editor opens beneath the card it belongs to, ruled off from it. */
 .editorWrap {
   width: 100%;
-  padding: var(--space-lg) var(--space-xl) var(--space-xl);
+  min-width: 0;
+  padding-top: var(--space-lg);
   border-top: 1px solid var(--color-border);
 }
 
@@ -103,7 +175,7 @@
   flex-direction: column;
   gap: var(--space-lg);
   width: 100%;
-  max-width: 40rem;
+  min-width: 0;
 }
 
 .editorTitle {
@@ -113,12 +185,12 @@
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
 }
 
 .editorActions {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-lg);
-  flex-wrap: wrap;
+  gap: var(--space-md);
 }

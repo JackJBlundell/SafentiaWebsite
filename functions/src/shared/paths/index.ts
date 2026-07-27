@@ -120,7 +120,13 @@ function rtdbFor(env: Environment) {
       root('customerMembers', orgId, customerId),
     customerMember: (orgId: string, customerId: string, uid: string) =>
       root('customerMembers', orgId, customerId, uid),
+    /** Every portal space this account can enter, keyed by portalSpaceKey. A
+     *  COLLECTION, not a single slot: one person can hold contact records at
+     *  several customers (a managing agent covering more than one housing
+     *  association), and the space picker has to be able to list them all. */
     customerUserIndex: (uid: string) => root('customerUserIndex', uid),
+    customerUserIndexEntry: (uid: string, spaceKey: string) =>
+      root('customerUserIndex', uid, spaceKey),
 
     /** Sites. */
     sites: (orgId: string, customerId: string) =>
@@ -280,6 +286,13 @@ function storageFor(env: Environment) {
      *  and tenant-URL validation reads naturally. */
     orgAsset: (orgId: string, assetId: string): StoragePath =>
       org(orgId, 'assets', assetId),
+    /** Organisation-level PDF certificate (a template's accreditation sheet).
+     *  Deliberately its OWN prefix under assets rather than sharing
+     *  `assets/{assetId}` with the logo: that match is bounded to images, and
+     *  widening it to admit PDFs would let a PDF be set as the whitelabel logo.
+     *  A separate segment keeps each rule as tight as its content demands. */
+    orgCertificate: (orgId: string, certificateId: string): StoragePath =>
+      org(orgId, 'assets', 'certificates', certificateId),
     /** Generated report PDF. */
     report: (orgId: string, reportId: string): StoragePath =>
       org(orgId, 'reports', `${reportId}.pdf`),
@@ -308,4 +321,17 @@ export function forEnv(env: Environment): EnvPaths {
  *  so the "testMode -> which root" rule is stated exactly once. */
 export function envFromTestMode(testMode: boolean | undefined): Environment {
   return testMode ? 'test' : 'live';
+}
+
+/**
+ * The key one portal space occupies under `/customerUserIndex/{uid}`.
+ *
+ * Derived from the pair it identifies rather than pushed, so re-accepting an
+ * invitation to a customer someone already belongs to overwrites its own entry
+ * instead of adding a duplicate the picker would show twice. Both segments are
+ * already RTDB keys, so the composite is safe by construction; the separator is
+ * two underscores because a single one appears inside neither id form in use.
+ */
+export function portalSpaceKey(orgId: string, customerId: string): string {
+  return `${orgId}__${customerId}`;
 }

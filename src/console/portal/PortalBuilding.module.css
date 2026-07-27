@@ -1,36 +1,32 @@
-.stack {
-  display: grid;
-  gap: var(--space-lg);
-  margin-top: var(--space-lg);
+/* PortalBuilding - the risk band, the reports gate and the action plan, with
+ * the building's standing facts pinned in the aside. */
+
+.cardHeaderPad {
+  padding: var(--space-xl) var(--space-xxl) 0;
 }
 
-.facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: var(--space-md);
-  margin: var(--space-md) 0 0;
+.cardBodyPad {
+  padding: 0 var(--space-xxl) var(--space-xl);
 }
 
-.fact {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.factLabel {
+/* How many reports are still waiting on this reader. A count in words, sitting
+ * where the card's action would: it is the one outstanding ask on the page. */
+.awaitingBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-text-muted);
-}
-
-.factValue {
-  margin: 0;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
   color: var(--color-text);
 }
 
 .emptyLine {
-  margin: var(--space-md) 0 0;
+  margin: 0;
+  padding: 0 var(--space-xxl) var(--space-xl);
   color: var(--color-text-muted);
 }
 
@@ -41,17 +37,36 @@
   padding: 0;
 }
 
+.reportList {
+  padding-inline: var(--space-xxl);
+  padding-block-end: var(--space-xl);
+}
+
 .reportRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-md);
   min-height: var(--min-touch-target);
-  padding: var(--space-sm) 0;
+  padding: var(--space-md) 0;
 }
 
 .reportRow + .reportRow {
   border-top: 1px solid var(--color-border);
+}
+
+/* Whether this reader has signed the report off. Text, always: the state is
+ * never carried by weight or colour alone. */
+.reportStateTodo {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.reportStateDone {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
 }
 
 .reportIdentity {

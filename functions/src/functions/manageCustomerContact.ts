@@ -46,8 +46,12 @@ import {
 } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
+import { issueInvitation } from '../lib/invitations';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import type { EnvPaths } from '../shared/paths';
 import type {
   CustomerContact,
+  Environment,
   InvitationSummary,
   ManageCustomerContactInput,
   ManageCustomerContactResult,
@@ -67,8 +71,93 @@ const CONTACT_FIELDS = [
 
 const ACTIONS = ['create', 'update', 'remove'] as const;
 
+/** Does this contact hold at least one portal role? A role set is an object of
+ *  optional `true` flags, so "has portal access" is simply a non-empty set. */
+function hasPortalAccess(contact: CustomerContact): boolean {
+  const roles = contact.portalRoles;
+  return Boolean(roles) && Object.keys(roles as object).length > 0;
+}
+
+/**
+ * Invite a contact to the portal if they should have access and do not already.
+ *
+ * Granting `portalRoles` is the act of saying "this person should be able to
+ * sign in", so it is what issues the invitation - previously roles could be
+ * granted with no invitation ever sent, leaving a contact who was supposed to
+ * have access sitting there with no way in and no signal that anything was
+ * outstanding. Mirrors the primary-contact auto-invite in manageCustomer.
+ *
+ * Runs AFTER the contact write has committed and NEVER throws: the contact is
+ * real by this point, so a failed invitation must not fail the call or roll the
+ * contact back. The admin can always resend from the contacts panel.
+ */
+async function autoInvitePortalContact({
+  env,
+  paths,
+  orgId,
+  customerId,
+  contactId,
+  contact,
+  invitedBy,
+  logger,
+}: {
+  env: Environment;
+  paths: EnvPaths;
+  orgId: string;
+  customerId: string;
+  contactId: string;
+  contact: CustomerContact;
+  invitedBy: string;
+  logger: ReturnType<typeof createLogger>;
+}): Promise<void> {
+  if (!contact.email || !hasPortalAccess(contact)) return;
+  // Already linked to an account: they can sign in, so there is nothing to send.
+  if (contact.uid) return;
+
+  try {
+    // Do not stack invitations. The token-bearing /invitations root is not
+    // readable here by design, so this reads the admin-safe per-org summaries,
+    // exactly as the remove branch does when it revokes.
+    const summariesSnap = await db.ref(paths.db.orgInvitations(orgId)).get();
+    const summaries = (summariesSnap.val() ?? {}) as Record<
+      string,
+      InvitationSummary
+    >;
+    const live = Object.values(summaries).some(
+      (summary) =>
+        summary.customerId === customerId &&
+        summary.contactId === contactId &&
+        (summary.status === 'pending' || summary.status === 'accepted'),
+    );
+    if (live) return;
+
+    // roles is deliberately empty: a portal invitation carries NO organisation
+    // roles, the recipient's permissions come from the contact's portalRoles.
+    await issueInvitation({
+      env,
+      paths,
+      orgId,
+      invitedBy,
+      email: contact.email,
+      roles: {},
+      customerId,
+      contactId,
+      logger,
+    });
+    logger.info('Portal invitation auto-issued for customer contact', {
+      customerId,
+      contactId,
+    });
+  } catch (error) {
+    logger.error(
+      'Auto-invite failed after contact write; the contact exists and an admin can resend from the contacts panel',
+      { customerId, contactId, error: String(error) },
+    );
+  }
+}
+
 export const manageCustomerContact = onCall<ManageCustomerContactInput>(
-  callableOptions,
+  { ...callableOptions, secrets: EMAIL_PROVIDER_SECRETS },
   (request) =>
     runCallable<ManageCustomerContactResult>(
       createLogger({ fn: 'manageCustomerContact' }),
@@ -79,7 +168,7 @@ export const manageCustomerContact = onCall<ManageCustomerContactInput>(
         await assertRateLimit(uid, 'manageCustomerContact');
         const claims = getClaims(request);
         assertOrgRole(claims, 'admin');
-        const { paths } = envFor(claims);
+        const { env, paths } = envFor(claims);
         const orgId = claims.orgId;
 
         // 2. Validate the action and the owning customer.
@@ -232,6 +321,20 @@ export const manageCustomerContact = onCall<ManageCustomerContactInput>(
 
           await writeAudit('customerContact.created', contactId);
           logger.info('Customer contact created', { customerId, contactId });
+
+          // Created with portal roles = created with portal access, so send the
+          // invitation now rather than leaving it as a separate manual step an
+          // admin has to remember.
+          await autoInvitePortalContact({
+            env,
+            paths,
+            orgId,
+            customerId,
+            contactId,
+            contact,
+            invitedBy: uid,
+            logger,
+          });
           return { contactId };
         }
 
@@ -320,6 +423,31 @@ export const manageCustomerContact = onCall<ManageCustomerContactInput>(
 
           await writeAudit('customerContact.updated', contactId);
           logger.info('Customer contact updated', { customerId, contactId });
+
+          // Granting portal roles to an existing contact is the same act as
+          // creating one with them, so it invites too. Gated on roles actually
+          // being granted in THIS update: without the gate every unrelated edit
+          // (a phone number, a job title) would pay a read of the invitation
+          // summaries only to find there is nothing to do.
+          if (fields.portalRoles) {
+            const committed = (result.snapshot.val() ?? {}) as Record<
+              string,
+              CustomerContact
+            >;
+            const updated = committed[contactId];
+            if (updated) {
+              await autoInvitePortalContact({
+                env,
+                paths,
+                orgId,
+                customerId,
+                contactId,
+                contact: updated,
+                invitedBy: uid,
+                logger,
+              });
+            }
+          }
           return { contactId };
         }
 

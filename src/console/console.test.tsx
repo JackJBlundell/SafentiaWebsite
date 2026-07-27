@@ -16,6 +16,8 @@ import { forEnv } from '../paths';
 import { keys } from '../query/keys';
 import { queryClient } from '../query/queryClient';
 import type { SessionClaims } from '../auth/claims';
+import { rememberSpaceChoice } from '../auth/spaceChoice';
+import type { UserSpace } from '../types';
 
 // --- Module mocks -----------------------------------------------------------
 
@@ -34,8 +36,8 @@ const mocks = vi.hoisted(() => {
       refreshSession: vi.fn(),
       signOut: vi.fn(),
     },
-    userOrgs: {
-      organisations: [] as { orgId: string; name: string; isCurrent: boolean }[],
+    userSpaces: {
+      spaces: [] as UserSpace[],
       loading: false,
       hasMultiple: false,
     },
@@ -64,8 +66,8 @@ vi.mock('../auth/AuthProvider', () => ({
   useAuth: () => mocks.auth,
 }));
 
-vi.mock('../auth/useUserOrganisations', () => ({
-  useUserOrganisations: () => mocks.userOrgs,
+vi.mock('../auth/useUserSpaces', () => ({
+  useUserSpaces: () => mocks.userSpaces,
 }));
 
 vi.mock('./admin/useSuperAdminClaim', () => ({
@@ -145,11 +147,12 @@ beforeEach(() => {
     claims: null,
     paths: null,
   });
-  mocks.userOrgs.organisations = [];
-  mocks.userOrgs.loading = false;
-  mocks.userOrgs.hasMultiple = false;
+  mocks.userSpaces.spaces = [];
+  mocks.userSpaces.loading = false;
+  mocks.userSpaces.hasMultiple = false;
   mocks.superAdmin = 'denied';
   mocks.rtdbData = undefined;
+  window.sessionStorage.clear();
   vi.clearAllMocks();
 });
 
@@ -201,8 +204,8 @@ describe('ConsoleGate', () => {
       claims: testClaims,
       paths: forEnv('test'),
     });
-    mocks.userOrgs.organisations = [
-      { orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
+    mocks.userSpaces.spaces = [
+      { kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
     ];
     renderConsoleAt('/app');
     expect(
@@ -220,11 +223,93 @@ describe('ConsoleGate', () => {
     expect(
       screen.getByRole('heading', { name: 'Upcoming reviews' }),
     ).toBeInTheDocument();
+    // The releases card is driven by its own released-assessments read, which
+    // is still undefined here - the card renders its skeleton, not a wrong row.
+    expect(
+      screen.getByRole('heading', { name: 'Recent releases' }),
+    ).toBeInTheDocument();
     // The overview cards each carry a "View all" affordance (Recent activity,
     // and Recent releases for auditors/admins), so there is at least one.
     expect(
       screen.getAllByRole('link', { name: 'View all' }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+// --- The space picker (two-half accounts) --------------------------------------
+
+describe('SpacePicker', () => {
+  beforeEach(() => {
+    setAuth({
+      status: 'authenticated',
+      user: testUser,
+      claims: testClaims,
+      paths: forEnv('test'),
+    });
+    mocks.userSpaces.spaces = [
+      {
+        kind: 'staff',
+        orgId: 'org-1',
+        name: 'Acme Fire Safety',
+        isCurrent: true,
+      },
+      {
+        kind: 'portal',
+        orgId: 'org-9',
+        customerId: 'cus-1',
+        name: 'Northern Housing',
+        orgName: 'Borough Compliance',
+        isCurrent: false,
+      },
+    ];
+    mocks.userSpaces.hasMultiple = true;
+  });
+
+  it('asks which space to open, naming both halves', () => {
+    renderConsoleAt('/app');
+    expect(
+      screen.getByRole('heading', { name: 'Where would you like to go?' }),
+    ).toBeInTheDocument();
+    // The halves are told apart by their headings and each row's own words,
+    // never by position or colour alone.
+    expect(
+      screen.getByRole('heading', { name: 'Organisations you work for' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Customer accounts you can view' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Customer account, assessed by Borough Compliance'),
+    ).toBeInTheDocument();
+  });
+
+  it('goes straight in when the account holds exactly one space', () => {
+    mocks.userSpaces.spaces = [
+      {
+        kind: 'staff',
+        orgId: 'org-1',
+        name: 'Acme Fire Safety',
+        isCurrent: true,
+      },
+    ];
+    mocks.userSpaces.hasMultiple = false;
+    renderConsoleAt('/app');
+    expect(
+      screen.queryByRole('heading', { name: 'Where would you like to go?' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Hello, Jane' }),
+    ).toBeInTheDocument();
+  });
+
+  it('enters a portal space through the callable, carrying the customer', async () => {
+    const user = userEvent.setup();
+    renderConsoleAt('/app');
+    await user.click(screen.getByRole('button', { name: /Northern Housing/ }));
+    expect(mocks.callable).toHaveBeenCalledWith('setActiveOrganisation', {
+      orgId: 'org-9',
+      customerId: 'cus-1',
+    });
   });
 });
 
@@ -241,10 +326,10 @@ describe('OrgSwitcher', () => {
   });
 
   it('renders a single organisation as static text, not a control', () => {
-    mocks.userOrgs.organisations = [
-      { orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
+    mocks.userSpaces.spaces = [
+      { kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
     ];
-    mocks.userOrgs.hasMultiple = false;
+    mocks.userSpaces.hasMultiple = false;
     renderConsoleAt('/app');
     expect(screen.getByText('Acme Fire Safety')).toBeInTheDocument();
     expect(
@@ -256,11 +341,14 @@ describe('OrgSwitcher', () => {
 
   it('renders a disclosure listing every organisation when the user has several', async () => {
     const user = userEvent.setup();
-    mocks.userOrgs.organisations = [
-      { orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
-      { orgId: 'org-2', name: 'Borough Compliance', isCurrent: false },
+    mocks.userSpaces.spaces = [
+      { kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
+      { kind: 'staff' as const, orgId: 'org-2', name: 'Borough Compliance', isCurrent: false },
     ];
-    mocks.userOrgs.hasMultiple = true;
+    mocks.userSpaces.hasMultiple = true;
+    // Holding several spaces, the gate asks WHICH before rendering the shell;
+    // this test is about the switcher, so answer it the way the picker does.
+    rememberSpaceChoice('user-1');
     renderConsoleAt('/app');
 
     const trigger = screen.getByRole('button', { name: /Acme Fire Safety/ });
@@ -269,7 +357,7 @@ describe('OrgSwitcher', () => {
     await user.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
 
-    const list = screen.getByRole('list', { name: 'Your organisations' });
+    const list = screen.getByRole('list', { name: 'Your spaces' });
     expect(list).toBeInTheDocument();
     // The active organisation is marked as current.
     const currentOption = screen.getByRole('button', {
@@ -310,10 +398,10 @@ describe('Platform mode', () => {
   it('offers a super admin the Super Admin Dashboard switcher entry that enters platform mode', async () => {
     const user = userEvent.setup();
     mocks.superAdmin = 'granted';
-    mocks.userOrgs.organisations = [
-      { orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
+    mocks.userSpaces.spaces = [
+      { kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
     ];
-    mocks.userOrgs.hasMultiple = false;
+    mocks.userSpaces.hasMultiple = false;
     renderConsoleAt('/app');
 
     // A super admin gets the disclosure even with a single org.
@@ -335,8 +423,8 @@ describe('Platform mode', () => {
 
   it('renders the platform rail and neutral brand at /app/admin, not the org rail', () => {
     mocks.superAdmin = 'granted';
-    mocks.userOrgs.organisations = [
-      { orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
+    mocks.userSpaces.spaces = [
+      { kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
     ];
     renderConsoleAt('/app/admin');
 
@@ -360,8 +448,8 @@ describe('Platform mode', () => {
 
   it('never shows the platform entry or rail to a non-super-admin', () => {
     mocks.superAdmin = 'denied';
-    mocks.userOrgs.organisations = [
-      { orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
+    mocks.userSpaces.spaces = [
+      { kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
     ];
     // Even at a hand-typed /app/admin the org rail stays; platform is presentation
     // over the rules' real superAdmin boundary.
@@ -378,11 +466,12 @@ describe('Platform mode', () => {
   it('returns to an organisation from platform mode', async () => {
     const user = userEvent.setup();
     mocks.superAdmin = 'granted';
-    mocks.userOrgs.organisations = [
-      { orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
-      { orgId: 'org-2', name: 'Borough Compliance', isCurrent: false },
+    mocks.userSpaces.spaces = [
+      { kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
+      { kind: 'staff' as const, orgId: 'org-2', name: 'Borough Compliance', isCurrent: false },
     ];
-    mocks.userOrgs.hasMultiple = true;
+    mocks.userSpaces.hasMultiple = true;
+    rememberSpaceChoice('user-1');
     renderConsoleAt('/app/admin');
 
     // In platform mode the trigger reads as the platform, not an org.
@@ -456,6 +545,8 @@ describe('AccountPage email preferences', () => {
         actionAssigned: true,
         awaitingValidation: true,
         released: true,
+        infoRequested: true,
+        deadlineReminder: true,
       },
     });
     expect(

@@ -96,7 +96,7 @@ export const updateOrgProfile = onCall<UpdateOrgProfileInput>(
           const secondary = requireString(brandInput, 'secondary', 16);
           if (!HEX_COLOUR.test(primary) || !HEX_COLOUR.test(secondary)) {
             throw fail.invalidArgument(
-              'Brand colours must be six-digit hex values like #2563EB.',
+              'Brand colours must be six-digit hex values like #D9C554.',
               { field: 'brand' },
             );
           }

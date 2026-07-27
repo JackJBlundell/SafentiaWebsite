@@ -1,0 +1,187 @@
+/* RiskExplanation - the shared reasons body, the in-flow disclosure used on
+   detail surfaces, and the chip-as-disclosure used in lists. */
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.summary {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.summaryInline {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+}
+
+/* The counts read as a compact label/value strip; the numbers carry the meaning,
+   so no colour is used to distinguish the severities here. */
+.counts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+}
+
+.counts li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+}
+
+.countLabel {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.countValue {
+  font-size: 0.875rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.reasons {
+  margin: 0;
+  padding-inline-start: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.meta {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.caveat {
+  margin: 0;
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* --- In-flow disclosure -------------------------------------------------- */
+
+.disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-block-start: var(--space-md);
+  min-width: 0;
+}
+
+.disclosureButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  align-self: flex-start;
+  min-height: var(--min-touch-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand-ink);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.disclosureButton:hover {
+  text-decoration: underline;
+}
+
+.disclosureButton:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.caret,
+.caretOpen {
+  display: inline-block;
+  font-size: 0.6875rem;
+  line-height: 1;
+}
+
+.caretOpen {
+  transform: rotate(90deg);
+}
+
+.disclosureRegion {
+  padding-block-start: var(--space-sm);
+  border-block-start: 1px solid var(--color-border);
+}
+
+/* --- Chip as disclosure -------------------------------------------------- */
+
+.badgeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.badgeButton:hover {
+  border-color: currentColor;
+}
+
+.badgeButton:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+}
+
+/* The affordance that this chip explains itself. Decorative: the button's
+   aria-label carries the same promise for anyone not seeing it. */
+.badgeHint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.625rem;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+/* Fixed and portalled to <body>: PageGrid's columns scroll on their own above
+   1024px, and anything positioned inside them is clipped by that scroll box. */
+.popover {
+  position: fixed;
+  z-index: 60;
+  max-width: calc(100vw - var(--space-lg) * 2);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px var(--shadow-color);
+}

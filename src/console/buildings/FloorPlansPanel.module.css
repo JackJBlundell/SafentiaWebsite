@@ -64,7 +64,7 @@
 }
 
 .thumbnailButton:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
 }
 
@@ -85,7 +85,7 @@
 }
 
 .pdfTile:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
 }
 
@@ -176,7 +176,7 @@
 }
 
 .input:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
   border-color: transparent;
 }
@@ -258,7 +258,7 @@
 .progress {
   flex: 1;
   height: 8px;
-  accent-color: var(--brand-primary);
+  accent-color: var(--brand-ink);
 }
 
 .progressLabel {
@@ -266,6 +266,21 @@
   color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
   min-width: 3ch;
+}
+
+/* Off-screen but read by assistive tech: the polite reorder announcement and
+   the plan-name context inside each move button. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .inlineError {

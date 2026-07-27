@@ -26,7 +26,7 @@
 }
 
 .dropAreaActive {
-  border-color: var(--brand-primary);
+  border-color: var(--brand-ink);
   background: var(--color-surface-sunken);
 }
 
@@ -103,7 +103,7 @@
 }
 
 .contactRowSelected {
-  border-color: var(--brand-primary);
+  border-color: var(--brand-ink);
   background: var(--color-surface-alt);
 }
 
@@ -111,7 +111,7 @@
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  accent-color: var(--brand-primary);
+  accent-color: var(--brand-ink);
 }
 
 /* --- Finish ----------------------------------------------------------------- */

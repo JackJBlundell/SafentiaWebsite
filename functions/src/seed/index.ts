@@ -33,7 +33,7 @@ import * as admin from 'firebase-admin';
 // the URL on each record, so idempotency is preserved.
 const SEED_DOWNLOAD_TOKEN = randomUUID();
 
-import { forEnv } from '../shared/paths';
+import { forEnv, portalSpaceKey } from '../shared/paths';
 import type { Environment } from '../shared/types';
 
 import {
@@ -289,7 +289,9 @@ async function seed(): Promise<void> {
 
   // --- 1. Media: generate and upload all PNGs first, collecting their URLs ---
   // Org logo (brand-coloured tile so whitelabel theming is demonstrable). It is
-  // org-level brand media, so it lives directly under the org Storage root.
+  // org-level brand media, so it lives directly under the org Storage root. The
+  // colours are the demo TENANT's own pair from seed/data/org.ts, kept distinct
+  // from the platform default for the reason stated there.
   const logoUrl = await uploadPng(
     `${ENV}/orgs/${ORG_ID}/brand/logo.png`,
     solidTile(512, 512, '#2563EB', '#1E3A8A'),
@@ -498,10 +500,19 @@ async function seed(): Promise<void> {
     customerRoles: { admin: true },
     testMode: true,
   });
-  await setDb(p.db.customerUserIndex(PORTAL_UID), {
-    orgId: ORG_ID,
-    customerId: CUSTOMER.meridian,
-  });
+  // One entry per portal space (Helen holds a single one), keyed exactly as
+  // acceptInvitation writes it so the space picker reads seeded and invited
+  // accounts the same way.
+  await setDb(
+    p.db.customerUserIndexEntry(
+      PORTAL_UID,
+      portalSpaceKey(ORG_ID, CUSTOMER.meridian),
+    ),
+    {
+      orgId: ORG_ID,
+      customerId: CUSTOMER.meridian,
+    },
+  );
 
   // 10c. Invitations in every non-accepted state (pending staff, pending
   // portal, revoked, expired). The bearer token lives ONLY on the unreadable

@@ -40,6 +40,7 @@ import { Card, CardHeader } from '../ui/Card';
 import { ErrorNotice, PageHeader } from '../ui/Page';
 import { Stepper } from '../ui/Stepper';
 import { useCallable } from '../ui/useCallable';
+import { CustomerImageField, useCustomerImage } from './CustomerImageField';
 import { useUnsavedGuard } from './useUnsavedGuard';
 import { isValidEmail, toEntries, urls, useOrgScope } from './shared';
 import shared from './shared.module.css';
@@ -86,6 +87,10 @@ export function CustomerWizard() {
   const [orgAddress, setOrgAddress] = useState('');
   const [orgEmail, setOrgEmail] = useState('');
   const [orgPhone, setOrgPhone] = useState('');
+  // The organisation's optional logo/photo, picked in step 1 and uploaded at
+  // the commit (a new customer has no id yet, and the org asset prefix needs
+  // none). No current image on create, so the hook starts empty.
+  const image = useCustomerImage(null);
 
   // Step 2 - people.
   const [primaryName, setPrimaryName] = useState('');
@@ -205,6 +210,16 @@ export function CustomerWizard() {
 
     setSubmitting(true);
     try {
+      // Upload any chosen image first so its URL rides in the create payload;
+      // a failed upload aborts before the customer is written.
+      const imageChange = await image.resolve();
+      if (imageChange === 'error') {
+        setFieldError('Could not upload the image. Please try again.');
+        return;
+      }
+      if ('photoUrl' in imageChange && imageChange.photoUrl) {
+        customer.photoUrl = imageChange.photoUrl;
+      }
       const result = await manageCustomer.call({
         action: 'create',
         customer,
@@ -334,6 +349,11 @@ export function CustomerWizard() {
                 />
               </div>
             </div>
+            <CustomerImageField
+              image={image}
+              name={orgName.trim() || 'this customer'}
+              disabled={submitting}
+            />
           </div>
           {fieldError && <ErrorNotice message={fieldError} />}
           <ControlBar>

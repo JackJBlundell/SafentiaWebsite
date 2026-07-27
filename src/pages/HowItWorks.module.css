@@ -78,7 +78,7 @@
   height: var(--space-lg);
   flex: none;
   border-radius: var(--radius-pill);
-  border: 2px solid var(--brand-primary);
+  border: 2px solid var(--brand-ink);
   background: var(--brand-primary);
 }
 
@@ -107,7 +107,7 @@
   flex: none;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--brand-primary) 12%, var(--color-surface));
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   font-size: 0.6875rem;
   font-weight: 700;
 }

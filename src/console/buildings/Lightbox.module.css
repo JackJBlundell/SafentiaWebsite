@@ -50,13 +50,13 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   font-size: 0.875rem;
   text-decoration: underline;
 }
 
 .downloadLink:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
 }
 

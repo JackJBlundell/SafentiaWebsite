@@ -16,7 +16,7 @@
   height: var(--min-touch-target);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--brand-primary) 10%, var(--color-surface));
-  color: var(--brand-primary);
+  color: var(--brand-ink);
 }
 
 .title {

@@ -18,6 +18,14 @@
   text-align: center;
 }
 
+/* Wraps on a narrow viewport so neither control is pushed off the panel. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-md);
+}
+
 .heading {
   font-size: 1.25rem;
   font-weight: 650;

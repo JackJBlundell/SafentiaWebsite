@@ -57,7 +57,7 @@ export function SiteHeader() {
   return (
     <header className={styles.header}>
       <div className={styles.inner}>
-        <Wordmark to="/" />
+        <Wordmark to="/" priority />
 
         <nav className={styles.desktopNav} aria-label="Primary">
           <ul className={styles.navList}>

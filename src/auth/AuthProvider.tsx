@@ -40,7 +40,9 @@ import {
   getIdTokenResult,
   onIdTokenChanged,
   reauthenticateWithCredential,
+  reload,
   sendPasswordResetEmail,
+  signInWithCustomToken as fbSignInWithCustomToken,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as fbSignOut,
@@ -55,6 +57,7 @@ import type { EnvPaths } from '../paths';
 import { queryClient } from '../query/queryClient';
 import { authErrorMessage } from './errors';
 import { resolveClaims, type SessionClaims } from './claims';
+import { forgetSpaceChoice } from './spaceChoice';
 
 /** The mutually-exclusive states the console can be in. The router switches on
  *  this, so the set is exhaustive by design (no implicit "unknown" gap). */
@@ -67,17 +70,32 @@ export type AuthStatus =
 export interface AuthContextValue {
   status: AuthStatus;
   user: User | null;
+  /** Whether Firebase records this account's email address as verified. Held as
+   *  STATE rather than read off `user`, because `reload()` mutates the User
+   *  object in place: a component reading `user.emailVerified` would never
+   *  re-render when the flag changes under it. False whenever signed out. */
+  emailVerified: boolean;
   claims: SessionClaims | null;
   /** Env-bound path builders for the active session. Present iff authenticated. */
   paths: EnvPaths | null;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  /** Exchange a server-minted custom token for a session. Used by /invite: the
+   *  accept callable mints one for the account it just created, so a new member
+   *  lands inside the console without retyping the password they just chose. */
+  signInWithCustomToken: (token: string) => Promise<void>;
   sendReset: (email: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   updateDisplayName: (name: string) => Promise<void>;
   /** Force an ID-token refresh so a server-side claims change (e.g. switching the
    *  active organisation) takes effect immediately, re-scoping the session. */
   refreshSession: () => Promise<void>;
+  /** Re-read the account record from Firebase and republish `emailVerified`.
+   *  The client's copy is a snapshot taken at sign-in, so an operator setting
+   *  the flag server-side is invisible until this runs - without it a user
+   *  whose account was just repaired would stay locked out until they signed
+   *  out. Resolves with the freshly-read value. */
+  refreshEmailVerification: () => Promise<boolean>;
   signOut: () => Promise<void>;
 }
 
@@ -86,6 +104,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('initialising');
   const [user, setUser] = useState<User | null>(null);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [claims, setClaims] = useState<SessionClaims | null>(null);
 
   // Bootstrap Firebase (App Check) exactly once, before the token listener
@@ -108,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onIdTokenChanged(firebase.auth(), async (nextUser) => {
       if (!nextUser) {
         setUser(null);
+        setEmailVerified(false);
         setClaims(null);
         setStatus('signedOut');
         return;
@@ -126,6 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         const resolved = resolveClaims(result);
         setUser(nextUser);
+        setEmailVerified(nextUser.emailVerified);
         setClaims(resolved);
         setStatus(resolved ? 'authenticated' : 'noMembership');
       } catch (error) {
@@ -137,6 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         setUser(nextUser);
+        setEmailVerified(nextUser.emailVerified);
         setClaims(null);
         setStatus('noMembership');
       }
@@ -176,6 +198,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ) {
         return;
       }
+      throw new Error(authErrorMessage(error));
+    }
+  }, []);
+
+  const signInWithCustomToken = useCallback(async (token: string) => {
+    try {
+      await fbSignInWithCustomToken(firebase.auth(), token);
+      // As with the other sign-in methods, the token listener does the rest
+      // (claims, routing); nothing is set here that it would have to undo.
+    } catch (error) {
+      // A custom token is minted seconds before use, so a rejection here is
+      // effectively always transport or an expired mint. Map it like every
+      // other auth failure so no raw Firebase code reaches the screen.
       throw new Error(authErrorMessage(error));
     }
   }, []);
@@ -233,6 +268,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Drop the recorded space choice BEFORE the session ends, while we still
+    // know whose it was. sessionStorage outlives a sign-out within the same tab,
+    // so without this, signing out and back in on one tab skips the picker and
+    // drops the person straight into whichever space they last chose - which
+    // reads as the picker being unreliable, because it only ever appeared once.
+    // Signing in is exactly when someone expects to be asked where they are
+    // going, so the record must not survive the session that created it.
+    const current = firebase.auth().currentUser;
+    if (current) {
+      forgetSpaceChoice(current.uid);
+    }
     await fbSignOut(firebase.auth());
     // The query cache is NOT cleared here. At this moment the console is still
     // mounted with its RTDB listeners attached; a snapshot landing between a
@@ -260,19 +306,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     previousStatus.current = status;
   }, [status]);
 
-  // The same discipline for switching organisation: every cached entry was read
-  // under the OLD org's claims and paths, none of it is valid in the new
-  // workspace. The clear keys off the orgId TRANSITION so it runs in this
-  // ancestor's effect, after the console subtree's listener effects (children
-  // run first) have detached from the old org's paths. Clear, not invalidate:
-  // invalidation would refetch keys no screen should own any more.
-  const previousOrgId = useRef<string | null>(null);
+  // The same discipline for switching space: every cached entry was read under
+  // the OLD space's claims and paths, none of it is valid in the new one. The
+  // clear keys off the SPACE transition so it runs in this ancestor's effect,
+  // after the console subtree's listener effects (children run first) have
+  // detached from the old space's paths. Clear, not invalidate: invalidation
+  // would refetch keys no screen should own any more.
+  //
+  // The identity is the org AND the customer, not the org alone: moving between
+  // an organisation's staff console and one of its own customer portals keeps
+  // the same orgId while changing what the session is allowed to see, and a
+  // cache surviving that crossing would show staff-scoped data inside the
+  // customer's portal.
+  const previousSpace = useRef<string | null>(null);
   useEffect(() => {
-    const nextOrgId = claims?.orgId ?? null;
-    if (previousOrgId.current && nextOrgId && previousOrgId.current !== nextOrgId) {
+    const nextSpace = claims
+      ? `${claims.orgId}:${claims.customerId ?? ''}`
+      : null;
+    if (previousSpace.current && nextSpace && previousSpace.current !== nextSpace) {
       queryClient.clear();
     }
-    previousOrgId.current = nextOrgId;
+    previousSpace.current = nextSpace;
   }, [claims]);
 
   const paths = useMemo<EnvPaths | null>(
@@ -298,8 +352,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const resolved = resolveClaims(result);
     setUser(current);
+    setEmailVerified(current.emailVerified);
     setClaims(resolved);
     setStatus(resolved ? 'authenticated' : 'noMembership');
+  }, []);
+
+  const refreshEmailVerification = useCallback(async () => {
+    const current = firebase.auth().currentUser;
+    if (!current) {
+      return false;
+    }
+    await reload(current);
+    // Same ordering guard as the token listener: a sign-out completing while
+    // the reload was in flight must not republish the dead session's flag.
+    if (firebase.auth().currentUser !== current) {
+      return false;
+    }
+    setEmailVerified(current.emailVerified);
+    return current.emailVerified;
   }, []);
 
   // Claims-staleness watcher: writeClaims (functions/src/lib/claims.ts) stamps
@@ -348,27 +418,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       status,
       user,
+      emailVerified,
       claims,
       paths,
       signInWithEmail,
       signInWithGoogle,
+      signInWithCustomToken,
       sendReset,
       changePassword,
       updateDisplayName,
       refreshSession,
+      refreshEmailVerification,
       signOut,
     }),
     [
       status,
       user,
+      emailVerified,
       claims,
       paths,
       signInWithEmail,
       signInWithGoogle,
+      signInWithCustomToken,
       sendReset,
       changePassword,
       updateDisplayName,
       refreshSession,
+      refreshEmailVerification,
       signOut,
     ],
   );

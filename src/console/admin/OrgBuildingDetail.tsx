@@ -45,6 +45,7 @@ import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { SkeletonRows } from '../ui/Skeleton';
 import { formatDate, RagChip } from '../customers/shared';
 import { usePlatformEnv } from './platformEnv';
+import { useRecordPlatformAccess } from './useRecordPlatformAccess';
 import styles from './OrgBuildingDetail.module.css';
 
 interface AssessmentRow {
@@ -74,6 +75,10 @@ export function OrgBuildingDetail() {
   const paths = forEnv(env);
   const { theme } = useTheme();
   const enabled = Boolean(orgId && siteId && buildingId);
+
+  // Story 2069 AC2: record this building drill-down in the tenant's own trail,
+  // once per mount and best-effort, so a failed note never blocks the view.
+  useRecordPlatformAccess('building', orgId, buildingId);
 
   const orgProfileQuery = useRtdbQuery<OrgProfile | null>({
     key: ['platformOrgProfile', env, orgId],

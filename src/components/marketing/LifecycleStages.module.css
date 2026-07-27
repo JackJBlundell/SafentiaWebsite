@@ -29,8 +29,8 @@
   width: var(--space-xxxl);
   height: var(--space-xxxl);
   border-radius: var(--radius-pill);
-  border: 2px solid var(--brand-primary);
-  color: var(--brand-primary);
+  border: 2px solid var(--brand-ink);
+  color: var(--brand-ink);
   background: var(--color-surface);
   font-size: 0.8125rem;
   font-weight: 700;

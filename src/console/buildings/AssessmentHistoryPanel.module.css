@@ -88,7 +88,7 @@
 
 /* The download link keeps a 44px target through the row's min-height. */
 .downloadLink {
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   text-decoration: underline;
   font-size: 0.9375rem;
   font-weight: 600;

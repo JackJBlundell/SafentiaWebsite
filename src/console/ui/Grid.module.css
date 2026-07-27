@@ -32,10 +32,33 @@
     grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   }
 
+  /* Each column scrolls on its own rather than the page scrolling as one unit.
+     A long list on the left used to drag the organisation facts and actions out
+     of view even though the aside had room to show them, and a tall aside
+     stretched the page for everyone. Both columns are pinned below the shell
+     chrome and capped to the space left beneath it, so each owns its overflow.
+     The cap is only applied where the two-column layout exists: below this
+     breakpoint the columns stack and must scroll with the page as normal. */
+  .main,
   .aside {
     position: sticky;
     /* Below the shell's top chrome, with breathing room. */
     top: calc(var(--header-height) + var(--space-lg));
+    max-height: calc(100dvh - var(--header-height) - var(--space-lg) * 2);
+    overflow-y: auto;
+    /* Keep content clear of its own scrollbar. */
+    padding-inline-end: var(--space-xs);
+  }
+
+  /* The column is a flex column that scrolls, so its cards must keep their own
+     height and let the column overflow. Without this they inherit the default
+     flex-shrink of 1: once the stacked cards are taller than the capped column
+     they each squash below their content, and a `flush` card (overflow: hidden)
+     then clips to a stub - which is why the empty Reports card looked like a
+     tiny box with nothing in it. Scrolling, not shrinking, is the intent. */
+  .main > *,
+  .aside > * {
+    flex-shrink: 0;
   }
 }
 
@@ -80,12 +103,21 @@
 }
 
 /* --- Toolbar ------------------------------------------------------------------- */
+/* A dedicated, contained filter bar rather than a flat row of controls: the
+   surface, border and padding make "this is where you search and filter" read
+   as its own section, distinct from the table below it. One definition, so every
+   list page across the console gets the same treatment. It sits directly on the
+   page (never inside a Card), so the panel never nests. */
 .toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm) var(--space-md);
   margin-block-end: var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
 }
 
 .toolbarGroup {

@@ -27,10 +27,16 @@ export type ColorScheme = 'light' | 'dark';
 
 /** Resolved brand colours plus the readable text colour to use ON each fill. */
 export interface ThemeBrand {
-  /** Primary accent, contrast-corrected against the page background. */
+  /** Primary accent as a FILL: button faces, rules, tints, chart plates. Shipped
+   *  as the org set it, because a fill is what the brand actually looks like. */
   primary: string;
   /** Text/icon colour that reads on a `primary` fill (e.g. a primary button). */
   onPrimary: string;
+  /** The primary accent as READABLE INK on a page surface: links, active tab
+   *  labels, focus rings, meaningful borders. Corrected to AA, so a pale brand
+   *  becomes a darker shade of itself rather than an illegible one. Distinct
+   *  from `primary` because correcting the fill would repaint the brand. */
+  ink: string;
   /** Secondary accent, contrast-corrected against the page background. */
   secondary: string;
   onSecondary: string;
@@ -95,11 +101,13 @@ export function buildTheme(args: {
   const rawPrimary = brand?.primary ?? DEFAULT_BRAND.primary;
   const rawSecondary = brand?.secondary ?? DEFAULT_BRAND.secondary;
 
-  // Accents must read against the page background when used as text/icon tint
-  // (e.g. a link or an active tab label), so we correct them to AA there. The
-  // ON colour is chosen for readability when the accent is used as a FILL.
-  const primary = adjustToMeetAA(rawPrimary, neutral.background);
-  const secondary = adjustToMeetAA(rawSecondary, neutral.background);
+  // Correct against surfaceAlt, not background: brand ink also lands on cards and
+  // panels, and surfaceAlt is the tightest of the light surfaces (and, in dark
+  // mode, the lightest). Clearing AA there clears it everywhere in the scheme.
+  // The ON colour is chosen for readability when the accent is used as a FILL,
+  // and the fill itself is never adjusted - see ThemeBrand.
+  const ink = adjustToMeetAA(rawPrimary, neutral.surfaceAlt);
+  const secondary = adjustToMeetAA(rawSecondary, neutral.surfaceAlt);
 
   return {
     scheme,
@@ -107,8 +115,9 @@ export function buildTheme(args: {
     logoUrl,
     fontFamily: fontFamily ?? SYSTEM_FONT_FAMILY,
     brand: {
-      primary,
+      primary: rawPrimary,
       onPrimary: readableTextOn(rawPrimary, onFillLight, onFillDark),
+      ink,
       secondary,
       onSecondary: readableTextOn(rawSecondary, onFillLight, onFillDark),
     },

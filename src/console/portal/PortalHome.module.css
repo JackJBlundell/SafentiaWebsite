@@ -1,7 +1,31 @@
+/* PortalHome - triage first (counts, then the buildings behind them), the
+ * estate second. */
+
+.summary {
+  margin-top: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.partialNote {
+  margin: var(--space-sm) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+/* The band heading that separates triage from browsing. */
+.sectionHeading {
+  margin: var(--space-xl) 0 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
 .sites {
   display: grid;
   gap: var(--space-lg);
-  margin-top: var(--space-lg);
+  margin-top: var(--space-sm);
 }
 
 .cardHeaderPad {
@@ -18,17 +42,120 @@
   color: var(--color-text-muted);
 }
 
-.buildingList {
+/* --- Site summary band ------------------------------------------------------
+ * A distinct, faintly sunken panel between a site's header and its building
+ * rows, so the card reads as a considered summary rather than a flat list. It
+ * spans the flush card edge to edge; the header above it stays inset. */
+.siteSummary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface-sunken);
+  border-block: 1px solid var(--color-border);
+}
+
+/* The site's position in one line - the human read above the numbers. */
+.siteHeadline {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Proportional risk mix. Shown only for sites with more than one building, so a
+ * single-building site never gets a meaningless full-width block. The 2px gap
+ * shows the panel surface between adjacent fills (colour-vision-safe), and the
+ * counts always ride beside these fills in the legend. */
+.riskBar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.seg {
+  display: block;
+  min-width: 4px;
+}
+
+/* The fixed RAG safety tokens; awaiting is a neutral, deliberately not green. */
+.segHigh {
+  background: var(--rag-red);
+}
+
+.segMedium {
+  background: var(--rag-amber);
+}
+
+.segLow {
+  background: var(--rag-green);
+}
+
+.segAwait {
+  background: var(--color-border-strong);
+}
+
+.riskLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-lg);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.riskLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  flex: none;
+}
+
+/* Legend text wears text tokens, never the segment colour. */
+.riskLegendText {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The review roll-up line (overdue / due soon) under the breakdown. */
+.siteMeta {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+/* The review cell in a building row: its flag chip stacked over the date, kept
+ * as one unit so the row's status column wraps cleanly. */
+.reviewCell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.buildingList,
+.attentionList {
   list-style: none;
   margin: var(--space-sm) 0 0;
   padding: 0;
 }
 
-.buildingList li + li {
+.buildingList li + li,
+.attentionList li + li {
   border-top: 1px solid var(--color-border);
 }
 
-.buildingRow {
+.buildingRow,
+.attentionRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -39,7 +166,23 @@
   color: var(--color-text);
 }
 
-.buildingRow:hover {
+.buildingRow:hover,
+.attentionRow:hover {
+  background: var(--color-surface-alt);
+}
+
+/* The row is the target, so the ring goes round the whole row rather than the
+ * text inside it. Brand INK, never the raw accent fill. */
+.buildingRow:focus-visible,
+.attentionRow:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: -2px;
+}
+
+/* Attention rows sit on a faintly warmer plate than the plain estate rows, so
+ * the two lists never read as the same thing. The RAG chip and the written
+ * reason carry the meaning; this is texture only. */
+.attentionRow {
   background: var(--color-surface-alt);
 }
 
@@ -50,19 +193,25 @@
   min-width: 0;
 }
 
+/* Building and site names run long; they wrap inside the row rather than
+ * pushing the status column off the card. */
 .buildingName {
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .buildingAddress {
   font-size: 0.8125rem;
   color: var(--color-text-muted);
+  overflow-wrap: anywhere;
 }
 
 .buildingStatus {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
   flex-shrink: 0;
 }
 
@@ -72,14 +221,37 @@
   white-space: nowrap;
 }
 
+/* Why a building is on the attention list. A word, not a colour: it is read
+ * alongside the RAG chip, never instead of it. */
+.reasonChip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
 @media (max-width: 40rem) {
-  .buildingRow {
+  .buildingRow,
+  .attentionRow {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-xs);
+    padding-block: var(--space-md);
   }
 
   .buildingStatus {
-    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  /* Flag and date align to the row's left edge alongside everything else. */
+  .reviewCell {
+    align-items: flex-start;
   }
 }

@@ -48,7 +48,7 @@ import type {
 const PLAN_FIELDS = ['name', 'description', 'imageUrl', 'kind'] as const;
 const PLAN_KINDS = ['image', 'pdf'] as const;
 
-const ACTIONS = ['create', 'update', 'remove'] as const;
+const ACTIONS = ['create', 'update', 'remove', 'reorder'] as const;
 
 export const manageFloorPlan = onCall<ManageFloorPlanInput>(
   callableOptions,
@@ -135,9 +135,25 @@ export const manageFloorPlan = onCall<ManageFloorPlanInput>(
               field: !fields.name ? 'name' : 'imageUrl',
             });
           }
+          // Give the new plan a defined position at the END of the building's
+          // list (story 2021), derived from the existing plans rather than
+          // trusted from the client, so ordering is total the moment the record
+          // exists and a fresh upload never jumps an admin's arrangement. A
+          // batch upload creates plans one awaited call at a time, so each read
+          // here already sees the previous one and appends after it.
+          const existing = (
+            await db.ref(paths.db.floorPlans(orgId, buildingId)).get()
+          ).val() as Record<string, FloorPlan> | null;
+          const orders = existing
+            ? Object.values(existing)
+                .map((entry) => entry.order)
+                .filter((value): value is number => typeof value === 'number')
+            : [];
+          const nextOrder = orders.length > 0 ? Math.max(...orders) + 1 : 0;
           const plan: FloorPlan = {
             name: fields.name,
             imageUrl: fields.imageUrl,
+            order: nextOrder,
             ...(fields.description ? { description: fields.description } : {}),
             ...(fields.kind ? { kind: fields.kind } : {}),
           };
@@ -158,7 +174,89 @@ export const manageFloorPlan = onCall<ManageFloorPlanInput>(
           return { planId };
         }
 
-        // 3b. Update / remove both address an existing plan.
+        // 3b. Reorder: rewrite every plan's position in one atomic update. The
+        // client sends the FULL id list in the intended order; we accept it
+        // only if it is EXACTLY the building's current plan set. A reorder built
+        // against a stale list (a plan added or removed on another device
+        // meanwhile) must FAIL, never silently drop, duplicate or invent a
+        // record, so the check below proves the two sets are identical before
+        // any write.
+        if (action === 'reorder') {
+          const requested = input.order;
+          if (!Array.isArray(requested)) {
+            throw fail.invalidArgument(
+              'A reorder needs the full list of plan ids.',
+              { field: 'order' },
+            );
+          }
+          const orderedIds = requested.map((value, index) => {
+            if (typeof value !== 'string' || value.trim().length === 0) {
+              throw fail.invalidArgument(
+                'Each plan id in the order must be a non-empty string.',
+                { field: `order[${index}]` },
+              );
+            }
+            return value;
+          });
+
+          const existing = (
+            await db.ref(paths.db.floorPlans(orgId, buildingId)).get()
+          ).val() as Record<string, FloorPlan> | null;
+          const currentIds = existing ? Object.keys(existing) : [];
+          const currentSet = new Set(currentIds);
+
+          // Same length + every id belongs to the current set + no duplicates,
+          // together, prove the requested list is a permutation of exactly the
+          // current set: nothing dropped, nothing invented, nothing doubled.
+          if (orderedIds.length !== currentIds.length) {
+            throw fail.failedPrecondition(
+              'The floor plans changed since this order was made. Reload and try again.',
+              { field: 'order' },
+            );
+          }
+          const seen = new Set<string>();
+          for (const id of orderedIds) {
+            if (!currentSet.has(id)) {
+              throw fail.failedPrecondition(
+                'The floor plans changed since this order was made. Reload and try again.',
+                { field: 'order' },
+              );
+            }
+            if (seen.has(id)) {
+              throw fail.invalidArgument(
+                'A plan id appears more than once in the order.',
+                { field: 'order' },
+              );
+            }
+            seen.add(id);
+          }
+
+          const reorderUpdate: Record<string, unknown> = {};
+          orderedIds.forEach((id, index) => {
+            reorderUpdate[`${paths.db.floorPlan(orgId, buildingId, id)}/order`] =
+              index;
+          });
+          Object.assign(
+            reorderUpdate,
+            activityUpdate(paths, orgId, {
+              actorUid: uid,
+              action: 'floorPlan.reordered',
+              target: buildingId,
+            }),
+          );
+          await db.ref().update(reorderUpdate);
+
+          createLogger({ fn: 'manageFloorPlan', orgId }).info(
+            'Floor plans reordered',
+            { buildingId, count: orderedIds.length },
+          );
+          // The result carries a single planId by contract; a reorder has no one
+          // subject, so return the first in the new order (the building always
+          // has at least one plan to reorder).
+          return { planId: orderedIds[0] ?? buildingId };
+        }
+
+        // 3c. Update / remove both address an existing plan.
         const planId = requireString(input, 'planId', TEXT_LIMITS.shortText);
         const planPath = paths.db.floorPlan(orgId, buildingId, planId);
         const existingSnap = await db.ref(planPath).get();

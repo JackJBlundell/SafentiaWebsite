@@ -236,6 +236,11 @@ export interface ComplianceGlanceProps {
   /** Single-building mode: the one building's own RAG replaces the bar, and the
    *  tiles become that building's open / overdue / Life Protection counts. */
   single?: boolean;
+  /** Single mode only: one sentence stating WHY the building carries that
+   *  status, printed under the chip. A status with no stated reason is a
+   *  verdict with no working shown; the full account lives in the page's status
+   *  card, so this stays to a line. */
+  riskSummary?: string;
 }
 
 export function ComplianceGlance({
@@ -246,6 +251,7 @@ export function ComplianceGlance({
   riskHref,
   overdueHref,
   single = false,
+  riskSummary,
 }: ComplianceGlanceProps) {
   const { theme } = useTheme();
 
@@ -280,6 +286,9 @@ export function ComplianceGlance({
               <span aria-hidden="true">{rag.icon}</span>
               {rag.label}
             </span>
+          )}
+          {rag !== undefined && riskSummary !== undefined && (
+            <p className={styles.riskSummary}>{riskSummary}</p>
           )}
         </div>
         <div className={styles.tilesSingle}>

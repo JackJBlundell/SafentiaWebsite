@@ -53,14 +53,89 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   font-size: 0.875rem;
   text-decoration: underline;
 }
 
 .versionsLink:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
+}
+
+/* --- The expanded contents summary -------------------------------------------
+   Sections only, one line each. Denser than the version-history view on
+   purpose: this sits inside a directory row and has to stay scannable. */
+.contents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.contentsHint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.contentsEmpty {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.sectionList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.section {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-surface-alt);
+  font-size: 0.875rem;
+}
+
+.sectionCode {
+  flex: none;
+  min-width: 2.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.sectionTitle {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.sectionCount {
+  flex: none;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* Narrow rows stack the count under the title rather than squeezing three
+   columns into a phone-width card. */
+@media (max-width: 480px) {
+  .section {
+    flex-wrap: wrap;
+    gap: var(--space-xs) var(--space-sm);
+  }
+
+  .sectionTitle {
+    flex: 1 1 60%;
+  }
 }
 
 .panelTitle {
@@ -72,7 +147,29 @@
 .noMatches {
   margin: 0;
   padding: var(--space-lg);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
   color: var(--color-text-muted);
+}
+
+.clearSearch {
+  border: none;
+  background: none;
+  padding: 0 var(--space-sm);
+  min-height: var(--min-touch-target);
+  color: var(--brand-ink);
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.clearSearch:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 /* Post-publish confirmation, mirroring ErrorNotice's shape in the success

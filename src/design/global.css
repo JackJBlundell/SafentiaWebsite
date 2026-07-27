@@ -56,7 +56,7 @@ p {
 }
 
 a {
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
 }
@@ -100,7 +100,7 @@ ol {
 
 /* --- Focus: visible, always, and never removed ---------------------------- */
 :focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }

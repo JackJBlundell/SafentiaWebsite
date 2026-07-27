@@ -8,10 +8,17 @@
 // push - via the shared sendNotification helper (which also accounts the org's
 // monthly notification quota and targets the user's registered devices).
 //
-// "Today" is the UK calendar day, compared by formatting both the run time and
-// each job's scheduledFor in Europe/London - correct across the BST/GMT switch
-// without any offset arithmetic. The job pulls one /{env}/jobs read per env, then
-// groups in memory, so it is a handful of reads regardless of org count.
+// "Today" is the UK calendar day (lib/ukCalendar), compared by formatting both
+// the run time and each job's scheduledFor in Europe/London - correct across the
+// BST/GMT switch without any offset arithmetic. The job pulls one /{env}/jobs read
+// per env, then groups in memory, so it is a handful of reads regardless of org
+// count.
+//
+// This digest can only ever describe the diary AS IT STOOD AT 07:00. A job booked
+// (or moved) into today AFTER the run is announced by its own createJob /
+// rescheduleJob notification, whose copy names the day - see lib/ukCalendar's
+// ukWhenPhrase. That is the pair: one morning overview, plus a live nudge for
+// anything that lands later in the day.
 // ============================================================================
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -20,20 +27,10 @@ import { REGION } from '../lib/region';
 import { createLogger } from '../lib/logging';
 import { forEnv } from '../shared/paths';
 import { sendNotification } from '../lib/notifications';
+import { ukDay } from '../lib/ukCalendar';
 import type { Environment, Job } from '../shared/types';
 
 const ENVIRONMENTS: Environment[] = ['live', 'test'];
-
-/** The UK calendar day for an epoch-millis value, as a stable YYYY-MM-DD string.
- *  Formatting in Europe/London is correct across the BST/GMT boundary. */
-function ukDay(millis: number): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/London',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(millis));
-}
 
 /** A job needs the assessor ON SITE today only while it is scheduled or in
  *  progress. Once it is awaiting validation/release (assessor's work done),

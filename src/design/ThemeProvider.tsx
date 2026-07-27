@@ -187,6 +187,7 @@ export function ThemeProvider({
     const root = document.documentElement;
     root.style.setProperty('--brand-primary', theme.brand.primary);
     root.style.setProperty('--brand-on-primary', theme.brand.onPrimary);
+    root.style.setProperty('--brand-ink', theme.brand.ink);
     root.style.setProperty('--brand-secondary', theme.brand.secondary);
     root.style.setProperty('--brand-on-secondary', theme.brand.onSecondary);
     root.style.setProperty('--font-family', theme.fontFamily);

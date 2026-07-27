@@ -38,7 +38,7 @@
 
 .field:focus-within {
   background: var(--color-surface);
-  border-color: var(--brand-primary);
+  border-color: var(--brand-ink);
 }
 
 .icon {

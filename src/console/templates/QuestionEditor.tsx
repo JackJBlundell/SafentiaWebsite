@@ -11,13 +11,18 @@
 import { useId, useState } from 'react';
 import { Button } from '../../components/Button';
 import type {
+  QuestionMatrix,
   QuestionType,
   StandardParagraph,
   TemplateQuestion,
 } from '../../types';
 import { QUESTION_TYPES } from '../../types';
 import {
+  defaultMatrix,
+  hasMatrix,
   hasOptions,
+  matrixIssues,
+  MATRIX_LIMITS,
   QUESTION_TYPE_LABELS,
   questionAnchor,
 } from './builderModel';
@@ -161,6 +166,330 @@ function ParagraphPicker({
 }
 
 // ----------------------------------------------------------------------------
+// MatrixEditor - the grid behind a `matrix` question (the BS 9792 / PAS 79
+// simple risk level estimator, generalised). The assessor later answers by
+// tapping ONE cell, which fixes row, column and outcome together, so what is
+// authored here is the whole answer space.
+//
+// Every mutation rebuilds rows, columns and cells in one go: adding a column
+// appends a cell to EVERY row, removing one drops that index from every row.
+// A ragged grid is therefore unrepresentable through this UI rather than merely
+// caught at save time. Renaming an option carries its definition across with it,
+// because definitions are keyed by the label the author is editing.
+// ----------------------------------------------------------------------------
+
+/** Rebuild the definitions map when an option is renamed, so the author does
+ *  not silently lose the wording attached to it. */
+function moveDefinition(
+  definitions: Record<string, string> | undefined,
+  from: string,
+  to: string,
+): Record<string, string> | undefined {
+  const text = definitions?.[from];
+  if (!definitions || text === undefined || from === to) {
+    return definitions;
+  }
+  const next: Record<string, string> = {};
+  for (const [key, value] of Object.entries(definitions)) {
+    if (key !== from) {
+      next[key] = value;
+    }
+  }
+  if (to.trim()) {
+    next[to] = text;
+  }
+  return next;
+}
+
+function MatrixEditor({
+  idBase,
+  matrix,
+  onChange,
+}: {
+  idBase: string;
+  matrix: QuestionMatrix;
+  onChange: (next: QuestionMatrix) => void;
+}) {
+  const { rowLabel, columnLabel, rows, columns, cells } = matrix;
+  const issues = matrixIssues(matrix);
+
+  const renameOption = (axis: 'rows' | 'columns', index: number, value: string) => {
+    const current = axis === 'rows' ? rows : columns;
+    const previous = current[index];
+    const nextAxis = current.map((label, i) => (i === index ? value : label));
+    const definitions = moveDefinition(matrix.definitions, previous, value);
+    onChange({
+      ...matrix,
+      [axis]: nextAxis,
+      ...(definitions ? { definitions } : {}),
+    });
+  };
+
+  const addRow = () =>
+    onChange({
+      ...matrix,
+      rows: [...rows, ''],
+      cells: [...cells, columns.map(() => '')],
+    });
+
+  const removeRow = (index: number) =>
+    onChange({
+      ...matrix,
+      rows: rows.filter((_, i) => i !== index),
+      cells: cells.filter((_, i) => i !== index),
+    });
+
+  const addColumn = () =>
+    onChange({
+      ...matrix,
+      columns: [...columns, ''],
+      cells: cells.map((row) => [...row, '']),
+    });
+
+  const removeColumn = (index: number) =>
+    onChange({
+      ...matrix,
+      columns: columns.filter((_, i) => i !== index),
+      cells: cells.map((row) => row.filter((_, i) => i !== index)),
+    });
+
+  const setCell = (rowIndex: number, columnIndex: number, value: string) =>
+    onChange({
+      ...matrix,
+      cells: cells.map((row, r) =>
+        r === rowIndex
+          ? row.map((cell, c) => (c === columnIndex ? value : cell))
+          : row,
+      ),
+    });
+
+  const setDefinition = (label: string, text: string) => {
+    const next: Record<string, string> = { ...(matrix.definitions ?? {}) };
+    if (text.trim()) {
+      next[label] = text;
+    } else {
+      delete next[label];
+    }
+    onChange({ ...matrix, definitions: next });
+  };
+
+  // One definition slot per distinct option across both axes; a label used on
+  // both axes is defined once, which is what the printed estimator does too.
+  const definableLabels = [...new Set([...rows, ...columns])].filter((label) =>
+    label.trim(),
+  );
+
+  const atRowCeiling = rows.length >= MATRIX_LIMITS.maxAxis;
+  const atColumnCeiling = columns.length >= MATRIX_LIMITS.maxAxis;
+
+  return (
+    <div className={styles.matrixGroup}>
+      <h4 className={styles.groupTitle}>Grid</h4>
+      <p className={styles.hint}>
+        The assessor answers by choosing one cell, which records the row, the
+        column and that cell&rsquo;s outcome together.
+      </p>
+
+      <div className={styles.fieldRow}>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor={`${idBase}-matrix-row-label`}>
+            What the rows measure
+          </label>
+          <input
+            id={`${idBase}-matrix-row-label`}
+            className={styles.input}
+            type="text"
+            autoComplete="off"
+            value={rowLabel}
+            onChange={(event) =>
+              onChange({ ...matrix, rowLabel: event.target.value })
+            }
+          />
+        </div>
+        <div className={styles.field}>
+          <label
+            className={styles.label}
+            htmlFor={`${idBase}-matrix-column-label`}
+          >
+            What the columns measure
+          </label>
+          <input
+            id={`${idBase}-matrix-column-label`}
+            className={styles.input}
+            type="text"
+            autoComplete="off"
+            value={columnLabel}
+            onChange={(event) =>
+              onChange({ ...matrix, columnLabel: event.target.value })
+            }
+          />
+        </div>
+      </div>
+
+      <div className={styles.matrixScroll}>
+        <table className={styles.matrixTable}>
+          <caption className="sr-only">
+            Grid outcomes, by row and column
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col" className={styles.matrixCorner}>
+                {rowLabel.trim() || 'Rows'} &times;{' '}
+                {columnLabel.trim() || 'Columns'}
+              </th>
+              {columns.map((column, columnIndex) => (
+                // Index keys are safe here: options are plain strings edited in
+                // place, and a column is only ever added or removed at an index.
+                <th scope="col" key={columnIndex} className={styles.matrixHead}>
+                  <label
+                    className="sr-only"
+                    htmlFor={`${idBase}-matrix-column-${columnIndex}`}
+                  >
+                    Column {columnIndex + 1} label
+                  </label>
+                  <input
+                    id={`${idBase}-matrix-column-${columnIndex}`}
+                    className={styles.input}
+                    type="text"
+                    autoComplete="off"
+                    value={column}
+                    onChange={(event) =>
+                      renameOption('columns', columnIndex, event.target.value)
+                    }
+                  />
+                  <Button
+                    variant="ghost"
+                    disabled={columns.length <= MATRIX_LIMITS.minAxis}
+                    aria-label={`Remove column ${columnIndex + 1}`}
+                    onClick={() => removeColumn(columnIndex)}
+                  >
+                    Remove
+                  </Button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                <th scope="row" className={styles.matrixHead}>
+                  <label
+                    className="sr-only"
+                    htmlFor={`${idBase}-matrix-row-${rowIndex}`}
+                  >
+                    Row {rowIndex + 1} label
+                  </label>
+                  <input
+                    id={`${idBase}-matrix-row-${rowIndex}`}
+                    className={styles.input}
+                    type="text"
+                    autoComplete="off"
+                    value={row}
+                    onChange={(event) =>
+                      renameOption('rows', rowIndex, event.target.value)
+                    }
+                  />
+                  <Button
+                    variant="ghost"
+                    disabled={rows.length <= MATRIX_LIMITS.minAxis}
+                    aria-label={`Remove row ${rowIndex + 1}`}
+                    onClick={() => removeRow(rowIndex)}
+                  >
+                    Remove
+                  </Button>
+                </th>
+                {columns.map((column, columnIndex) => (
+                  <td key={columnIndex} className={styles.matrixCell}>
+                    <label
+                      className="sr-only"
+                      htmlFor={`${idBase}-matrix-cell-${rowIndex}-${columnIndex}`}
+                    >
+                      Outcome for {row.trim() || `row ${rowIndex + 1}`} and{' '}
+                      {column.trim() || `column ${columnIndex + 1}`}
+                    </label>
+                    <input
+                      id={`${idBase}-matrix-cell-${rowIndex}-${columnIndex}`}
+                      className={styles.input}
+                      type="text"
+                      autoComplete="off"
+                      value={cells[rowIndex]?.[columnIndex] ?? ''}
+                      onChange={(event) =>
+                        setCell(rowIndex, columnIndex, event.target.value)
+                      }
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className={styles.matrixActions}>
+        <Button variant="secondary" disabled={atRowCeiling} onClick={addRow}>
+          Add row
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={atColumnCeiling}
+          onClick={addColumn}
+        >
+          Add column
+        </Button>
+        {(atRowCeiling || atColumnCeiling) && (
+          <span className={styles.hint}>
+            A grid may have at most {MATRIX_LIMITS.maxAxis} rows and{' '}
+            {MATRIX_LIMITS.maxAxis} columns.
+          </span>
+        )}
+      </div>
+
+      {definableLabels.length > 0 && (
+        <div className={styles.field}>
+          <span className={styles.label}>Definitions (optional)</span>
+          <p className={styles.hint}>
+            Shown to the assessor alongside the grid, and kept with the
+            assessment record. BS 9792 defines each likelihood and each harm
+            level this way.
+          </p>
+          <ul className={styles.optionList}>
+            {definableLabels.map((label) => (
+              <li key={label} className={styles.definitionRow}>
+                <label
+                  className={styles.label}
+                  htmlFor={`${idBase}-matrix-definition-${label}`}
+                >
+                  {label}
+                </label>
+                <textarea
+                  id={`${idBase}-matrix-definition-${label}`}
+                  className={styles.textarea}
+                  value={matrix.definitions?.[label] ?? ''}
+                  onChange={(event) => setDefinition(label, event.target.value)}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {issues.length > 0 && (
+        <ul className={styles.matrixIssues} role="alert">
+          {issues.map((issue) => (
+            <li key={issue}>
+              {/* Sentence-cased for a standalone list; the publish checklist
+                  prefixes the same wording with the question's position. */}
+              {issue.charAt(0).toUpperCase()}
+              {issue.slice(1)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
 // The question row.
 // ----------------------------------------------------------------------------
 
@@ -203,6 +532,11 @@ export function QuestionEditor({
     const next: TemplateQuestion = { ...question, type };
     if (hasOptions(type) && !next.options) {
       next.options = [];
+    }
+    // A matrix question is meaningless without a grid, so it opens on the
+    // smallest legal one rather than on nothing to fill in.
+    if (hasMatrix(type) && !next.matrix) {
+      next.matrix = defaultMatrix();
     }
     onChange(next);
   };
@@ -327,6 +661,14 @@ export function QuestionEditor({
                 </Button>
               </div>
             </div>
+          )}
+
+          {hasMatrix(question.type) && (
+            <MatrixEditor
+              idBase={idBase}
+              matrix={question.matrix ?? defaultMatrix()}
+              onChange={(matrix) => patch({ matrix })}
+            />
           )}
 
           <div className={styles.toggleRow}>

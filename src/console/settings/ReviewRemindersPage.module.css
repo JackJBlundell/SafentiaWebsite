@@ -1,0 +1,87 @@
+/* ReviewRemindersPage - the reminder-schedule form inside the kit Card. Mirrors
+   the RagSettingsPage layout so the two settings surfaces read as one system. */
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-lg);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.input {
+  width: 100%;
+  max-width: 18rem;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.note {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  max-width: 60ch;
+}
+
+.success {
+  color: var(--status-success);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.chipList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken, var(--color-background));
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.chipOverdue {
+  color: var(--status-danger, var(--color-text));
+  border-color: var(--status-danger, var(--color-border));
+}

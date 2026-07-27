@@ -30,12 +30,23 @@ import type {
 } from '../shared/types';
 
 /** The complete category list, stated once so validation and the contract can
- *  never drift: exactly these four keys are legal, each a strict boolean. */
+ *  never drift: exactly these keys are legal, each a strict boolean.
+ *
+ *  This list is load-bearing beyond validation: step 4 REPLACES the whole
+ *  emailPreferences node with the keys named here, so a category read by a
+ *  sender but missing from this list is not merely unreachable from the account
+ *  page - it is wiped the next time the member saves any other preference. Every
+ *  key in EmailPreferences must therefore appear here and have a toggle in
+ *  AccountPage. */
 const PREFERENCE_KEYS = [
   'reviewDue',
   'actionAssigned',
   'awaitingValidation',
   'released',
+  // requestInfo's "more information needed" email to the assessor.
+  'infoRequested',
+  // The deadlineReminders sweep's information-request and action nudges.
+  'deadlineReminder',
 ] as const;
 
 export const updateMyPreferences = onCall<UpdateMyPreferencesInput>(

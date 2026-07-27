@@ -34,7 +34,7 @@
           ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
           ".write": false,
           "profile": {
-            ".read": "auth != null && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'"
+            ".read": "auth != null && ((auth.token.testMode === true) === ($env === 'test')) && (root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' || (auth.token.portalOrgId === $orgId && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived'))"
           }
         }
       },
@@ -76,7 +76,7 @@
             "status"
           ],
           "$customerId": {
-            ".read": "auth != null && auth.token.portalOrgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && auth.token.customerId === $customerId && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived'"
+            ".read": "auth != null && ((auth.token.testMode === true) === ($env === 'test')) && ((auth.token.portalOrgId === $orgId && auth.token.customerId === $customerId && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived') || root.child($env).child('customerUserIndex').child(auth.uid).child($orgId + '__' + $customerId).exists())"
           }
         }
       },

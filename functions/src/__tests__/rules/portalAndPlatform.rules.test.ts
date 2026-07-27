@@ -7,9 +7,10 @@
 //      orgId (written by onCustomerMembershipChange). The rules grant them
 //      exactly their own customer's slice: customer record, sites, buildings
 //      under an owned site, actions/reports/index entries via
-//      buildingCustomerIndex, and their customerContacts. Everything else -
-//      another customer in the same org, any staff node, cross-org, cross-env,
-//      and EVERY write - must be denied.
+//      buildingCustomerIndex, their customerContacts, and the assessing
+//      organisation's PROFILE node (the portal's whitelabel brand source).
+//      Everything else - another customer in the same org, any other staff
+//      node, cross-org, cross-env, and EVERY write - must be denied.
 //   2. PLATFORM operators - token {superAdmin: true} reads any org node across
 //      the whole $env cascade (both live and test), and the /platform tree is
 //      readable only when /platform/superAdmins/<uid> === true in the DB. No
@@ -116,6 +117,14 @@ async function seedFixtures(): Promise<void> {
     'test/customers/orgA/c1': { name: 'Test Customer One', status: 'active' },
     'test/sites/orgA/c1/s1': { name: 'Test Site One' },
 
+    // Org PROFILE (whitelabel brand) and a SIBLING node under the same
+    // organisation, so the portal profile grant can be proved to be exactly
+    // that node and not the organisation subtree.
+    'live/organisations/orgA/profile': { name: 'Org A Fire Safety', logoUrl: 'https://example.test/a.png', brand: { primary: '#123456', secondary: '#654321' } },
+    'live/organisations/orgA/settings': { ragConfig: { overdueDays: 30 } },
+    'live/organisations/orgB/profile': { name: 'Org B Fire Safety', brand: { primary: '#000000', secondary: '#ffffff' } },
+    'test/organisations/orgA/profile': { name: 'Org A Fire Safety (test)', brand: { primary: '#123456', secondary: '#654321' } },
+
     // Platform operator list (the DB half of the superAdmin predicate).
     'platform/superAdmins/superU': true,
     'platform/leads/lead1': { name: 'Lead', organisation: 'X', email: 'x@x', receivedAt: 1 },
@@ -175,6 +184,56 @@ describe('Portal access - own-customer grants (allow)', () => {
   test('a portal user reads their own buildingCustomerIndex entry', async () => {
     const db = await dbFor(portalC1);
     await assertSucceeds(db.ref('live/buildingCustomerIndex/orgA/b1').once('value'));
+  });
+
+  // The assessing organisation's PROFILE is the portal's whitelabel brand
+  // source (logo, colours, font, trading name). It is the one staff node a
+  // portal token may read, and only for the org that issued the token.
+  test('a portal user reads the assessing organisation profile', async () => {
+    const db = await dbFor(portalC1);
+    await assertSucceeds(db.ref('live/organisations/orgA/profile').once('value'));
+  });
+});
+
+describe('Portal access - the organisation profile grant is exactly that node', () => {
+  test('cannot read the organisation node the profile hangs off', async () => {
+    const db = await dbFor(portalC1);
+    await assertFails(db.ref('live/organisations/orgA').once('value'));
+  });
+
+  test('cannot read a sibling of profile under the same organisation', async () => {
+    const db = await dbFor(portalC1);
+    await assertFails(db.ref('live/organisations/orgA/settings').once('value'));
+  });
+
+  test('cannot read another organisation profile', async () => {
+    const db = await dbFor(portalC1);
+    await assertFails(db.ref('live/organisations/orgB/profile').once('value'));
+  });
+
+  test('cannot read the profile of the org it was NOT issued for', async () => {
+    const db = await dbFor(portalWrongOrg);
+    await assertFails(db.ref('live/organisations/orgA/profile').once('value'));
+  });
+
+  test('a live portal token cannot read the test-environment profile', async () => {
+    const db = await dbFor(portalC1);
+    await assertFails(db.ref('test/organisations/orgA/profile').once('value'));
+  });
+
+  test('an archived customer portal user cannot read the profile', async () => {
+    const db = await dbFor(portalC3);
+    await assertFails(db.ref('live/organisations/orgA/profile').once('value'));
+  });
+
+  test('a signed-out caller cannot read the profile', async () => {
+    const db = await dbFor(null);
+    await assertFails(db.ref('live/organisations/orgA/profile').once('value'));
+  });
+
+  test('cannot write the profile', async () => {
+    const db = await dbFor(portalC1);
+    await assertFails(db.ref('live/organisations/orgA/profile/name').set('Renamed'));
   });
 });
 

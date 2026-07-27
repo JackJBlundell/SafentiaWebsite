@@ -17,6 +17,13 @@
 // Idempotent by design: a second accept returns the FIRST acceptance untouched.
 // The signed name is an attestation, so the earliest one is the record; a repeat
 // submission (a double-click, a re-opened email link) must never overwrite it.
+// That is enforced by a TRANSACTION on the acceptance node, not by a read
+// followed by a write: two concurrent accepts (a double-click across two warm
+// instances, two contacts of the same customer signing at once) both read "no
+// acceptance yet", and a plain write would let the loser overwrite the record of
+// who actually signed. The transaction aborts for the loser, who is handed the
+// winner's acceptance. Only the winner appends the /activity entry, so the trail
+// carries exactly one accepted event per report.
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -30,7 +37,12 @@ import {
   getPortalClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
+import {
+  assertObject,
+  requireDbKey,
+  requireString,
+  TEXT_LIMITS,
+} from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import type {
@@ -63,8 +75,11 @@ export const acceptReport = onCall<AcceptReportInput>(callableOptions, (request)
       // 2. Validate the input. The name is the only client-supplied value that
       // reaches storage.
       const input = assertObject(request.data);
-      const buildingId = requireString(input, 'buildingId', TEXT_LIMITS.shortText);
-      const reportId = requireString(input, 'reportId', TEXT_LIMITS.shortText);
+      // The two ids are interpolated into database paths, so they are validated
+      // as keys: a value carrying `/` would address a node one level deeper than
+      // intended and let the acceptance write land on a sibling field.
+      const buildingId = requireDbKey(input, 'buildingId', TEXT_LIMITS.shortText);
+      const reportId = requireDbKey(input, 'reportId', TEXT_LIMITS.shortText);
       const name = requireString(input, 'name', TEXT_LIMITS.shortText).trim();
       if (name.length < MIN_NAME_LENGTH || !HAS_LETTER.test(name)) {
         throw fail.invalidArgument(
@@ -97,29 +112,40 @@ export const acceptReport = onCall<AcceptReportInput>(callableOptions, (request)
         });
       }
 
-      // 5. Already accepted: return the FIRST acceptance rather than writing a
-      // second one (file header). The caller sees success either way, so a
-      // retried submission is indistinguishable from the original for the user.
-      if (report.acceptance) {
-        return { acceptedAt: report.acceptance.at };
-      }
-
-      // 6. Write the acceptance and its audit entry in ONE atomic update: the
-      // trail can never show an accepted report without the entry recording who
-      // accepted it, or the reverse.
+      // 5. Claim the acceptance transactionally. The callback runs against the
+      // node's CURRENT value on the server, so exactly one concurrent caller can
+      // find it empty: returning `undefined` aborts for everyone else, leaving
+      // the first attestation standing (file header). The caller sees success
+      // either way, so a retried submission is indistinguishable from the
+      // original for the user.
       const acceptance: ReportAcceptance = {
         name,
         byUid: uid,
         at: Date.now(),
       };
-      await db.ref().update({
-        [`${reportPath}/acceptance`]: acceptance,
-        ...activityUpdate(paths, orgId, {
+      const outcome = await db
+        .ref(`${reportPath}/acceptance`)
+        .transaction((current: ReportAcceptance | null) =>
+          current === null ? acceptance : undefined,
+        );
+
+      // 6. Only the winner appends the audit entry, so the trail carries one
+      // accepted event per report rather than one per submission. The entry
+      // follows the acceptance rather than sharing its write: the transaction is
+      // what makes the record single-writer, and a multi-location update cannot
+      // take part in one.
+      const stored = outcome.snapshot.val() as ReportAcceptance | null;
+      if (!outcome.committed) {
+        return { acceptedAt: stored ? stored.at : acceptance.at };
+      }
+
+      await db.ref().update(
+        activityUpdate(paths, orgId, {
           actorUid: uid,
           action: 'report.accepted',
           target: reportId,
         }),
-      });
+      );
 
       createLogger({ fn: 'acceptReport', orgId }).info('Report accepted', {
         buildingId,

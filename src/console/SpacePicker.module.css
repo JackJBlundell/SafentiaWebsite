@@ -1,0 +1,344 @@
+/* ==========================================================================
+ * SpacePicker - a calm, centred choice screen in the same key as HoldingScreen:
+ * the person is not in an error state, they are being asked one question. Each
+ * half is a card, each space is a tile with its own mark, so the screen reads as
+ * picking a workspace rather than working down a list.
+ *
+ * The gold appears only as a FILL - the mark behind a row's initials, the rule
+ * on a group card, the "Currently open" pill - always under --brand-on-primary
+ * type (12.15:1). It is never a `color` and never an `outline`; anything that
+ * needs the brand in a stroke or a word uses --brand-ink, which is AA-corrected
+ * (tokens.css).
+ * ========================================================================== */
+
+.root {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-xxl) var(--space-lg) var(--space-huge);
+  background: var(--color-background);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xxl);
+  /* Wide enough for two customer names side by side in the meta line, narrow
+   * enough to stay a dialogue rather than a dashboard. */
+  width: min(38rem, 100%);
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  text-align: center;
+}
+
+.heading {
+  margin-block-start: var(--space-sm);
+  font-size: clamp(1.375rem, 1.15rem + 0.9vw, 1.75rem);
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.copy {
+  max-width: 44ch;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+/* --- A half, as a card ---------------------------------------------------- */
+
+.group {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+/* A filled brand edge along the top of each card. Decoration only: the card is
+ * identified by its heading, and both halves carry the same edge, so nothing is
+ * being said in colour here. */
+.group::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: 3px;
+  background: var(--brand-primary);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+}
+
+.groupIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--space-xxxl);
+  height: var(--space-xxxl);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--brand-primary) 16%, var(--color-surface));
+  color: var(--brand-ink);
+}
+
+.groupText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.groupHeading {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.groupHint {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* --- A space, as a tile --------------------------------------------------- */
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  text-align: left;
+  transition:
+    border-color var(--motion-fast) var(--easing),
+    background-color var(--motion-fast) var(--easing);
+}
+
+/* The affordance: the row lifts to the raised surface and takes the brand ink in
+ * its border, and the chevron steps toward the direction it will travel. */
+.option:hover:not(:disabled),
+.option:focus-visible {
+  border-color: var(--brand-ink);
+  background: var(--color-surface);
+}
+
+.option:hover:not(:disabled) .chevron {
+  color: var(--color-text);
+  transform: translateX(2px);
+}
+
+.option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* The active space is marked by a heavier border AND the words "Currently open"
+ * in its own pill, never by the border alone. */
+.option[aria-current='true'] {
+  border-color: var(--color-border-strong);
+  border-width: 2px;
+  /* Compensate for the extra border so the row does not shift by a pixel. */
+  padding: calc(var(--space-md) - 1px) calc(var(--space-lg) - 1px);
+}
+
+/* The row's identity: initials on a filled brand mark, with near-black type on
+ * the gold. Staff marks are rounded squares and portal marks are discs, so the
+ * two halves stay distinguishable without colour doing the work. */
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  overflow: hidden;
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* A logo fills its mark on a plain surface: an org logo is drawn for any ground,
+   so a white cell keeps it legible where a brand-colour fill might not, and
+   `contain` never crops the artwork. */
+.mark:has(.markLogo) {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.markLogo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Both marks are the same rounded square: the staff/portal distinction is
+   carried by the group heading and each row's wording ("Staff console" /
+   "Customer account"), so the shape does not also need to differ, and a mix of
+   squares and discs down one list read as inconsistent rather than meaningful. */
+.markStaff,
+.markPortal {
+  border-radius: var(--radius-md);
+}
+
+.markIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.optionText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Without this a long name refuses to shrink and pushes the row wider than
+   * the panel; the ellipsis below only works once the flex item may shrink. */
+  min-width: 0;
+  flex: 1;
+}
+
+.optionName {
+  font-size: 0.9375rem;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionMeta {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The fallback line for a space whose display name never resolved. Monospaced
+ * and labelled, so a record key looks like a deliberate reference rather than a
+ * company name that failed to load. */
+.reference {
+  margin-block-start: var(--space-xs);
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionAside {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: none;
+}
+
+/* Filled brand pill, near-black label. */
+.currentPill {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.optionState {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-muted);
+  transition:
+    color var(--motion-fast) var(--easing),
+    transform var(--motion-fast) var(--easing);
+}
+
+/* On the narrowest phones the pill and the name compete for the same line, so
+ * both give back the space they can spare rather than forcing the row to wrap. */
+@media (max-width: 420px) {
+  .currentPill {
+    letter-spacing: 0.02em;
+  }
+
+  .option {
+    padding-inline: var(--space-md);
+  }
+}
+
+.error {
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--status-error);
+  border-radius: var(--radius-md);
+  background: var(--status-error-surface);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.account {
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+.account strong {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}

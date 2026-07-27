@@ -57,6 +57,7 @@ import type {
   Keyed,
   PublishTemplateInput,
   PublishTemplateResult,
+  QuestionMatrix,
   QuestionType,
   ReportStandard,
   StandardParagraph,
@@ -153,6 +154,168 @@ function optionalDraftBoolean(
   return value;
 }
 
+// ----------------------------------------------------------------------------
+// Matrix grids. A `matrix` question is answered by choosing ONE cell, so the
+// grid IS the answer space: it must be rectangular and complete before an
+// assessor ever sees it, or a legitimate tap would record an empty outcome.
+// These ceilings MIRROR the builder's (src/console/templates/builderModel.ts,
+// MATRIX_LIMITS); change both together.
+// ----------------------------------------------------------------------------
+
+const MATRIX_LIMITS = {
+  /** A single-option axis is not a grid, it is a list. */
+  minAxis: 2,
+  maxAxis: 12,
+  /** Total cells, so a template cannot carry an enormous grid. */
+  maxCells: 100,
+} as const;
+
+/** One axis of a grid: bounded, fully labelled, and free of duplicates -
+ *  answers store the LABEL, so two options sharing one would be ambiguous in
+ *  the record and unresolvable in the report. */
+function validateMatrixAxis(
+  value: unknown,
+  noun: 'row' | 'column',
+  where: Where,
+): string[] {
+  const plural = `${noun}s`;
+  if (!Array.isArray(value) || value.length < MATRIX_LIMITS.minAxis) {
+    throw fail.invalidArgument(
+      `A matrix question needs at least ${MATRIX_LIMITS.minAxis} ${plural}.`,
+      { ...where, field: `matrix.${plural}` },
+    );
+  }
+  if (value.length > MATRIX_LIMITS.maxAxis) {
+    throw fail.invalidArgument(
+      `A matrix question may have at most ${MATRIX_LIMITS.maxAxis} ${plural}.`,
+      { ...where, field: `matrix.${plural}`, max: MATRIX_LIMITS.maxAxis },
+    );
+  }
+  const labels = value.map((label, index) =>
+    draftString(
+      label,
+      `matrix ${noun} ${index + 1}`,
+      TEXT_LIMITS.shortText,
+      where,
+    ),
+  );
+  const seen = new Set<string>();
+  for (const label of labels) {
+    const key = label.toLowerCase();
+    if (seen.has(key)) {
+      throw fail.invalidArgument(
+        `Two matrix ${plural} share the label "${label}".`,
+        { ...where, field: `matrix.${plural}` },
+      );
+    }
+    seen.add(key);
+  }
+  return labels;
+}
+
+/** Validate a draft grid and rebuild it from the validated fields only. */
+function validateMatrix(raw: unknown, where: Where): QuestionMatrix {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw fail.invalidArgument('A matrix question is missing its grid.', {
+      ...where,
+      field: 'matrix',
+    });
+  }
+  const m = raw as Record<string, unknown>;
+  const rowLabel = draftString(
+    m.rowLabel,
+    'matrix row heading',
+    TEXT_LIMITS.shortText,
+    where,
+  );
+  const columnLabel = draftString(
+    m.columnLabel,
+    'matrix column heading',
+    TEXT_LIMITS.shortText,
+    where,
+  );
+  const rows = validateMatrixAxis(m.rows, 'row', where);
+  const columns = validateMatrixAxis(m.columns, 'column', where);
+
+  if (rows.length * columns.length > MATRIX_LIMITS.maxCells) {
+    throw fail.invalidArgument(
+      `A matrix question may have at most ${MATRIX_LIMITS.maxCells} cells.`,
+      { ...where, field: 'matrix.cells', max: MATRIX_LIMITS.maxCells },
+    );
+  }
+
+  // Rectangular and complete: exactly one row of cells per row option, each
+  // exactly as long as the column axis, every entry a real outcome.
+  if (!Array.isArray(m.cells) || m.cells.length !== rows.length) {
+    throw fail.invalidArgument(
+      `The matrix has ${rows.length} rows but ${
+        Array.isArray(m.cells) ? m.cells.length : 0
+      } rows of cells.`,
+      { ...where, field: 'matrix.cells' },
+    );
+  }
+  const cells = m.cells.map((rawRow, rowIndex) => {
+    if (!Array.isArray(rawRow) || rawRow.length !== columns.length) {
+      throw fail.invalidArgument(
+        `Row ${rowIndex + 1} of the matrix has ${
+          Array.isArray(rawRow) ? rawRow.length : 0
+        } cells but the grid has ${columns.length} columns.`,
+        { ...where, field: 'matrix.cells', row: rowIndex + 1 },
+      );
+    }
+    return rawRow.map((cell, columnIndex) =>
+      draftString(
+        cell,
+        `matrix outcome at row ${rowIndex + 1}, column ${columnIndex + 1}`,
+        TEXT_LIMITS.shortText,
+        where,
+      ),
+    );
+  });
+
+  // Definitions are keyed by the option they define, so a key that names no
+  // option is a stale rename: rejected, because it would silently never render.
+  let definitions: Record<string, string> | undefined;
+  if (m.definitions !== undefined && m.definitions !== null) {
+    if (typeof m.definitions !== 'object' || Array.isArray(m.definitions)) {
+      throw fail.invalidArgument('The matrix definitions are malformed.', {
+        ...where,
+        field: 'matrix.definitions',
+      });
+    }
+    const labels = new Set([...rows, ...columns]);
+    const entries = Object.entries(m.definitions as Record<string, unknown>);
+    const built: Record<string, string> = {};
+    for (const [key, text] of entries) {
+      const label = key.trim();
+      if (!labels.has(label)) {
+        throw fail.invalidArgument(
+          `The matrix defines "${label}", which is not one of its rows or columns.`,
+          { ...where, field: 'matrix.definitions' },
+        );
+      }
+      built[label] = draftString(
+        text,
+        `matrix definition for "${label}"`,
+        TEXT_LIMITS.freeText,
+        where,
+      );
+    }
+    if (entries.length > 0) {
+      definitions = built;
+    }
+  }
+
+  return {
+    rowLabel,
+    columnLabel,
+    rows,
+    columns,
+    cells,
+    ...(definitions !== undefined ? { definitions } : {}),
+  };
+}
+
 /**
  * Validate one draft question and rebuild it from the validated fields only.
  * Collects its standardParagraphRef into `paragraphRefs` for the single
@@ -199,6 +362,18 @@ function validateQuestion(
   } else if (q.options !== undefined && q.options !== null) {
     throw fail.invalidArgument(
       'Only select and multiselect questions may carry options.',
+      at,
+    );
+  }
+
+  // The grid is to a matrix question what options are to a choice question:
+  // required there, meaningless - so rejected, not dropped - everywhere else.
+  let matrix: QuestionMatrix | undefined;
+  if (type === 'matrix') {
+    matrix = validateMatrix(q.matrix, at);
+  } else if (q.matrix !== undefined && q.matrix !== null) {
+    throw fail.invalidArgument(
+      'Only matrix questions may carry a grid.',
       at,
     );
   }
@@ -251,6 +426,7 @@ function validateQuestion(
     text,
     type: type as QuestionType,
     ...(options !== undefined ? { options } : {}),
+    ...(matrix !== undefined ? { matrix } : {}),
     ...(allowsFlagLocation !== undefined ? { allowsFlagLocation } : {}),
     ...(allowsPhotos !== undefined ? { allowsPhotos } : {}),
     ...(required !== undefined ? { required } : {}),

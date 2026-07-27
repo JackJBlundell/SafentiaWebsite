@@ -43,7 +43,7 @@
 }
 
 .input:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
   border-color: transparent;
 }
@@ -72,7 +72,7 @@
 }
 
 .colourPicker:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
 }
 

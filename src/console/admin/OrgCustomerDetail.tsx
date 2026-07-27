@@ -31,6 +31,7 @@ import {
   toEntries,
 } from '../customers/shared';
 import { usePlatformEnv } from './platformEnv';
+import { useRecordPlatformAccess } from './useRecordPlatformAccess';
 import styles from './OrgCustomerDetail.module.css';
 
 type BuildingsBySite = Record<string, Record<string, Building> | null>;
@@ -50,6 +51,10 @@ export function OrgCustomerDetail() {
   const { env } = usePlatformEnv();
   const paths = forEnv(env);
   const enabled = Boolean(orgId && customerId);
+
+  // Story 2069 AC2: record this drill-down in the tenant's own trail, once per
+  // mount and best-effort, so a failed note never blocks the read-only view.
+  useRecordPlatformAccess('customer', orgId, customerId);
 
   const orgProfileQuery = useRtdbQuery<OrgProfile | null>({
     key: ['platformOrgProfile', env, orgId],

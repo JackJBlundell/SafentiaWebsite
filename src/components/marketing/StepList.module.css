@@ -42,9 +42,9 @@
   font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   padding: var(--space-xs) var(--space-md);
-  border: 1px solid color-mix(in srgb, var(--brand-primary) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-ink) 35%, transparent);
   border-radius: var(--radius-pill);
 }
 

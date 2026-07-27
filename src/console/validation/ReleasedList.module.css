@@ -15,6 +15,13 @@
 .buildingName {
   font-weight: 600;
   color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* Long customer and template names break inside the cell rather than forcing
+   the table wider than the viewport. */
+.wrap {
+  overflow-wrap: anywhere;
 }
 
 .time {

@@ -30,6 +30,7 @@ import {
 import {
   assertObject,
   requireString,
+  requireDbKey,
   optionalString,
   clearableString,
   requireEnum,
@@ -339,7 +340,7 @@ export const manageBuilding = onCall<ManageBuildingInput>(
         // 2. Validate the action, the owning site and the fields.
         const input = assertObject(request.data);
         const action = requireEnum(input, 'action', ACTIONS);
-        const siteId = requireString(input, 'siteId', TEXT_LIMITS.shortText);
+        const siteId = requireDbKey(input, 'siteId', TEXT_LIMITS.shortText);
         const payload = assertObject(input.building);
         // Null is only meaningful as a CLEAR on update (ClearableFields in the
         // contract); on create there is nothing to clear yet, so it is a client
@@ -447,7 +448,7 @@ export const manageBuilding = onCall<ManageBuildingInput>(
         // site - checking mere customer existence would let the record drift out
         // of step with the site tree that physically holds it, and createJob
         // trusts building.customerId downstream.
-        const buildingId = requireString(input, 'buildingId', TEXT_LIMITS.shortText);
+        const buildingId = requireDbKey(input, 'buildingId', TEXT_LIMITS.shortText);
         const buildingPath = paths.db.building(orgId, siteId, buildingId);
         const existingSnap = await db.ref(buildingPath).get();
         if (!existingSnap.exists()) {

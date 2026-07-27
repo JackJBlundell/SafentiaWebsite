@@ -31,8 +31,8 @@ const mocks = vi.hoisted(() => ({
     paths: null as unknown,
     signOut: vi.fn(),
   },
-  userOrgs: {
-    organisations: [{ orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true }],
+  userSpaces: {
+    spaces: [{ kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true }],
     loading: false,
     hasMultiple: false,
   },
@@ -63,8 +63,8 @@ vi.mock('../../auth/AuthProvider', () => ({
   useAuth: () => mocks.auth,
 }));
 
-vi.mock('../../auth/useUserOrganisations', () => ({
-  useUserOrganisations: () => mocks.userOrgs,
+vi.mock('../../auth/useUserSpaces', () => ({
+  useUserSpaces: () => mocks.userSpaces,
 }));
 
 vi.mock('../admin/useSuperAdminClaim', () => ({

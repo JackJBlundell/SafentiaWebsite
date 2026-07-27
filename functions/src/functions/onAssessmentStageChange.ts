@@ -107,18 +107,37 @@ async function findBuilding(
   return undefined;
 }
 
-/** The customer's primary contact email, if the customer has one recorded. */
-async function primaryContactEmail(
+/** Every customer contact that has an email, de-duplicated by address. Story
+ *  2060 tells the whole customer, not just the primary, so a released report
+ *  reaches everyone the customer has listed. Duplicates (the same person
+ *  entered twice, or a shared inbox) are collapsed on a case- and space-
+ *  normalised key so no one is emailed twice; the first spelling seen is the
+ *  one used to send. */
+async function customerContactEmails(
   envPaths: EnvPaths,
   orgId: string,
   customerId: string,
-): Promise<string | undefined> {
+): Promise<string[]> {
   const contactsSnap = await db
     .ref(envPaths.db.customerContacts(orgId, customerId))
     .get();
   const contacts =
     (contactsSnap.val() as Keyed<CustomerContact> | null) ?? {};
-  return Object.values(contacts).find((c) => c?.isPrimary === true)?.email;
+  const seen = new Set<string>();
+  const emails: string[] = [];
+  for (const contact of Object.values(contacts)) {
+    const email = contact?.email?.trim();
+    if (!email) {
+      continue;
+    }
+    const key = email.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    emails.push(email);
+  }
+  return emails;
 }
 
 export const onAssessmentStageChange = onValueWritten(
@@ -490,18 +509,21 @@ export const onAssessmentStageChange = onValueWritten(
             }
           }
 
-          // ...and (story 2060) the building's customer hears too, via their
-          // primary contact when one is recorded. ALWAYS sent: customer
-          // contacts have no preferences node (emailPreferences lives on
-          // OrgMember only), so there is no choice to respect yet - revisit
-          // when portal notification settings exist.
+          // ...and (story 2060) the building's customer hears too. EVERY
+          // customer contact with an email is told, not just the primary, so a
+          // released report reaches everyone the customer has nominated to
+          // receive it. ALWAYS sent: customer contacts have no preferences node
+          // (emailPreferences lives on OrgMember only), so there is no choice to
+          // respect yet - revisit when portal notification settings exist. The
+          // message is identical for every contact, so it is rendered once and
+          // sent to each de-duplicated address.
           if (building) {
-            const contactEmail = await primaryContactEmail(
+            const contactEmails = await customerContactEmails(
               envPaths,
               orgId,
               building.customerId,
             );
-            if (contactEmail) {
+            if (contactEmails.length > 0) {
               const customerHtml = renderBrandedEmail({
                 brand,
                 preheader: body,
@@ -536,16 +558,20 @@ export const onAssessmentStageChange = onValueWritten(
                       label: 'View your report in the portal',
                       url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}`,
                     },
-                footerNote: `You are receiving this because you are the primary contact for ${buildingName} on Safentia.`,
+                footerNote: `You are receiving this because you are a contact for ${buildingName} on Safentia.`,
               });
-              await dispatchEmail(
-                { to: contactEmail, subject, body, html: customerHtml },
-                logger,
-                { orgId, env: envPaths.env, category: 'released' },
-              );
+              // Best-effort per recipient: dispatchEmail never throws, so one
+              // contact's provider failure cannot stop the rest being told.
+              for (const contactEmail of contactEmails) {
+                await dispatchEmail(
+                  { to: contactEmail, subject, body, html: customerHtml },
+                  logger,
+                  { orgId, env: envPaths.env, category: 'released' },
+                );
+              }
             } else {
               logger.info(
-                'Released customer email skipped: no primary contact email recorded',
+                'Released customer email skipped: no contact email recorded',
               );
             }
           } else {

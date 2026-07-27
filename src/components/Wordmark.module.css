@@ -1,8 +1,19 @@
-.root {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  line-height: 1;
+/* The mark is sized by HEIGHT and takes its width from the artwork's own aspect
+ * ratio, so a future re-cut of the files needs no change here. `aspect-ratio`
+ * repeats what the <img> width/height attributes already imply; it is stated
+ * anyway so the box survives a failed or blocked image load. */
+.mark {
+  flex: none;
+  width: auto;
+  object-fit: contain;
+}
+
+.lockup {
+  aspect-ratio: 1707 / 643;
+}
+
+.icon {
+  aspect-ratio: 1038 / 1200;
 }
 
 .link {
@@ -12,48 +23,30 @@
   border-radius: var(--radius-md);
 }
 
-.glyph {
-  flex: none;
-  /* Optical alignment: the flame's visual centre sits a hair above the type's. */
-  margin-block-start: -1px;
+/* Sized from the LOCKUP's 2.65:1 aspect: a height of 22px rendered a mark only
+ * ~58px wide, which read as a favicon rather than a brand and left the artwork
+ * illegible at a glance. Each step is set so the horizontal lockup earns its
+ * place in the chrome it sits in, with `lg` deliberately generous because its
+ * only uses are the sign-in and holding screens, where the mark IS the page's
+ * identity rather than a label on someone else's. */
+.lockup.sm {
+  height: 28px;
+}
+.lockup.md {
+  height: 38px;
+}
+.lockup.lg {
+  height: 64px;
 }
 
-.glyphPlate {
-  fill: var(--brand-primary);
-}
-
-.glyphFlame {
-  fill: var(--brand-on-primary);
-}
-
-.word {
-  font-weight: 700;
-  letter-spacing: -0.028em;
-  color: var(--color-text);
-  /* Inter's default `t` and `i` spacing reads loose at display weights. */
-  font-feature-settings: 'cv05' 1, 'ss01' 1;
-}
-
-.sm .glyph {
-  width: 20px;
-  height: 20px;
-}
-.sm .word {
-  font-size: 1rem;
-}
-
-.md .glyph {
-  width: 26px;
+/* The icon is near-square, so it needs less height than the lockup to read at
+ * the same visual weight. */
+.icon.sm {
   height: 26px;
 }
-.md .word {
-  font-size: 1.1875rem;
-}
-
-.lg .glyph {
-  width: 34px;
+.icon.md {
   height: 34px;
 }
-.lg .word {
-  font-size: 1.5rem;
+.icon.lg {
+  height: 52px;
 }

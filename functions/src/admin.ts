@@ -92,9 +92,17 @@ function ensureApp(): App {
 
   const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
 
+  // Both keys are spread CONDITIONALLY, and that is the whole point rather than
+  // a tidiness preference. In a deployed Function the runtime supplies
+  // FIREBASE_CONFIG, which already carries the correct databaseURL and
+  // storageBucket. Passing an explicit `storageBucket: undefined` does NOT fall
+  // back to that config - it overrides it with nothing, so getStorage() came up
+  // with no bucket and every report upload died on "Bucket name not specified or
+  // invalid" AFTER the PDF had been rendered. The scripts, which do set the env
+  // vars, are unaffected either way.
   return initializeApp({
-    databaseURL,
-    storageBucket,
+    ...(databaseURL ? { databaseURL } : {}),
+    ...(storageBucket ? { storageBucket } : {}),
   });
 }
 

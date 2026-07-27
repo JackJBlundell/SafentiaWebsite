@@ -25,11 +25,9 @@
 
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getDownloadURL, ref as storageRef } from 'firebase/storage';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
 import { urls } from '../customers/shared';
-import { firebase } from '../../firebase';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import {
@@ -58,6 +56,7 @@ import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
 import { AnswerCard, isAnswered } from './AnswerCard';
 import { actorName } from '../lib/actorName';
+import { useReportDownload } from './releaseShared';
 import styles from './AssessmentReview.module.css';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -154,32 +153,9 @@ function StageBadge({ status }: { status: Assessment['status'] }) {
  *  when the report record has not been written yet - generation trails release
  *  by moments, so the released assessment can briefly have no report node. */
 function ReportDownload({ report }: { report: Report | null }) {
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [downloadFailed, setDownloadFailed] = useState(false);
-  const pdfPath = report?.pdfPath;
-
-  useEffect(() => {
-    if (!pdfPath) {
-      return;
-    }
-    let cancelled = false;
-    setDownloadUrl(null);
-    setDownloadFailed(false);
-    getDownloadURL(storageRef(firebase.storage(), pdfPath))
-      .then((url) => {
-        if (!cancelled) {
-          setDownloadUrl(url);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setDownloadFailed(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pdfPath]);
+  // The shared resolution the released surfaces use, so a Storage refusal is
+  // reported the same way wherever a report is offered.
+  const download = useReportDownload(report?.pdfPath);
 
   if (!report) {
     return (
@@ -188,14 +164,14 @@ function ReportDownload({ report }: { report: Report | null }) {
       </p>
     );
   }
-  if (downloadFailed) {
+  if (download.state === 'unreachable') {
     return (
       <p className={styles.decisionHint}>
         The report file could not be reached. Please try again shortly.
       </p>
     );
   }
-  if (!downloadUrl) {
+  if (download.state === 'resolving') {
     return (
       <p role="status" className={styles.decisionHint}>
         Preparing the report for download
@@ -205,7 +181,7 @@ function ReportDownload({ report }: { report: Report | null }) {
   return (
     <a
       className={styles.reportDownload}
-      href={downloadUrl}
+      href={download.url}
       target="_blank"
       rel="noopener"
     >

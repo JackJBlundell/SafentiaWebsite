@@ -12,16 +12,24 @@
 // customer and a building.
 // ============================================================================
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { forEnv } from '../../paths';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
-import { ORG_ROLES } from '../../types';
-import type { Organisation, OrgMember, OrgRole } from '../../types';
+import { MEMBER_STATUSES, ORG_ROLES } from '../../types';
+import type {
+  MemberStatus,
+  Organisation,
+  OrgMember,
+  OrgRole,
+} from '../../types';
+import { Button } from '../../components/Button';
 import { StatusBadge } from '../customers/shared';
 import { DataTable, type Column } from '../ui/DataTable';
+import { Toolbar, ToolbarGroup } from '../ui/Grid';
 import { ErrorNotice, PageHeader } from '../ui/Page';
 import { SkeletonRows } from '../ui/Skeleton';
 import { usePlatformEnv } from './platformEnv';
+import shared from '../customers/shared.module.css';
 import admin from './admin.module.css';
 import styles from './PlatformMembers.module.css';
 
@@ -34,6 +42,18 @@ const ROLE_LABELS: Record<OrgRole, string> = {
   finance: 'Finance',
   viewer: 'Viewer',
 };
+
+/** Human labels for the member-status filter. The StatusBadge keeps its own
+ *  copy; these name the same states in the select the operator reads. */
+const STATUS_LABELS: Record<MemberStatus, string> = {
+  active: 'Active',
+  locked: 'Locked',
+  archived: 'Archived',
+};
+
+/** The filter select's sentinel for "no filter". Not a valid role or status, so
+ *  it can never collide with the const vocabularies it sits beside. */
+const ANY = 'all';
 
 interface MemberRow {
   orgId: string;
@@ -121,6 +141,10 @@ export function PlatformMembers() {
   // The environment is the platform-wide choice from the rail toggle.
   const { env } = usePlatformEnv();
   const [rowsByOrg, setRowsByOrg] = useState<Record<string, MemberRow[]>>({});
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<OrgRole | typeof ANY>(ANY);
+  const [statusFilter, setStatusFilter] = useState<MemberStatus | typeof ANY>(ANY);
+  const [orgFilter, setOrgFilter] = useState<string>(ANY);
   const paths = forEnv(env);
 
   const orgsQuery = useRtdbQuery<Record<string, Organisation> | null>({
@@ -142,11 +166,14 @@ export function PlatformMembers() {
     });
   }, []);
 
-  const orgs = Object.entries(orgsQuery.data ?? {}).map(([orgId, org]) => ({
-    orgId,
-    name: org?.profile?.name ?? orgId,
-  }));
-  const orgIds = orgs.map((org) => org.orgId);
+  const orgs = useMemo(
+    () =>
+      Object.entries(orgsQuery.data ?? {})
+        .map(([orgId, org]) => ({ orgId, name: org?.profile?.name ?? orgId }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'en-GB')),
+    [orgsQuery.data],
+  );
+  const orgIds = useMemo(() => orgs.map((org) => org.orgId), [orgs]);
 
   // Honest readiness: the org list has loaded AND every listed org has reported
   // (an empty org reports an empty list), so a slow org never flashes a false
@@ -156,13 +183,46 @@ export function PlatformMembers() {
     !orgsQuery.isLoading &&
     (orgIds.length === 0 || orgIds.every((orgId) => rowsByOrg[orgId] !== undefined));
 
-  const rows: MemberRow[] = orgIds
-    .flatMap((orgId) => rowsByOrg[orgId] ?? [])
-    .sort(
-      (a, b) =>
-        a.orgName.localeCompare(b.orgName, 'en-GB') ||
-        a.name.localeCompare(b.name, 'en-GB'),
+  // The full aggregate, memoised so re-filtering on a keystroke never re-walks
+  // and re-sorts every org's reported rows.
+  const rows: MemberRow[] = useMemo(
+    () =>
+      orgIds
+        .flatMap((orgId) => rowsByOrg[orgId] ?? [])
+        .sort(
+          (a, b) =>
+            a.orgName.localeCompare(b.orgName, 'en-GB') ||
+            a.name.localeCompare(b.name, 'en-GB'),
+        ),
+    [orgIds, rowsByOrg],
+  );
+
+  const total = rows.length;
+  const filtersActive =
+    search.trim() !== '' ||
+    roleFilter !== ANY ||
+    statusFilter !== ANY ||
+    orgFilter !== ANY;
+  const clearFilters = () => {
+    setSearch('');
+    setRoleFilter(ANY);
+    setStatusFilter(ANY);
+    setOrgFilter(ANY);
+  };
+
+  // Search, role, status and org compose: each narrows the same set, so any
+  // combination is an AND. Search runs over the person's name and email only.
+  const filtered: MemberRow[] = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return rows.filter(
+      (row) =>
+        (needle === '' ||
+          `${row.name} ${row.email}`.toLowerCase().includes(needle)) &&
+        (roleFilter === ANY || row.roles.includes(roleFilter)) &&
+        (statusFilter === ANY || row.status === statusFilter) &&
+        (orgFilter === ANY || row.orgId === orgFilter),
     );
+  }, [rows, search, roleFilter, statusFilter, orgFilter]);
 
   const columns: Array<Column<MemberRow>> = [
     { header: 'Organisation', cell: (row) => row.orgName },
@@ -203,17 +263,126 @@ export function PlatformMembers() {
       {!ready && !orgsQuery.isError && (
         <SkeletonRows rows={4} label="Loading members across the platform" />
       )}
-      {ready && !orgsQuery.isError && rows.length === 0 && (
+      {ready && !orgsQuery.isError && total === 0 && (
         <p className={admin.emptyNote}>No members found in this environment.</p>
       )}
-      {ready && rows.length > 0 && (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          rowKey={(row) => `${row.orgId}:${row.uid}`}
-          rowHref={(row) => `/app/admin/${row.orgId}`}
-          label="Members"
-        />
+      {ready && !orgsQuery.isError && total > 0 && (
+        <>
+          <Toolbar>
+            <ToolbarGroup>
+              <div className={shared.field}>
+                <label className={shared.label} htmlFor="members-search">
+                  Search members
+                </label>
+                <input
+                  id="members-search"
+                  className={`${shared.input} ${admin.searchInput}`}
+                  type="search"
+                  autoComplete="off"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+            </ToolbarGroup>
+            <ToolbarGroup>
+              <div className={shared.field}>
+                <label className={shared.label} htmlFor="members-role">
+                  Role
+                </label>
+                <select
+                  id="members-role"
+                  className={shared.select}
+                  value={roleFilter}
+                  onChange={(event) =>
+                    setRoleFilter(event.target.value as OrgRole | typeof ANY)
+                  }
+                >
+                  <option value={ANY}>All roles</option>
+                  {ORG_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {ROLE_LABELS[role]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </ToolbarGroup>
+            <ToolbarGroup>
+              <div className={shared.field}>
+                <label className={shared.label} htmlFor="members-status">
+                  Status
+                </label>
+                <select
+                  id="members-status"
+                  className={shared.select}
+                  value={statusFilter}
+                  onChange={(event) =>
+                    setStatusFilter(event.target.value as MemberStatus | typeof ANY)
+                  }
+                >
+                  <option value={ANY}>All statuses</option>
+                  {MEMBER_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {STATUS_LABELS[status]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </ToolbarGroup>
+            {orgs.length > 1 && (
+              <ToolbarGroup>
+                <div className={shared.field}>
+                  <label className={shared.label} htmlFor="members-org">
+                    Organisation
+                  </label>
+                  <select
+                    id="members-org"
+                    className={shared.select}
+                    value={orgFilter}
+                    onChange={(event) => setOrgFilter(event.target.value)}
+                  >
+                    <option value={ANY}>All organisations</option>
+                    {orgs.map((org) => (
+                      <option key={org.orgId} value={org.orgId}>
+                        {org.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </ToolbarGroup>
+            )}
+            {filtersActive && (
+              <ToolbarGroup push>
+                <Button variant="secondary" type="button" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              </ToolbarGroup>
+            )}
+          </Toolbar>
+
+          <p role="status" className={admin.resultCount}>
+            Showing {filtered.length} of {total}{' '}
+            {total === 1 ? 'member' : 'members'}
+          </p>
+
+          {filtered.length === 0 ? (
+            <div className={admin.noMatch}>
+              <p className={admin.emptyNote}>
+                No members match your search and filters.
+              </p>
+              <Button variant="secondary" type="button" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              rows={filtered}
+              rowKey={(row) => `${row.orgId}:${row.uid}`}
+              rowHref={(row) => `/app/admin/${row.orgId}`}
+              label="Members"
+            />
+          )}
+        </>
       )}
       <p className={admin.footnote}>Read-only oversight; counts are live.</p>
     </div>

@@ -4,6 +4,10 @@
 .panel {
   display: flex;
   flex-direction: column;
+  /* The panel is a flex item of a bounded, scrolling PageGrid column. Without
+     this it can be pushed wider than that column by any child that refuses to
+     shrink, and the card's border ends up inside its own content. */
+  min-width: 0;
   gap: var(--space-lg);
   padding: var(--space-xl);
   background: var(--color-surface);
@@ -38,12 +42,20 @@
   align-items: end;
   gap: var(--space-lg);
   flex-wrap: wrap;
+  min-width: 0;
 }
 
+/* A select is as wide as its widest option, and the Responsible options are
+   people's names straight from the plan. One long name used to set a hard
+   floor under this whole row, which is what pushed the card wider than the
+   column. Shrinking is allowed here; the full name is still readable in the
+   open dropdown. */
 .filterField {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .filterLabel,
@@ -55,6 +67,8 @@
 
 .select,
 .input {
+  width: 100%;
+  min-width: 0;
   min-height: 44px;
   padding: 0 var(--space-md);
   font: inherit;
@@ -65,6 +79,8 @@
 }
 
 .textarea {
+  width: 100%;
+  min-width: 0;
   min-height: 44px;
   padding: var(--space-sm) var(--space-md);
   font: inherit;
@@ -88,7 +104,7 @@
 .checkField input {
   width: 20px;
   height: 20px;
-  accent-color: var(--brand-primary);
+  accent-color: var(--brand-ink);
 }
 
 .severityChip {
@@ -107,6 +123,85 @@
   align-items: center;
   gap: var(--space-sm);
   flex-wrap: wrap;
+}
+
+/* Status chip: the label carries the meaning; the tint only reinforces it, so
+   the state is legible with colour removed. One tone per lifecycle state. */
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.statusOpen {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-alt);
+}
+
+.statusInProgress {
+  color: var(--status-info);
+  background: var(--status-info-surface);
+}
+
+.statusSignedOff {
+  color: var(--status-success);
+  background: var(--status-success-surface);
+}
+
+.statusArchived {
+  color: var(--color-text-muted);
+  background: var(--color-surface-sunken);
+}
+
+/* The sign-off confirmation stacks its optional note field above the confirm /
+   cancel pair; a sensible minimum keeps the textarea usable inside the narrow
+   actions cell, and it wraps rather than bursting the card on small screens. */
+.signOffConfirm {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: min(220px, 100%);
+  text-align: start;
+}
+
+/* The status-history timeline inside the disclosure panel. */
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.historyItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  align-items: start;
+}
+
+.historyMeta {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+/* Long completion notes wrap and stay inside the panel rather than stretching
+   the table. */
+.historyNote {
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+  max-width: 70ch;
+}
+
+.historyEmpty {
+  font-size: 0.9375rem;
+  color: var(--color-text-muted);
 }
 
 /* LTP is a fact of the action at all times, not only when overdue. */
@@ -147,7 +242,7 @@
 /* "View location" keeps the 44px target via generous line-height inside the
    observation cell; it is a real link, underlined, never colour alone. */
 .locationLink {
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   text-decoration: underline;
   font-size: 0.875rem;
   white-space: nowrap;
@@ -170,6 +265,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  min-width: 0;
   padding: var(--space-lg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -187,13 +283,17 @@
   flex-direction: column;
   gap: var(--space-xs);
   flex: 1;
-  min-width: 180px;
+  /* 180px is the width at which two fields stop sharing a line, but it must
+     never exceed the row itself: below roughly 260px the form has less than
+     180px to give, and a flat minimum would burst the card instead of wrapping. */
+  min-width: min(180px, 100%);
 }
 
 .fieldRow {
   display: flex;
   gap: var(--space-md);
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .formNote {
@@ -205,6 +305,7 @@
 .formActions {
   display: flex;
   gap: var(--space-sm);
+  flex-wrap: wrap;
 }
 
 .inlineError {

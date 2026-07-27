@@ -1,0 +1,23 @@
+/* OrgsOverview - the organisation cell stack around the shared DataTable. The
+   search width, result count and no-match card are shared admin furniture.
+   Tokens only; 44px targets come from the shared input/select. */
+
+/* The organisation cell stacks the name over its contact line, so a long name
+   or address wraps within the column rather than stretching the table. */
+.orgCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cellName {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.cellMeta {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}

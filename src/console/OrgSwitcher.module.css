@@ -1,5 +1,5 @@
-/* OrgSwitcher - static text for the single-org majority; a disclosure list for
- * genuine multi-org members. Same visual weight as the account menu trigger. */
+/* OrgSwitcher - static text for the single-space majority; a grouped disclosure
+ * for anyone holding several. Same visual weight as the account menu trigger. */
 
 .single {
   display: inline-flex;
@@ -59,33 +59,69 @@
   stroke: currentColor;
 }
 
-.list {
+/* The floating surface. It holds one list per half plus the platform entry, so
+ * the panel (not the list) is what is positioned and bounded. */
+.panel {
   position: absolute;
   top: calc(100% + var(--space-xs));
   right: 0;
   z-index: 20;
-  min-width: 14rem;
-  margin: 0;
+  min-width: 16rem;
+  /* Long customer names must not push the panel across the viewport; they
+   * ellipsis inside a bounded row instead. */
+  max-width: min(22rem, calc(100vw - 2 * var(--space-lg)));
+  /* A person with many customer accounts scrolls the panel rather than losing
+   * its foot off the bottom of the screen. */
+  max-height: min(24rem, 60dvh);
+  overflow-y: auto;
   padding: var(--space-xs);
-  list-style: none;
-  display: flex;
-  flex-direction: column;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 24px var(--shadow-color);
 }
 
+.groupHeading {
+  padding: var(--space-sm) var(--space-md) var(--space-xs);
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Separates the platform entry, and the second half, from what precedes it. */
+.list + .list {
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-border);
+}
+
+.groupHeading + .list {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* A row is a mark, its two lines of text, then the current dot: the mark gives
+   each space a visible identity so the list reads as spaces, not a text menu. */
 .option {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
+  gap: var(--space-sm);
   width: 100%;
   min-height: var(--min-touch-target);
-  padding-inline: var(--space-md);
+  padding: var(--space-sm);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-text);
   font-size: 0.9375rem;
@@ -102,8 +138,42 @@
   cursor: not-allowed;
 }
 
+.option[aria-current='true'] {
+  background: var(--color-surface-alt);
+}
+
 .option[aria-current='true'] .optionName {
   font-weight: 650;
+}
+
+/* The platform entry's mark: the accent as a fill, matching a space mark's
+   weight so the row lines up, with a distinct shield glyph. */
+.platformMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+}
+
+.platformGlyph {
+  width: 60%;
+  height: 60%;
+}
+
+.optionText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /* Takes the row's remaining width and lets the ellipsis below take effect:
+   * without it a flex item refuses to shrink below its content width and widens
+   * the whole panel. */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .optionName {
@@ -112,13 +182,24 @@
   white-space: nowrap;
 }
 
-.currentMark {
-  flex-shrink: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
+.optionMeta {
   color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A filled brand dot marks the open space. aria-current on the button already
+   states it to a screen reader, so the dot is purely visual and hidden from the
+   tree; it reads as "you are here" without the shouty uppercase label. */
+.currentMark {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--brand-ink);
 }
 
 .error {
@@ -139,12 +220,13 @@
  * downward panel opens off-screen. Flip it above the trigger and let it span
  * the rail. Breakpoint mirrors ConsoleShell's rail media query. */
 @media (min-width: 1024px) {
-  .list,
+  .panel,
   .error {
     top: auto;
     bottom: calc(100% + var(--space-xs));
     left: 0;
     right: 0;
     min-width: 0;
+    max-width: none;
   }
 }

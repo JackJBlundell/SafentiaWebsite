@@ -40,6 +40,7 @@ import {
   type AnswerFlag,
   type AnswerPhoto,
   type AssessmentAnswer,
+  type MatrixAnswer,
   type ResponsibleParty,
   type Severity,
   type TemplateQuestion,
@@ -217,6 +218,24 @@ export function readNonConformityValue(answer: AssessmentAnswer): {
   return {};
 }
 
+/** The stored value of a matrix answer, or null when the answer predates the
+ *  grid or is malformed - the card falls back to whatever text it carries
+ *  rather than rendering three empty rows. */
+function readMatrixValue(answer: AssessmentAnswer): MatrixAnswer | null {
+  const value = answer.value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const v = value as Record<string, unknown>;
+    if (
+      typeof v.row === 'string' &&
+      typeof v.column === 'string' &&
+      typeof v.outcome === 'string'
+    ) {
+      return { row: v.row, column: v.column, outcome: v.outcome };
+    }
+  }
+  return null;
+}
+
 /** British date for a finding's own due date: "12 June 2026". */
 const dueDateFormat = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
@@ -274,6 +293,31 @@ function AnswerBody({
             </li>
           ))}
         </ul>
+      );
+    }
+    case 'matrix': {
+      // One cell was chosen, which fixed all three facts at once; the reviewer
+      // needs each of them named, not just the outcome word, or the risk level
+      // cannot be checked against the grid the assessor was shown.
+      const chosen = readMatrixValue(answer);
+      if (!chosen) {
+        return <p className={styles.answerText}>{answer.text ?? ''}</p>;
+      }
+      return (
+        <dl className={styles.findingFacts}>
+          <div className={styles.findingFact}>
+            <dt>{question.matrix?.rowLabel?.trim() || 'Row'}</dt>
+            <dd>{chosen.row}</dd>
+          </div>
+          <div className={styles.findingFact}>
+            <dt>{question.matrix?.columnLabel?.trim() || 'Column'}</dt>
+            <dd>{chosen.column}</dd>
+          </div>
+          <div className={styles.findingFact}>
+            <dt>Outcome</dt>
+            <dd>{chosen.outcome}</dd>
+          </div>
+        </dl>
       );
     }
     case 'photo':
@@ -336,7 +380,7 @@ function AnswerBody({
       );
     }
     default:
-      // A snapshot can only carry the seven known types, but a review must
+      // A snapshot can only carry the known types, but a review must
       // never render nothing silently if a future one arrives.
       return <p className={styles.answerText}>{answer.text ?? ''}</p>;
   }

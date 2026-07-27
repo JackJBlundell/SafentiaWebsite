@@ -13,7 +13,17 @@ import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { forEnv } from '../paths';
 import type { SessionClaims } from '../auth/claims';
-import type { Action, ActivityEntry, Building, OrgMember } from '../types';
+import type {
+  Action,
+  ActivityEntry,
+  Assessment,
+  Building,
+  Customer,
+  Job,
+  OrgMember,
+  Report,
+  Template,
+} from '../types';
 
 // --- Module mocks -----------------------------------------------------------
 
@@ -31,13 +41,28 @@ const mocks = vi.hoisted(() => {
       activity: [] as Array<ActivityEntry & { id: string }>,
       members: {} as Record<string, OrgMember>,
       profile: { name: 'Acme Fire Safety' } as unknown,
+      /** Already ordered, as the ConsoleHome selector would deliver them. */
+      releases: [] as Array<Assessment & { id: string }>,
+      jobs: {} as Record<string, Job>,
+      buildings: {} as Record<string, Building>,
+      customers: {} as Record<string, Customer>,
+      /** Keyed by buildingId, matching the building-scoped reports node. */
+      reports: {} as Record<string, Record<string, Report>>,
     },
+    getDownloadURL: vi.fn(async () => 'https://example.com/report.pdf'),
   };
 });
 
 vi.mock('../firebase', () => ({
   startFirebase: vi.fn(),
-  firebase: { functions: vi.fn() },
+  firebase: { functions: vi.fn(), storage: vi.fn() },
+}));
+
+// The report affordance resolves a Storage path to a tokened URL; mocked at the
+// SDK boundary so the card renders without touching Storage.
+vi.mock('firebase/storage', () => ({
+  ref: vi.fn(),
+  getDownloadURL: () => mocks.getDownloadURL(),
 }));
 
 vi.mock('../auth/AuthProvider', () => ({
@@ -81,6 +106,23 @@ vi.mock('../query/useRtdbQuery', () => ({
         break;
       case 'orgMembers':
         data = fixtures.members;
+        break;
+      // The releases card's own bounded window, plus the cached single-node
+      // reads each row resolves through.
+      case 'assessments':
+        data = fixtures.releases;
+        break;
+      case 'jobs':
+        data = fixtures.jobs[String(key[2])] ?? null;
+        break;
+      case 'building':
+        data = fixtures.buildings[String(key[3])] ?? null;
+        break;
+      case 'customer':
+        data = fixtures.customers[String(key[2])] ?? null;
+        break;
+      case 'reports':
+        data = fixtures.reports[String(key[3])] ?? null;
         break;
       default:
         data = null;
@@ -155,6 +197,11 @@ beforeEach(() => {
   mocks.fixtures.actionsRoot = {};
   mocks.fixtures.activity = [];
   mocks.fixtures.members = {};
+  mocks.fixtures.releases = [];
+  mocks.fixtures.jobs = {};
+  mocks.fixtures.buildings = {};
+  mocks.fixtures.customers = {};
+  mocks.fixtures.reports = {};
 });
 
 // --- Buildings-by-risk stat tiles ---------------------------------------------
@@ -322,31 +369,131 @@ describe('ConsoleHome upcoming reviews', () => {
 
 // --- Recent releases --------------------------------------------------------------
 
+const templateSnapshot: Template = {
+  name: 'PAS 79 Fire Risk Assessment',
+  version: 3,
+  status: 'published',
+  standard: 'pas79',
+  sections: [],
+};
+
+function release(overrides: Partial<Assessment> & { id: string }): Assessment & {
+  id: string;
+} {
+  return {
+    jobId: 'job-1',
+    buildingId: 'b1',
+    customerId: 'c-1',
+    templateSnapshot,
+    conductedBy: 'u1',
+    conductedAt: NOW - 5 * DAY,
+    status: 'released',
+    workflow: { releasedAt: NOW - 1000, releasedBy: 'u1' },
+    ...overrides,
+  };
+}
+
+/** The joins one released row resolves: job -> siteId -> building, and the
+ *  customer record. */
+function seedRowContext() {
+  mocks.fixtures.jobs = {
+    'job-1': { siteId: 'site1' } as unknown as Job,
+  };
+  mocks.fixtures.buildings = {
+    b1: building({ name: 'North Tower', riskLevel: 'high' }),
+  };
+  mocks.fixtures.customers = {
+    'c-1': { name: 'Meridian Estates' } as unknown as Customer,
+  };
+  mocks.fixtures.members = { u1: { name: 'Jane Doe' } as unknown as OrgMember };
+}
+
+function releasesCard(): HTMLElement {
+  return screen
+    .getByRole('heading', { name: 'Recent releases' })
+    .closest('section') as HTMLElement;
+}
+
 describe('ConsoleHome recent releases', () => {
-  it('filters the activity window to release events, newest five', () => {
-    mocks.fixtures.activity = [
-      { id: 'e1', actorUid: 'u1', action: 'assessment.released', target: 'as-9', at: NOW - 1000 },
-      { id: 'e2', actorUid: 'u1', action: 'job.cancelled', target: 'job-1', at: NOW - 2000 },
-      { id: 'e3', actorUid: 'u2', action: 'assessment.released', target: 'as-8', at: NOW - 3000 },
-    ];
-    mocks.fixtures.members = {
-      u1: { name: 'Jane Doe' } as unknown as OrgMember,
-      u2: { name: 'Sam Poll' } as unknown as OrgMember,
+  it('tells each release in full: building, customer, template and attribution', () => {
+    seedRowContext();
+    mocks.fixtures.releases = [release({ id: 'as-9' })];
+    renderHome();
+
+    const card = releasesCard();
+    // The building is the headline, linking into its own record.
+    expect(
+      within(card).getByRole('link', { name: 'North Tower' }),
+    ).toHaveAttribute('href', '/app/customers/c-1/sites/site1/buildings/b1');
+    // Customer and the pinned template (with its standard) on the meta line.
+    expect(card).toHaveTextContent(
+      'Meridian Estates · PAS 79 Fire Risk Assessment v3 · PAS 79',
+    );
+    // Attribution names the releaser, not a raw uid.
+    expect(card).toHaveTextContent(/Released .* by Jane Doe/);
+  });
+
+  it('offers the report as a labelled download once it has been generated', async () => {
+    seedRowContext();
+    mocks.fixtures.releases = [release({ id: 'as-9' })];
+    mocks.fixtures.reports = {
+      b1: {
+        'rep-1': {
+          pdfPath: 'orgs/org-1/reports/rep-1.pdf',
+          generatedAt: NOW - 500,
+          assessmentId: 'as-9',
+        },
+      },
     };
     renderHome();
-    const card = screen
-      .getByRole('heading', { name: 'Recent releases' })
-      .closest('section') as HTMLElement;
-    const rows = within(card).getAllByRole('listitem');
-    expect(rows).toHaveLength(2);
-    // Rows read as sentences via the shared humaniser, actor first, with the
-    // assessment id as the secondary line (no console view exists for it yet).
-    expect(rows[0]).toHaveTextContent('Jane Doe released an assessment');
-    expect(rows[0]).toHaveTextContent('as-9');
-    expect(rows[1]).toHaveTextContent('Sam Poll released an assessment');
-    expect(rows[1]).toHaveTextContent('as-8');
-    // The non-release event stays in the recent-activity feed only.
-    expect(within(card).queryByText(/job-1/)).toBeNull();
+
+    // The control names WHAT it downloads, not a bare "Download".
+    const link = await screen.findByRole('link', {
+      name: 'Download PDF for North Tower',
+    });
+    expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
+  });
+
+  it('states that the report is not ready rather than offering a dead button', () => {
+    seedRowContext();
+    mocks.fixtures.releases = [release({ id: 'as-9' })];
+    // The building has reports, but none for THIS assessment: generation is
+    // asynchronous and trails the release.
+    mocks.fixtures.reports = {
+      b1: {
+        'rep-old': {
+          pdfPath: 'orgs/org-1/reports/rep-old.pdf',
+          generatedAt: NOW - 90 * DAY,
+          assessmentId: 'as-1',
+        },
+      },
+    };
+    renderHome();
+
+    const card = releasesCard();
+    expect(within(card).getByText(/Report not ready/)).toBeInTheDocument();
+    expect(within(card).queryByRole('link', { name: /Download PDF/ })).toBeNull();
+  });
+
+  it('degrades a dangling building and customer to their ids', () => {
+    mocks.fixtures.members = { u1: { name: 'Jane Doe' } as unknown as OrgMember };
+    mocks.fixtures.releases = [release({ id: 'as-9' })];
+    renderHome();
+
+    const card = releasesCard();
+    // No job node, so no honest building URL: the id stands in as plain text.
+    expect(within(card).getByText('b1')).toBeInTheDocument();
+    expect(within(card).queryByRole('link', { name: 'b1' })).toBeNull();
+    expect(card).toHaveTextContent('c-1 · PAS 79 Fire Risk Assessment v3 · PAS 79');
+  });
+
+  it('states the empty case rather than hiding the card', () => {
+    renderHome();
+    expect(
+      within(releasesCard()).getByText(
+        'No assessments have been released recently.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('exposes a View-all affordance into the releases list for an auditor', () => {
@@ -356,21 +503,16 @@ describe('ConsoleHome recent releases', () => {
       environment: 'test',
     } as SessionClaims);
     renderHome();
-    const card = screen
-      .getByRole('heading', { name: 'Recent releases' })
-      .closest('section') as HTMLElement;
-    expect(within(card).getByRole('link', { name: 'View all' })).toHaveAttribute(
-      'href',
-      '/app/validation/released',
-    );
+    expect(
+      within(releasesCard()).getByRole('link', { name: 'View all' }),
+    ).toHaveAttribute('href', '/app/validation/released');
   });
 
   it('withholds the View-all link from a viewer who cannot reach the list', () => {
     setClaims(viewerClaims);
     renderHome();
-    const card = screen
-      .getByRole('heading', { name: 'Recent releases' })
-      .closest('section') as HTMLElement;
-    expect(within(card).queryByRole('link', { name: 'View all' })).toBeNull();
+    expect(
+      within(releasesCard()).queryByRole('link', { name: 'View all' }),
+    ).toBeNull();
   });
 });

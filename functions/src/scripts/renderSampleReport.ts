@@ -27,6 +27,7 @@ import type {
   ReportSection,
   ResolvedImage,
 } from '../report/assemble';
+import type { MatrixAnswer, QuestionMatrix } from '../shared/types';
 
 /** An intentionally-unavailable image: the renderer paints its titled
  *  "image unavailable" placeholder box, so no bytes are required. */
@@ -51,6 +52,64 @@ function prose(sentences: number): string {
     out.push(bank[i % bank.length]);
   }
   return out.join(' ');
+}
+
+/** The BS 9792 style simple risk level estimator, used as the `matrix` question
+ *  fixture so the drawn grid, its marked cell and its definitions can be eyeballed. */
+const RISK_ESTIMATOR: QuestionMatrix = {
+  rowLabel: 'Likelihood of fire',
+  columnLabel: 'Potential consequences of fire',
+  rows: ['Low', 'Medium', 'High'],
+  columns: ['Slight harm', 'Moderate harm', 'Extreme harm'],
+  cells: [
+    ['Trivial risk', 'Tolerable risk', 'Moderate risk'],
+    ['Tolerable risk', 'Moderate risk', 'Substantial risk'],
+    ['Moderate risk', 'Substantial risk', 'Intolerable risk'],
+  ],
+  definitions: {
+    Low: 'Fire is unlikely to occur given the ignition sources and controls observed.',
+    Medium: 'Fire is reasonably foreseeable over the life of the premises.',
+    High: 'Fire is likely to occur unless the arrangements are improved.',
+    'Slight harm': 'Outbreak of fire is unlikely to result in serious injury.',
+    'Moderate harm':
+      'Outbreak of fire could result in injury, including serious injury, of one or more occupants.',
+    'Extreme harm': 'Outbreak of fire could result in death of one or more occupants.',
+  },
+};
+
+/**
+ * The estimator row for a subject. Every subject carries one so the grid is
+ * exercised at many different page positions in a single render, which is how a
+ * grid that splits across a page break shows up. The chosen cell walks the grid
+ * so the marker is seen in several positions; definitions are attached to the
+ * first subject only, since twelve copies would pad the document without testing
+ * anything new.
+ */
+function matrixRow(index: number): ReportSection['rows'][number] {
+  const rowIndex = index % RISK_ESTIMATOR.rows.length;
+  const columnIndex = (index * 2) % RISK_ESTIMATOR.columns.length;
+  const answer: MatrixAnswer = {
+    row: RISK_ESTIMATOR.rows[rowIndex],
+    column: RISK_ESTIMATOR.columns[columnIndex],
+    outcome: RISK_ESTIMATOR.cells[rowIndex][columnIndex],
+  };
+  const withoutDefinitions: QuestionMatrix = {
+    rowLabel: RISK_ESTIMATOR.rowLabel,
+    columnLabel: RISK_ESTIMATOR.columnLabel,
+    rows: RISK_ESTIMATOR.rows,
+    columns: RISK_ESTIMATOR.columns,
+    cells: RISK_ESTIMATOR.cells,
+  };
+  return {
+    questionText: 'Simple risk level estimator for this subject',
+    // Mirrors the sentence assemble.ts builds for a matrix answer.
+    answerText: `${answer.outcome} (${RISK_ESTIMATOR.rowLabel}: ${answer.row}; ${RISK_ESTIMATOR.columnLabel}: ${answer.column})`,
+    questionType: 'matrix',
+    guidance:
+      'Cross the likelihood of fire with the potential consequences and record the cell that results.',
+    matrix: index === 0 ? RISK_ESTIMATOR : withoutDefinitions,
+    matrixAnswer: answer,
+  };
 }
 
 /** 12 subjects, one carrying an observation well over a page of text. */
@@ -113,6 +172,7 @@ function buildSections(): ReportSection[] {
           ? { observation: prose(4), severity: 'M' as const }
           : {}),
       },
+      matrixRow(index),
     ];
     return { code, title, rows };
   });

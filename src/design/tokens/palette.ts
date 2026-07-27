@@ -107,16 +107,42 @@ export const NEUTRALS = {
 } as const;
 
 /** The default brand accent used before an org profile loads, and as the
- *  fallback when an org has not set one. A clean, confident medium blue. */
+ *  fallback when an org has not set one. Safentia's gold.
+ *
+ *  It is a LIGHT colour (1.74:1 on white), which is why the theme keeps the fill
+ *  and the text roles apart: `primary` is only ever a FILL, and anything that has
+ *  to be read - a link, an active tab label, a focus ring - uses the derived
+ *  `ink` below instead. The secondary stays the deep navy: it pairs with the
+ *  gold, it already clears AA unaided, and no component style depends on it. */
 export const DEFAULT_BRAND = {
-  primary: '#2563EB',
+  primary: '#D9C554',
   secondary: '#1E3A8A',
+} as const;
+
+/** The default brand rendered as a READABLE accent, per scheme.
+ *
+ *  These are exactly what `adjustToMeetAA(DEFAULT_BRAND.primary, ...)` returns
+ *  against the tightest surface of each scheme, precomputed so the pre-rendered
+ *  stylesheet can paint the same value the ThemeProvider later publishes. Light
+ *  is 5.29:1 on white and 4.56:1 on the sunken surface; dark needs no correction
+ *  at 10.8:1 on the dark background. Change one and the token test fails. */
+export const BRAND_INK = {
+  light: '#776C2E',
+  dark: '#D9C554',
 } as const;
 
 /** Near-black / near-white used by the contrast helper to choose readable text
  *  ON a brand fill. Kept here so the choice references the palette, not a magic
- *  literal at the call site. */
+ *  literal at the call site.
+ *
+ *  `dark` is a NEUTRAL near-black, deliberately. It used to be #10141A, which is
+ *  blue-leaning (R16 G20 B26), and a cool near-black on Safentia's warm gold
+ *  read as muddy and unintentional even though the contrast was ample. A neutral
+ *  value fixes that without going warm, which matters because this same token
+ *  lands on whitelabel brand fills too: a brown-black would have looked as wrong
+ *  on a customer's blue as the blue-black looked on our gold. 10.1:1 on the gold,
+ *  so the correction costs no contrast. */
 export const ON_FILL = {
   light: '#FFFFFF',
-  dark: '#10141A',
+  dark: '#1A1A1A',
 } as const;

@@ -49,6 +49,11 @@ export interface PageHeaderProps {
   /** One supporting sentence under the title. */
   lede?: string;
   crumbs?: Crumb[];
+  /** A prominent "back to X" link above the title. Breadcrumbs show the whole
+   *  trail but read as orientation, not a control; this is the single obvious
+   *  way back one level, which is what a reader on a deep page reaches for. Give
+   *  it the destination label (e.g. "your buildings") and its route. */
+  back?: { label: string; to: string };
   /** Small, non-interactive badges that sit inline beside the title (e.g. live
    *  counts). Each carries its own text, so the badge means something without
    *  its colour; the caller styles them, the header only lays them out. */
@@ -57,9 +62,14 @@ export interface PageHeaderProps {
   action?: React.ReactNode;
 }
 
-export function PageHeader({ title, lede, crumbs, badges, action }: PageHeaderProps) {
+export function PageHeader({ title, lede, crumbs, back, badges, action }: PageHeaderProps) {
   return (
     <div className={styles.header}>
+      {back && (
+        <Link to={back.to} className={styles.backLink}>
+          <span aria-hidden="true">&#8592;</span> Back to {back.label}
+        </Link>
+      )}
       {crumbs && crumbs.length > 0 && <Breadcrumbs crumbs={crumbs} />}
       <div className={styles.headerRow}>
         <div>

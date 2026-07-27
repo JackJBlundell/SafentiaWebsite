@@ -32,7 +32,7 @@ import type { ActivityEntry, Job, RiskLevel } from '../../types';
 import { Card, CardHeader, StatCard } from '../ui/Card';
 import { CardGrid } from '../ui/Grid';
 import { DataTable, type Column } from '../ui/DataTable';
-import { PageHeader } from '../ui/Page';
+import { EmptyState, PageHeader } from '../ui/Page';
 import { Skeleton, SkeletonStatus } from '../ui/Skeleton';
 import { LoadingNote } from '../customers/shared';
 import { downloadCsv } from '../lib/csv';
@@ -258,7 +258,19 @@ export function ReportsPage() {
               <Skeleton height="120px" />
             </div>
           )}
-          {releases.data !== undefined && (
+          {/* Loaded and genuinely empty is its own state, not a chart of empty
+              bars: a wall of zero columns reads as a rendering fault, and it
+              hides the real, reassuring message that nothing has been released
+              yet in this window. An absent activity node now resolves here as
+              [] rather than a perpetual skeleton (the bridge treats an empty
+              node as a success). */}
+          {releases.data !== undefined && releases.data.length === 0 && (
+            <EmptyState
+              title="No reports released yet"
+              body={`No assessments have been released in the last ${REPORT_MONTHS} months. When one is released, it appears here and in the summary below.`}
+            />
+          )}
+          {releases.data !== undefined && releases.data.length > 0 && (
             <ReleasesChart
               months={months}
               counts={countPerMonth(releases.data)}

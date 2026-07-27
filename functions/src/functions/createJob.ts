@@ -33,6 +33,7 @@ import { assertObject, requireString, requireTimestamp, TEXT_LIMITS } from '../l
 import { assertRateLimit } from '../lib/rateLimit';
 import { assertValidSlot, assertNoSlotClash } from '../lib/jobSlots';
 import { sendNotification } from '../lib/notifications';
+import { isUkToday, ukWhenPhrase } from '../lib/ukCalendar';
 import type {
   CreateJobInput,
   CreateJobResult,

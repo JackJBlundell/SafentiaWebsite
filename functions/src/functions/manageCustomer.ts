@@ -37,6 +37,7 @@ import {
   clearableString,
   clearableEmail,
   requireEnum,
+  requireTenantStorageRef,
   TEXT_LIMITS,
 } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
@@ -53,7 +54,7 @@ import type {
 /** The customer fields an admin may set. Unknown or derived keys (score,
  *  status - status moves only via the archive action) are rejected, never
  *  dropped, so a client cannot silently believe it wrote a field. */
-const CUSTOMER_FIELDS = ['name', 'address', 'email', 'phone'] as const;
+const CUSTOMER_FIELDS = ['name', 'address', 'email', 'phone', 'photoUrl'] as const;
 
 const ACTIONS = ['create', 'update', 'archive', 'restore'] as const;
 
@@ -99,6 +100,19 @@ export const manageCustomer = onCall<ManageCustomerInput>(
               field: 'name',
             });
           }
+          // The customer's logo/photo pointer, held to the org's OWN tenant
+          // Storage prefix exactly as Building.photoUrl and OrgProfile.logoUrl
+          // are: an arbitrary URL here would let an admin point the record at
+          // another tenant's object or an external host (an exfiltration or
+          // image-swap-after-review vector). Null is the CLEAR intent on update;
+          // the create path rejects nulls before this runs.
+          let photoUrl: string | null | undefined;
+          if (payload.photoUrl === null) {
+            photoUrl = null;
+          } else if (payload.photoUrl !== undefined) {
+            const url = requireString(payload, 'photoUrl', 2048);
+            photoUrl = requireTenantStorageRef(url, 'photoUrl', env, orgId);
+          }
           return {
             name: optionalString(payload, 'name', TEXT_LIMITS.shortText),
             address: clearableString(payload, 'address', TEXT_LIMITS.shortText),
@@ -106,6 +120,7 @@ export const manageCustomer = onCall<ManageCustomerInput>(
             // address on the platform, never accepted as a free-text string.
             email: clearableEmail(payload),
             phone: clearableString(payload, 'phone', TEXT_LIMITS.shortText),
+            photoUrl,
           };
         };
 
@@ -177,6 +192,7 @@ export const manageCustomer = onCall<ManageCustomerInput>(
             ...(fields.address ? { address: fields.address } : {}),
             ...(fields.email ? { email: fields.email } : {}),
             ...(fields.phone ? { phone: fields.phone } : {}),
+            ...(fields.photoUrl ? { photoUrl: fields.photoUrl } : {}),
           };
           const customerId = db.ref(paths.db.customers(orgId)).push()
             .key as string;
@@ -290,6 +306,9 @@ export const manageCustomer = onCall<ManageCustomerInput>(
           }
           if (fields.email !== undefined) update[`${customerPath}/email`] = fields.email;
           if (fields.phone !== undefined) update[`${customerPath}/phone`] = fields.phone;
+          if (fields.photoUrl !== undefined) {
+            update[`${customerPath}/photoUrl`] = fields.photoUrl;
+          }
           if (Object.keys(update).length === 0) {
             throw fail.invalidArgument('No customer fields were provided.');
           }

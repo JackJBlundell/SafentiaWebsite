@@ -107,6 +107,16 @@ export const keys = {
    *  NOT with `assessment` (a different node shape). */
   assessmentsByStatus: (orgId: string, status: string) =>
     ['assessments', orgId, 'status', status] as const,
+  /** A BOUNDED window of assessments in one lifecycle stage. The window size is
+   *  part of the key for the same reason as `logBookWindow`: the dashboard's
+   *  release card and the full released list read the same indexed node through
+   *  different limits, and one cache entry cannot honestly hold both windows.
+   *  Shares the `assessments` prefix so prefix invalidation covers it. */
+  assessmentsByStatusWindow: (
+    orgId: string,
+    status: string,
+    windowSize: number,
+  ) => ['assessments', orgId, 'status', status, 'window', windowSize] as const,
   assessmentAnswers: (orgId: string, assessmentId: string) =>
     ['assessmentAnswers', orgId, assessmentId] as const,
   buildingAssessments: (orgId: string, buildingId: string) =>

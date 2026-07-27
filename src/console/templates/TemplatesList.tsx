@@ -24,12 +24,17 @@ import { useRtdbQuery } from '../../query/useRtdbQuery';
 import type { ReportStandard, Template } from '../../types';
 import { REPORT_STANDARDS } from '../../types';
 import { Card } from '../ui/Card';
-import { DataTable, type Column } from '../ui/DataTable';
+import { DataTable, type Column, type RowExpansion } from '../ui/DataTable';
 import { Toolbar, ToolbarGroup } from '../ui/Grid';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { LoadingNote, toEntries, useOrgScope } from '../customers/shared';
 import shared from '../customers/shared.module.css';
-import { isBaseTemplate, standardLabel, templateUrls } from './shared';
+import {
+  isBaseTemplate,
+  standardLabel,
+  templateCounts,
+  templateUrls,
+} from './shared';
 import styles from './TemplatesList.module.css';
 
 // ----------------------------------------------------------------------------
@@ -45,6 +50,12 @@ interface TemplateRow {
   /** Live node status, when a live node exists. */
   liveStatus: 'published' | 'archived' | null;
   hasDraft: boolean;
+  /** The body the row's link opens, so the expanded summary describes what an
+   *  admin would actually see in the builder: the draft when one is in flight,
+   *  otherwise the published version. */
+  body: Template;
+  /** Says WHICH body the summary is of, so a draft is never mistaken for live. */
+  bodyLabel: string;
 }
 
 function mergeRows(
@@ -54,6 +65,7 @@ function mergeRows(
   const rows: TemplateRow[] = [];
   const draftIds = new Set(Object.keys(drafts ?? {}));
   for (const [id, template] of toEntries(templates)) {
+    const draft = drafts?.[id];
     rows.push({
       id,
       name: template.name,
@@ -61,6 +73,10 @@ function mergeRows(
       publishedVersion: template.version,
       liveStatus: template.status === 'archived' ? 'archived' : 'published',
       hasDraft: draftIds.has(id),
+      body: draft ?? template,
+      bodyLabel: draft
+        ? 'Draft in progress'
+        : `Published version ${template.version}`,
     });
   }
   // Drafts with no published node yet: real templates, just not live.
@@ -73,6 +89,8 @@ function mergeRows(
       publishedVersion: null,
       liveStatus: null,
       hasDraft: true,
+      body: draft,
+      bodyLabel: 'Draft in progress',
     });
   }
   return rows.sort((a, b) => a.name.localeCompare(b.name, 'en-GB'));
@@ -115,20 +133,66 @@ const COLUMNS_STATIC: Array<Column<TemplateRow>> = [
     header: 'Actions',
     align: 'end',
     width: '1%',
-    cell: (row) => (
-      <span className={styles.actions}>
-        <Button variant="secondary" to={templateUrls.builder(row.id)}>
-          Edit draft
-        </Button>
-        {row.publishedVersion !== null && (
+    cell: (row) =>
+      // Opening the draft is the row's own link (see rowHref below), so the
+      // only action left here is the one the row does NOT lead to.
+      row.publishedVersion === null ? null : (
+        <span className={styles.actions}>
           <Link className={styles.versionsLink} to={templateUrls.versions(row.id)}>
             Version history
           </Link>
-        )}
-      </span>
-    ),
+        </span>
+      ),
   },
 ];
+
+// ----------------------------------------------------------------------------
+// The expanded summary: what is actually inside the template.
+// ----------------------------------------------------------------------------
+
+/** Reveals the section list of the body the row's link opens, so an admin can
+ *  see the shape of a template without leaving the directory. Section titles
+ *  and question counts only: enough to tell two templates apart and to spot an
+ *  empty draft, without pasting the builder into a table row. */
+function TemplateContents({ row }: { row: TemplateRow }) {
+  const sections = row.body.sections ?? [];
+  const counts = templateCounts(row.body);
+  return (
+    <div className={styles.contents}>
+      <p className={styles.contentsHint}>
+        {row.bodyLabel}
+        {' | '}
+        {counts.sections} {counts.sections === 1 ? 'section' : 'sections'}
+        {' | '}
+        {counts.questions} {counts.questions === 1 ? 'question' : 'questions'}
+      </p>
+      {sections.length === 0 ? (
+        <p className={styles.contentsEmpty}>
+          This template has no sections yet. Open it to add the first one.
+        </p>
+      ) : (
+        <ol className={styles.sectionList}>
+          {sections.map((section) => (
+            <li key={section.id} className={styles.section}>
+              <span className={styles.sectionCode}>{section.code}</span>
+              <span className={styles.sectionTitle}>{section.title}</span>
+              <span className={styles.sectionCount}>
+                {(section.questions ?? []).length}{' '}
+                {(section.questions ?? []).length === 1 ? 'question' : 'questions'}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+const CONTENTS_EXPANSION: RowExpansion<TemplateRow> = {
+  header: 'Contents',
+  label: (row) => `contents of ${row.name}`,
+  content: (row) => <TemplateContents row={row} />,
+};
 
 // ----------------------------------------------------------------------------
 // New-template panel: name + standard + start-from, writing the draft node.
@@ -342,7 +406,7 @@ export function TemplatesList() {
     <div className={styles.root}>
       <PageHeader
         title="Templates"
-        lede="The assessment templates your organisation publishes to assessors. Edit a draft, publish a new version, or manage the Standard Paragraphs library."
+        lede="The assessment templates your organisation publishes to assessors. Select a template to edit its draft, show its contents to see the sections inside, or manage the Standard Paragraphs library."
         action={
           <Button variant="secondary" to={templateUrls.paragraphs}>
             Standard paragraphs
@@ -382,6 +446,9 @@ export function TemplatesList() {
                   className={`${shared.input} ${styles.search}`}
                   type="search"
                   autoComplete="off"
+                  // The hint repeats what the filter below actually matches on;
+                  // the <label> above carries the name, this only adds detail.
+                  placeholder="Search by name or standard"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
@@ -415,7 +482,14 @@ export function TemplatesList() {
             <Card flush={rows.length > 0}>
               {rows.length === 0 ? (
                 <p className={styles.noMatches}>
-                  No templates match. Adjust the search.
+                  <span>No templates match "{search.trim()}".</span>
+                  <button
+                    type="button"
+                    className={styles.clearSearch}
+                    onClick={() => setSearch('')}
+                  >
+                    Clear search
+                  </button>
                 </p>
               ) : (
                 <DataTable
@@ -423,6 +497,8 @@ export function TemplatesList() {
                   columns={COLUMNS_STATIC}
                   rows={rows}
                   rowKey={(row) => row.id}
+                  rowHref={(row) => templateUrls.builder(row.id)}
+                  expansion={CONTENTS_EXPANSION}
                 />
               )}
             </Card>

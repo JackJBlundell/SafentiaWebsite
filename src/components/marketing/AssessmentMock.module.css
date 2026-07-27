@@ -21,7 +21,7 @@
   justify-self: start;
   font-size: 0.6875rem;
   font-weight: 600;
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   background: color-mix(in srgb, var(--brand-primary) 10%, var(--color-surface));
   padding: 2px var(--space-sm);
   border-radius: var(--radius-pill);

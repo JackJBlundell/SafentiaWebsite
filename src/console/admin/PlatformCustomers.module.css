@@ -1,6 +1,20 @@
 /* PlatformCustomers - platform-wide customers list. Tokens only. */
 
+.customerCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .name {
   font-weight: 600;
   color: var(--color-text);
 }
+
+/* Address under the name; wraps rather than widening the table. */
+.meta {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+

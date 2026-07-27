@@ -74,7 +74,7 @@
   /* Slightly narrower than bookings so an exact overlap still shows both. */
   right: var(--space-lg);
   background: var(--brand-primary);
-  border: 1px solid var(--brand-primary);
+  border: 1px solid var(--brand-ink);
   color: var(--brand-on-primary);
   cursor: grab;
   touch-action: none;

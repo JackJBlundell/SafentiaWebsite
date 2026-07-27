@@ -246,6 +246,20 @@ export interface ImportParseResult {
 // problem rather than throwing, so one bad cell never hides the rest.
 // ----------------------------------------------------------------------------
 
+/** Undo the spreadsheet formula-injection guard applied on export
+ *  (`escapeCsvField` prefixes an apostrophe to a cell opening with = + - @).
+ *  Without this, exporting and re-importing accumulates a quote per round trip
+ *  and turns `+441179...` into `'+441179...`.
+ *
+ *  Deliberately narrow: the apostrophe is only removed when the character after
+ *  it is one the guard actually escapes. A leading apostrophe is legitimate in
+ *  real place names, so blanket stripping would corrupt an address in
+ *  's-Hertogenbosch. */
+function unguardCell(value: string): string {
+  if (value.length < 2 || value[0] !== "'") return value;
+  return /[=+\-@]/.test(value[1] ?? '') ? value.slice(1) : value;
+}
+
 interface CellContext {
   line: number;
   errors: ImportProblem[];
@@ -681,12 +695,32 @@ export function readImportRows(
   dataRows.forEach((cells, index) => {
     const line = index + 2;
     const before = errors.length;
+
+    // A row holding MORE values than the file has columns is data this pass
+    // would otherwise drop in silence, and the usual cause is a comma or a
+    // quote mark inside a cell that was never quoted, which also shifts every
+    // later value into the wrong column. Importing that would write plausible
+    // but wrong records, so it is an error, not a tolerance. Trailing empty
+    // values are ignored: spreadsheets pad rows with commas routinely.
+    const overflow = cells
+      .slice(headerRow.length)
+      .filter((value) => value.trim().length > 0);
+    if (overflow.length > 0) {
+      errors.push({
+        line,
+        column: 'file',
+        message:
+          'This row has more values than the file has columns. Check for a comma or a quote mark inside a cell, and put quotes around it.',
+      });
+    }
+
     const ctx: CellContext = {
       line,
       errors,
       get: (header) => {
         const position = positions.get(header);
-        return position === undefined ? '' : (cells[position] ?? '').trim();
+        if (position === undefined) return '';
+        return unguardCell((cells[position] ?? '').trim());
       },
     };
 

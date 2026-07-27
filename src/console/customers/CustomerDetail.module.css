@@ -41,12 +41,18 @@
   font-size: 0.9375rem;
 }
 
+/* The actions sit directly beneath the organisation's description list rather
+   than in a card of their own, so they need their own separation: without it
+   the first button butts straight up against the Status badge above it. */
 .actions {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-md);
   width: 100%;
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border);
 }
 
 .emptyAction {
@@ -72,4 +78,19 @@
 
 .noReview {
   color: var(--color-text-muted);
+}
+
+/* The customer's logo/photo at the top of the organisation card. Contained so a
+   tall or wide upload never distorts, and centred with a quiet frame; absent for
+   most customers, which is the normal case, not an error. */
+.orgImage {
+  display: block;
+  max-inline-size: 8rem;
+  max-block-size: 8rem;
+  margin-block-end: var(--space-md);
+  object-fit: contain;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  padding: var(--space-sm);
 }

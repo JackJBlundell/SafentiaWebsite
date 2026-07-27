@@ -72,9 +72,11 @@ export function CertificatePanel({
     setProgress(0);
     try {
       // The certificate is an organisation-level asset, not building media, so
-      // it lives beside the whitelabel logo under the org's assets prefix.
+      // it lives under the org's assets prefix - but in its own `certificates`
+      // segment, whose Storage rule admits PDFs. The sibling `assets/{assetId}`
+      // rule stays image-only so a PDF can never become the whitelabel logo.
       const url = await uploadFile({
-        storagePath: paths.storage.orgAsset(claims.orgId, newObjectId()),
+        storagePath: paths.storage.orgCertificate(claims.orgId, newObjectId()),
         file,
         onProgress: setProgress,
       });
@@ -120,6 +122,15 @@ export function CertificatePanel({
         A PDF merged into every report generated from this template, such as an
         accreditation certificate or a signed cover sheet. Its pages are included
         exactly as uploaded.
+      </p>
+      {/* Password-protected files cannot be merged reliably: the pages can copy
+          across as unreadable content without raising an error, so the report
+          would go out with a corrupt certificate rather than none. Warning the
+          admin here is the only practical guard. */}
+      <p className={styles.hint}>
+        Do not upload a password-protected PDF. Reports are generated
+        automatically on release, so a certificate that cannot be read is left
+        out of the report rather than holding up the release.
       </p>
 
       {certificate ? (

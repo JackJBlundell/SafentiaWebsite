@@ -104,7 +104,7 @@
 }
 
 .tick {
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   font-weight: 700;
 }
 
@@ -113,7 +113,7 @@
   margin: 0;
   padding: var(--space-md) var(--space-lg);
   border: 1px solid var(--color-border-strong);
-  border-left: 4px solid var(--brand-primary);
+  border-left: 4px solid var(--brand-ink);
   border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
   color: var(--color-text);

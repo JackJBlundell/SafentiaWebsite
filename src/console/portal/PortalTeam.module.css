@@ -1,0 +1,240 @@
+/* PortalTeam - the customer admin's "who has access" list and invite form.
+ * Reuses the portal design tokens; brand colour is FILL only (--brand-ink for
+ * text, links and focus rings), never a decorative gold. */
+
+.listCard {
+  margin-top: var(--space-lg);
+}
+
+.cardPad {
+  padding: var(--space-lg) var(--space-lg) 0;
+}
+
+.cardPadBottom {
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.emptyRow {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+  color: var(--color-text-muted);
+}
+
+.list {
+  list-style: none;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+}
+
+.list li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  min-height: var(--min-touch-target);
+  padding: var(--space-sm) var(--space-lg);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Names and email addresses run long; they wrap inside the row rather than
+ * pushing the status column off the card. */
+.rowName {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rowEmail {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+  flex-shrink: 0;
+}
+
+.roles {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+/* Portal standing as a labelled chip. Colour is never the sole carrier: each
+ * chip states its status in words, the tint is texture only. */
+.standing {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
+.active {
+  border-color: var(--brand-ink);
+  color: var(--brand-ink);
+}
+
+.pending {
+  background: var(--color-surface-alt);
+  color: var(--color-text-secondary);
+}
+
+.none {
+  color: var(--color-text-muted);
+}
+
+/* --- Invite form ---------------------------------------------------------- */
+
+.formCard {
+  margin-top: var(--space-lg);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 34rem;
+  margin-top: var(--space-md);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.input {
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  margin: 0;
+}
+
+.legend {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-inline: var(--space-xs);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* Each role is a checkbox with its description on the same row, so the
+ * consequence of granting it is read at the point of choosing. */
+.roleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  cursor: pointer;
+}
+
+.checkbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--brand-ink);
+}
+
+.roleText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.roleLabel {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.roleDescription {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.success {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--brand-ink);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 40rem) {
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    padding-block: var(--space-md);
+  }
+
+  .rowMeta {
+    justify-content: flex-start;
+  }
+}

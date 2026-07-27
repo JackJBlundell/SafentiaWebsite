@@ -16,6 +16,7 @@
 
 import { Link } from 'react-router-dom';
 import {
+  equalTo,
   limitToLast,
   orderByChild,
   query,
@@ -27,6 +28,7 @@ import { useRtdbQuery, type RtdbQueryBuilder } from '../query/useRtdbQuery';
 import { ORG_ROLES } from '../types';
 import type {
   ActivityEntry,
+  Assessment,
   OrgMember,
   OrgProfile,
   OrgRole,
@@ -37,11 +39,14 @@ import { ComplianceGlance } from './ui/ComplianceGlance';
 import { PageHeader } from './ui/Page';
 import { SkeletonRows } from './ui/Skeleton';
 import { RagChip, formatDate, urls } from './customers/shared';
+import { activityTargetUrl, humaniseAction } from './lib/humaniseActivity';
 import {
-  activityTargetUrl,
-  humaniseAction,
-  isReleaseAction,
-} from './lib/humaniseActivity';
+  ReportLink,
+  releasedAt,
+  templateLabel,
+  useCustomerName,
+  useReleaseBuilding,
+} from './validation/releaseShared';
 import {
   flattenActions,
   flattenBuildings,
@@ -63,12 +68,23 @@ const ROLE_LABELS: Record<OrgRole, string> = {
   viewer: 'Viewer',
 };
 
-/** One bounded activity window feeds BOTH cards below: the eight newest events
- *  verbatim, and the newest five release events filtered from the same rows.
- *  Releases are sparse among general activity, hence the wider window; one
- *  subscription, two honest views of it. */
+/** The bounded activity window behind the recent-activity feed. */
 const ACTIVITY_WINDOW = 100;
 const RECENT_EVENT_COUNT = 8;
+
+/** Recent releases are read from the RELEASED ASSESSMENTS themselves, not from
+ *  the activity trail: an ActivityEntry carries only an actor, a verb and an
+ *  assessment id, which cannot answer "what went out, for whom, under which
+ *  template". The subscription is the released list's own indexed query
+ *  (orderByChild('status') + equalTo('released')) with a small limitToLast.
+ *
+ *  The window is wider than the number of rows shown because limitToLast on a
+ *  status query bounds by KEY order, and an assessment's key is minted when the
+ *  assessment starts, not when it is released; taking a slightly deeper slice
+ *  and then sorting by release time makes "the five most recent releases"
+ *  actually true, while keeping the payload bounded (each assessment carries a
+ *  full template snapshot). */
+const RELEASE_WINDOW = 25;
 const RECENT_RELEASE_COUNT = 5;
 
 interface ActivityRow extends ActivityEntry {
@@ -89,6 +105,29 @@ function selectActivityRows(value: unknown): ActivityRow[] {
 /** Stable builder (module scope) for the bounded activity window. */
 const buildActivityWindow: RtdbQueryBuilder = (node) =>
   query(node, orderByChild('at'), limitToLast(ACTIVITY_WINDOW));
+
+/** Stable builder for the bounded released-assessments window. */
+const buildReleaseWindow: RtdbQueryBuilder = (node) =>
+  query(
+    node,
+    orderByChild('status'),
+    equalTo('released'),
+    limitToLast(RELEASE_WINDOW),
+  );
+
+interface ReleaseRow extends Assessment {
+  id: string;
+}
+
+/** Newest release first, the same ordering the released list uses, so the two
+ *  surfaces can never disagree about what "most recent" means. */
+function selectReleaseRows(value: unknown): ReleaseRow[] {
+  const node = (value as Record<string, Assessment> | null) ?? {};
+  return Object.entries(node)
+    .map(([id, assessment]) => ({ id, ...assessment }))
+    .sort((a, b) => releasedAt(b) - releasedAt(a))
+    .slice(0, RECENT_RELEASE_COUNT);
+}
 
 /** British date, 24-hour time, for the tooltip: "12 Jun 2026, 14:03". */
 const dateTimeFormat = new Intl.DateTimeFormat('en-GB', {
@@ -164,6 +203,69 @@ function ActivityFeedRow({
       >
         {relativeTime(row.at, now)}
       </time>
+    </li>
+  );
+}
+
+/**
+ * One released assessment, told in full: which BUILDING went out, for which
+ * CUSTOMER, under which TEMPLATE (and its standard where the template declares
+ * one), when, and by whom - with the report PDF reachable from the row itself.
+ *
+ * The building name links to the building's own record, which every org role
+ * can reach and which holds the complete assessment history. Until the job
+ * resolves its site there is no honest building URL, so the name renders as
+ * plain text rather than a link that would 404; a dangling building or customer
+ * record renders its raw id, never a blank.
+ */
+function ReleaseRow({
+  row,
+  releaser,
+  now,
+}: {
+  row: ReleaseRow;
+  releaser: string;
+  now: number;
+}) {
+  const { building, siteId } = useReleaseBuilding(row.jobId, row.buildingId);
+  const customerName = useCustomerName(row.customerId);
+  const buildingName = building?.name ?? row.buildingId;
+  const at = releasedAt(row);
+  const href = siteId
+    ? urls.building(row.customerId, siteId, row.buildingId)
+    : null;
+
+  return (
+    <li className={styles.releaseRow}>
+      <div className={styles.releaseText}>
+        {href ? (
+          <Link to={href} className={styles.releaseLink}>
+            {buildingName}
+          </Link>
+        ) : (
+          <span className={styles.releaseName}>{buildingName}</span>
+        )}
+        <span className={styles.releaseMeta}>
+          {customerName} · {templateLabel(row.templateSnapshot)}
+        </span>
+        <span className={styles.releaseMeta}>
+          Released{' '}
+          <time
+            dateTime={new Date(at).toISOString()}
+            title={dateTimeFormat.format(at)}
+          >
+            {relativeTime(at, now)}
+          </time>{' '}
+          by {releaser}
+        </span>
+      </div>
+      <div className={styles.releaseAction}>
+        <ReportLink
+          buildingId={row.buildingId}
+          assessmentId={row.id}
+          subject={buildingName}
+        />
+      </div>
     </li>
   );
 }
@@ -278,6 +380,17 @@ export function ConsoleHome() {
     build: buildActivityWindow,
   });
 
+  // The releases card's own indexed, bounded subscription. Its own cache key
+  // (window size included), so it never clobbers the released list's deeper
+  // window over the same node.
+  const releases = useRtdbQuery<ReleaseRow[]>({
+    key: keys.assessmentsByStatusWindow(orgId, 'released', RELEASE_WINDOW),
+    path: paths ? paths.db.assessments(orgId) : '',
+    select: selectReleaseRows,
+    enabled,
+    build: buildReleaseWindow,
+  });
+
   // Greet by first name where one exists; the old greeting card's content now
   // lives in this header lede.
   const firstName = user?.displayName?.trim().split(/\s+/)[0];
@@ -300,12 +413,7 @@ export function ConsoleHome() {
   const reviews = buildingRows ? upcomingReviews(buildingRows, now) : undefined;
 
   const recentEvents = activity.data?.slice(0, RECENT_EVENT_COUNT);
-  // isReleaseAction, not an exact string match: releaseAssessment appends a
-  // "(manual risk: ...)" detail when the assessor overrode the derived band,
-  // and those releases belong in this card too.
-  const recentReleases = activity.data
-    ?.filter((row) => isReleaseAction(row.action))
-    .slice(0, RECENT_RELEASE_COUNT);
+  const recentReleases = releases.data;
 
   // The first quick-action set whose role the member holds; admins keep their
   // original three. A member with no matching set gets no card, not filler.
@@ -446,7 +554,7 @@ export function ConsoleHome() {
           <Card>
             <CardHeader
               title="Recent releases"
-              hint={`Assessments released, from the newest ${ACTIVITY_WINDOW} recorded events.`}
+              hint={`The last ${RECENT_RELEASE_COUNT} assessments released to customers, with their reports.`}
               action={
                 // The full releases list lives in the auditor-gated validation
                 // area, so the affordance is offered only to the roles that can
@@ -466,17 +574,22 @@ export function ConsoleHome() {
                 No assessments have been released recently.
               </p>
             )}
+            {releases.isError && (
+              <p className={styles.quietNote}>
+                Could not load recent releases. Please try again.
+              </p>
+            )}
             {recentReleases !== undefined && recentReleases.length > 0 && (
-              <ul className={styles.activityList}>
-                {/* The trail records the assessment id as each row's target;
-                    there is no console URL for a released assessment yet, so
-                    the target stays text rather than a dead link
-                    (activityTargetUrl encodes the same rule). */}
+              <ul className={styles.releaseList}>
                 {recentReleases.map((row) => (
-                  <ActivityFeedRow
+                  <ReleaseRow
                     key={row.id}
                     row={row}
-                    actor={actorName(row.actorUid)}
+                    releaser={
+                      row.workflow?.releasedBy
+                        ? actorName(row.workflow.releasedBy)
+                        : 'an account no longer recorded'
+                    }
                     now={now}
                   />
                 ))}

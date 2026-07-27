@@ -179,6 +179,8 @@ function EmailPreferencesForm() {
   const [actionAssigned, setActionAssigned] = useState(true);
   const [awaitingValidation, setAwaitingValidation] = useState(true);
   const [released, setReleased] = useState(true);
+  const [infoRequested, setInfoRequested] = useState(true);
+  const [deadlineReminder, setDeadlineReminder] = useState(true);
   const [saved, setSaved] = useState(false);
 
   // Seed once from the first snapshot: absent preferences mean every category
@@ -192,6 +194,8 @@ function EmailPreferencesForm() {
     setActionAssigned(stored?.actionAssigned !== false);
     setAwaitingValidation(stored?.awaitingValidation !== false);
     setReleased(stored?.released !== false);
+    setInfoRequested(stored?.infoRequested !== false);
+    setDeadlineReminder(stored?.deadlineReminder !== false);
     setSeeded(true);
   }, [seeded, member.data]);
 
@@ -203,6 +207,8 @@ function EmailPreferencesForm() {
         actionAssigned,
         awaitingValidation,
         released,
+        infoRequested,
+        deadlineReminder,
       },
     });
     if (result) {
@@ -244,6 +250,20 @@ function EmailPreferencesForm() {
       note: 'When a validated assessment is released and its report becomes available. Sent to administrators.',
       checked: released,
       set: setReleased,
+    },
+    {
+      id: 'pref-info-requested',
+      label: 'Information requested',
+      note: 'When an auditor asks for more information on an assessment you carried out. Applies to the assessor role.',
+      checked: infoRequested,
+      set: setInfoRequested,
+    },
+    {
+      id: 'pref-deadline-reminder',
+      label: 'Deadlines approaching',
+      note: 'Reminders as a deadline you own approaches or passes: an information request awaiting your response, or an open action on the action plan.',
+      checked: deadlineReminder,
+      set: setDeadlineReminder,
     },
   ];
 

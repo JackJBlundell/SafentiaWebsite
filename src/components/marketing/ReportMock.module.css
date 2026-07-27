@@ -11,7 +11,7 @@
   align-items: center;
   gap: var(--space-md);
   padding-bottom: var(--space-lg);
-  border-bottom: 2px solid var(--brand-primary);
+  border-bottom: 2px solid var(--brand-ink);
 }
 
 /* The customer's own mark goes here on the real report; the brand accent

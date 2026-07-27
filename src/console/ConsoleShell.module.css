@@ -283,7 +283,7 @@
 }
 
 .navLinkActive {
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   background: color-mix(in srgb, var(--brand-primary) 10%, transparent);
   font-weight: 600;
 }
@@ -312,7 +312,7 @@
   padding: 2px var(--space-xs);
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   font-size: 0.6875rem;
   font-weight: 700;
   line-height: 1.2;
@@ -420,7 +420,7 @@
   padding: 1px var(--space-xs);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
-  color: var(--brand-primary);
+  color: var(--brand-ink);
   font-size: 0.6875rem;
   font-weight: 650;
   letter-spacing: 0.04em;

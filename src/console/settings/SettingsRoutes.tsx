@@ -13,11 +13,13 @@ import { useAuth } from '../../auth/AuthProvider';
 import { EmptyState } from '../ui/Page';
 import { OrganisationSettingsPage } from './OrganisationSettingsPage';
 import { RagSettingsPage } from './RagSettingsPage';
+import { ReviewRemindersPage } from './ReviewRemindersPage';
 import styles from './SettingsRoutes.module.css';
 
 const SUB_NAV = [
   { to: '/app/settings', label: 'Organisation', end: true },
   { to: '/app/settings/rag', label: 'Risk scoring', end: false },
+  { to: '/app/settings/reminders', label: 'Review reminders', end: false },
 ] as const;
 
 export function SettingsRoutes() {
@@ -50,6 +52,7 @@ export function SettingsRoutes() {
         <Routes>
           <Route index element={<OrganisationSettingsPage />} />
           <Route path="rag" element={<RagSettingsPage />} />
+          <Route path="reminders" element={<ReviewRemindersPage />} />
         </Routes>
       </div>
     </div>

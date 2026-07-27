@@ -39,26 +39,43 @@
   width: 100%;
 }
 
-.row {
+/* The row is a shell, not a link: the name and meta are the link, and the risk
+   chip beside it is a disclosure button that explains the status. Nesting the
+   button inside the anchor would be invalid and unoperable, so the border and
+   background live on the shell and the link fills the space left. */
+.rowShell {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-lg);
-  min-height: var(--min-touch-target);
+  gap: var(--space-sm) var(--space-lg);
   padding: var(--space-md) var(--space-lg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-background);
+}
+
+.rowShell:hover {
+  border-color: var(--color-border-strong);
+}
+
+.row {
+  display: flex;
+  flex: 1 1 12rem;
+  align-items: center;
+  min-width: 0;
+  min-height: var(--min-touch-target);
   text-decoration: none;
   color: var(--color-text);
 }
 
-.row:hover {
-  border-color: var(--color-border-strong);
+/* Pushed to the trailing edge, and kept whole when the row wraps on a phone. */
+.rowStatus {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
 }
 
 .row:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 1px;
 }
 

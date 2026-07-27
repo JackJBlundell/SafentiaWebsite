@@ -8,6 +8,7 @@
 
 import {
   QUESTION_TYPES,
+  type QuestionMatrix,
   type QuestionType,
   type ReportStandard,
   type StandardParagraph,
@@ -44,6 +45,7 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   multiselect: 'Multiple choice',
   photo: 'Photo',
   nonConformity: 'Non-conformity',
+  matrix: 'Matrix (grid)',
 };
 
 export const STANDARD_LABELS: Record<ReportStandard, string> = {
@@ -55,6 +57,91 @@ export const STANDARD_LABELS: Record<ReportStandard, string> = {
 /** True for the types whose answers are chosen from authored options. */
 export function hasOptions(type: QuestionType): boolean {
   return type === 'select' || type === 'multiselect';
+}
+
+/** True for the types answered by picking one cell of an authored grid. */
+export function hasMatrix(type: QuestionType): boolean {
+  return type === 'matrix';
+}
+
+// ----------------------------------------------------------------------------
+// Matrix grids. These ceilings MIRROR the publishTemplate gate
+// (functions/src/functions/publishTemplate.ts, MATRIX_LIMITS) so the builder can
+// never author a grid the publish would reject; change both together.
+// ----------------------------------------------------------------------------
+
+export const MATRIX_LIMITS = {
+  /** A single-option axis is not a grid, it is a list. */
+  minAxis: 2,
+  maxAxis: 12,
+  /** Total cells, so a template cannot carry an enormous grid. */
+  maxCells: 100,
+  /** Axis headings, option labels and cell outcomes. */
+  labelMax: 200,
+  /** A per-option definition, which can run to a paragraph of standard wording. */
+  definitionMax: 5000,
+} as const;
+
+/**
+ * The grid a question starts life with when its type becomes `matrix`: the
+ * smallest shape the rules allow, so the editor opens on something real and the
+ * author fills it in rather than assembling it from nothing.
+ */
+export function defaultMatrix(): QuestionMatrix {
+  return {
+    rowLabel: '',
+    columnLabel: '',
+    rows: ['', ''],
+    columns: ['', ''],
+    cells: [
+      ['', ''],
+      ['', ''],
+    ],
+  };
+}
+
+/**
+ * Force a grid rectangular and drop definitions that no longer name an option.
+ * Both invariants are also maintained by the editor's mutators, so this only
+ * ever has work to do on data read back from RTDB (which stores no empty arrays
+ * and can return an array-shaped node as an object map).
+ */
+export function normaliseMatrix(raw: unknown): QuestionMatrix {
+  const value = (raw ?? {}) as Partial<QuestionMatrix>;
+  const asLabel = (candidate: unknown): string =>
+    typeof candidate === 'string' ? candidate : '';
+  const rows = asArray<unknown>(value.rows).map(asLabel);
+  const columns = asArray<unknown>(value.columns).map(asLabel);
+  const rawCells = asArray<unknown>(value.cells);
+  const cells = rows.map((_, rowIndex) => {
+    const rawRow = asArray<unknown>(rawCells[rowIndex]);
+    return columns.map((__, columnIndex) => asLabel(rawRow[columnIndex]));
+  });
+
+  const labels = new Set([...rows, ...columns].filter((label) => label.trim()));
+  const definitions: Record<string, string> = {};
+  const rawDefinitions = value.definitions;
+  if (rawDefinitions && typeof rawDefinitions === 'object') {
+    for (const [key, text] of Object.entries(
+      rawDefinitions as Record<string, unknown>,
+    )) {
+      if (labels.has(key) && typeof text === 'string' && text.trim()) {
+        definitions[key] = text;
+      }
+    }
+  }
+  const hasDefinitions = Object.keys(definitions).length > 0;
+
+  return {
+    rowLabel: asLabel(value.rowLabel),
+    columnLabel: asLabel(value.columnLabel),
+    rows,
+    columns,
+    cells,
+    // Omitted rather than left empty: the write payload omits it too, and the
+    // autosave echo-guard compares fingerprints of both.
+    ...(hasDefinitions ? { definitions } : {}),
+  };
 }
 
 // ----------------------------------------------------------------------------
@@ -82,17 +169,23 @@ export function normaliseTemplate(raw: unknown): Template {
     id: section.id ?? newId('s'),
     code: section.code ?? '',
     title: section.title ?? '',
-    questions: asArray<TemplateQuestion>(section.questions).map((question) => ({
-      ...question,
-      id: question.id ?? newId('q'),
-      text: question.text ?? '',
-      type: (QUESTION_TYPES as readonly string[]).includes(question.type)
+    questions: asArray<TemplateQuestion>(section.questions).map((question) => {
+      // options and matrix are pulled out of the spread so a type change can
+      // drop the one that no longer applies: the write payload omits it, and a
+      // stale copy left in the local draft would read as a foreign change.
+      const { options, matrix, ...rest } = question;
+      const type = (QUESTION_TYPES as readonly string[]).includes(question.type)
         ? question.type
-        : 'text',
-      ...(hasOptions(question.type)
-        ? { options: asArray<string>(question.options) }
-        : {}),
-    })),
+        : 'text';
+      return {
+        ...rest,
+        id: question.id ?? newId('q'),
+        text: question.text ?? '',
+        type,
+        ...(hasOptions(type) ? { options: asArray<string>(options) } : {}),
+        ...(hasMatrix(type) ? { matrix: normaliseMatrix(matrix) } : {}),
+      };
+    }),
   }));
   return {
     name: value.name ?? '',
@@ -147,6 +240,12 @@ export function draftWritePayload(template: Template): Template {
     if (hasOptions(question.type) && question.options) {
       next.options = question.options;
     }
+    // The grid is the substance of a matrix question, so it is written whole;
+    // normalising here keeps it rectangular even if a draft predates the
+    // editor's own guarantees.
+    if (hasMatrix(question.type)) {
+      next.matrix = normaliseMatrix(question.matrix);
+    }
     if (question.required) next.required = true;
     if (question.allowsPhotos) next.allowsPhotos = true;
     if (question.allowsFlagLocation) next.allowsFlagLocation = true;
@@ -195,6 +294,88 @@ export function sectionAnchor(sectionId: string): string {
 /** DOM anchor for a question row. */
 export function questionAnchor(questionId: string): string {
   return `builder-question-${questionId}`;
+}
+
+/**
+ * Every reason a grid could not be published, in plain language. Exported so the
+ * matrix editor can show the same wording inline, next to the offending axis,
+ * rather than only in the publish checklist.
+ */
+export function matrixIssues(matrix: QuestionMatrix | undefined): string[] {
+  const messages: string[] = [];
+  if (!matrix) {
+    return ['build the grid before publishing.'];
+  }
+
+  const axis = (labels: string[], noun: 'row' | 'column'): void => {
+    const plural = `${noun}s`;
+    if (labels.length < MATRIX_LIMITS.minAxis) {
+      messages.push(`the grid needs at least ${MATRIX_LIMITS.minAxis} ${plural}.`);
+    }
+    if (labels.length > MATRIX_LIMITS.maxAxis) {
+      messages.push(`the grid may have at most ${MATRIX_LIMITS.maxAxis} ${plural}.`);
+    }
+    if (labels.some((label) => !label.trim())) {
+      messages.push(`every ${noun} needs a label.`);
+    }
+    if (labels.some((label) => label.trim().length > MATRIX_LIMITS.labelMax)) {
+      messages.push(
+        `a ${noun} label is longer than ${MATRIX_LIMITS.labelMax} characters.`,
+      );
+    }
+    const seen = new Set<string>();
+    for (const label of labels) {
+      const key = label.trim().toLowerCase();
+      if (key && seen.has(key)) {
+        messages.push(`two ${plural} share the label "${label.trim()}".`);
+        break;
+      }
+      seen.add(key);
+    }
+  };
+
+  axis(matrix.rows, 'row');
+  axis(matrix.columns, 'column');
+
+  if (!matrix.rowLabel.trim()) {
+    messages.push('name what the rows measure.');
+  }
+  if (!matrix.columnLabel.trim()) {
+    messages.push('name what the columns measure.');
+  }
+  if (matrix.rows.length * matrix.columns.length > MATRIX_LIMITS.maxCells) {
+    messages.push(`the grid may have at most ${MATRIX_LIMITS.maxCells} cells.`);
+  }
+
+  const emptyCell = matrix.cells.some(
+    (row, rowIndex) =>
+      row.length !== matrix.columns.length ||
+      row.some((cell) => !cell.trim()) ||
+      rowIndex >= matrix.rows.length,
+  );
+  if (emptyCell || matrix.cells.length !== matrix.rows.length) {
+    messages.push('give every cell of the grid an outcome.');
+  }
+  if (
+    matrix.cells.some((row) =>
+      row.some((cell) => cell.trim().length > MATRIX_LIMITS.labelMax),
+    )
+  ) {
+    messages.push(
+      `a cell outcome is longer than ${MATRIX_LIMITS.labelMax} characters.`,
+    );
+  }
+  if (
+    Object.values(matrix.definitions ?? {}).some(
+      (text) => text.trim().length > MATRIX_LIMITS.definitionMax,
+    )
+  ) {
+    messages.push(
+      `a definition is longer than ${MATRIX_LIMITS.definitionMax} characters.`,
+    );
+  }
+
+  return messages;
 }
 
 export function validateTemplate(
@@ -256,6 +437,15 @@ export function validateTemplate(
         if (options.length === 0) {
           issues.push({
             message: `${questionLabel}: a choice question needs at least one option.`,
+            anchorId: questionAnchorId,
+            questionId: question.id,
+          });
+        }
+      }
+      if (hasMatrix(question.type)) {
+        for (const message of matrixIssues(question.matrix)) {
+          issues.push({
+            message: `${questionLabel}: ${message}`,
             anchorId: questionAnchorId,
             questionId: question.id,
           });

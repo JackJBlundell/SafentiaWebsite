@@ -2,15 +2,20 @@
 // PortalReport - one released report, behind its acceptance gate.
 //
 // This is where the released-report email lands (its "Accept & Sign Off" button
-// deep-links straight here). The gate is the point of the screen: until the
-// report record carries an `acceptance`, the contact sees a short form asking
-// them to type their name, NOT a download link. Only once the acceptance is
-// recorded does the PDF become reachable.
+// deep-links straight here). Until the report record carries an `acceptance`,
+// the contact sees a short form asking them to type their name, NOT a download
+// link; once it is recorded, the screen offers the PDF.
 //
-// The gate is a courtesy, not a security boundary - the Storage rules already
-// decide who may fetch the object, and a determined reader could always resolve
-// the path themselves. What the gate produces is the ARTEFACT the organisation
-// needs: a named, timestamped, server-attributed sign-off in the audit trail.
+// READ THIS BEFORE RELYING ON THE PROMPT: acceptance is an attestation of
+// receipt, NOT an access control (project-lead decision). The contact can read
+// `pdfPath` off the report record before accepting, and the Storage rule admits
+// them on their `customerId` metadata alone - Storage rules cannot read RTDB, so
+// an acceptance condition cannot live there. Hiding the link is presentation
+// only. What the prompt produces is the ARTEFACT the organisation needs: a
+// named, timestamped, server-attributed sign-off in the audit trail. If it ever
+// has to become a real gate, `pdfPath` must leave the portal-readable record and
+// the PDF must be served as a short-lived signed URL minted by a callable that
+// checks `acceptance` first.
 //
 // The route nests under the existing building URL, so the breadcrumb walks back
 // the way the reader came. onAssessmentStageChange builds the same URL for the
@@ -34,7 +39,7 @@ import { Card, CardHeader } from '../ui/Card';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
 import { LoadingNote, formatDate } from '../customers/shared';
-import { usePortalScope, portalUrls } from './shared';
+import { usePortalScope, portalUrls, portalReadStatus } from './shared';
 import styles from './PortalReport.module.css';
 
 /** The client mirror of the callable's name check: two characters and at least
@@ -63,20 +68,21 @@ export function PortalReport() {
   });
 
   const report = reports.data?.[reportId];
+  const status = portalReadStatus(reports);
 
-  if (reports.isError) {
+  if (status === 'failed') {
     return (
       <ErrorNotice message="This report could not be loaded. Please try again." />
     );
   }
-  if (reports.isLoading) {
+  if (status === 'loading') {
     return <LoadingNote>Loading report</LoadingNote>;
   }
   if (!report) {
     return (
       <EmptyState
-        title="Report not found"
-        body="This report may have been withdrawn, or the link is out of date."
+        title="This report is not available"
+        body="It may have been withdrawn, or the link may be out of date. Your other reports are on your buildings page."
         action={
           <Button variant="secondary" to={portalUrls.home}>
             Back to your buildings
@@ -91,6 +97,7 @@ export function PortalReport() {
       <PageHeader
         title="Fire risk assessment report"
         lede={`Released ${formatDate(report.generatedAt)}`}
+        back={{ label: 'this building', to: portalUrls.building(siteId, buildingId) }}
         crumbs={[
           { label: 'Your buildings', to: portalUrls.home },
           { label: 'Building', to: portalUrls.building(siteId, buildingId) },

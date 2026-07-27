@@ -461,20 +461,25 @@ describe('PlatformActivity', () => {
     };
     renderAdmin('/activity');
 
-    // Both entries show unfiltered, and the select offers their families.
+    // Both entries show unfiltered as humanised phrases (the raw code stays on
+    // the cell's title), and the select offers their grouped categories.
     expect(
-      await screen.findByText('assessment.stage.released'),
+      await screen.findByText('Released an assessment'),
     ).toBeInTheDocument();
-    expect(screen.getByText('member.updated (roles)')).toBeInTheDocument();
+    expect(
+      screen.getByText('Updated a staff member (roles)'),
+    ).toBeInTheDocument();
 
     await userEvent.selectOptions(
       await screen.findByLabelText('Event type'),
-      'member',
+      'Members',
     );
     expect(
-      screen.queryByText('assessment.stage.released'),
+      screen.queryByText('Released an assessment'),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('member.updated (roles)')).toBeInTheDocument();
+    expect(
+      screen.getByText('Updated a staff member (roles)'),
+    ).toBeInTheDocument();
   });
 });
 
@@ -710,11 +715,13 @@ describe('PlatformMembers', () => {
     expect(await screen.findByText('Ada Byron')).toBeInTheDocument();
     expect(screen.getByText('Noel NoRoles')).toBeInTheDocument();
 
-    // Roles render as text chips (colour is never the sole carrier).
-    expect(screen.getByText('Administrator')).toBeInTheDocument();
-    expect(screen.getByText('Assessor')).toBeInTheDocument();
+    // Roles render as text chips (colour is never the sole carrier). Scoped to
+    // the table: the role filter's select offers the same labels as options.
+    const membersTable = screen.getByRole('table', { name: 'Members' });
+    expect(within(membersTable).getByText('Administrator')).toBeInTheDocument();
+    expect(within(membersTable).getByText('Assessor')).toBeInTheDocument();
     // The role-less member reads honestly rather than throwing.
-    expect(screen.getByText('No roles')).toBeInTheDocument();
+    expect(within(membersTable).getByText('No roles')).toBeInTheDocument();
 
     // The row links to its organisation's detail page.
     expect(
@@ -752,8 +759,11 @@ describe('PlatformBuildings', () => {
 
     expect(await screen.findByText('Tower A')).toBeInTheDocument();
     expect(screen.getByText('Tower B')).toBeInTheDocument();
-    // The stored risk level, presented (never re-derived).
-    expect(screen.getByText('High risk')).toBeInTheDocument();
+    // The stored risk level, presented (never re-derived). Scoped to the table
+    // because the risk filter reuses the same "High risk" label as its chip.
+    expect(
+      within(screen.getByRole('table', { name: 'Buildings' })).getByText('High risk'),
+    ).toBeInTheDocument();
 
     const hrefs = screen
       .getAllByRole('link')

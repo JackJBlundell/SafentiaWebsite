@@ -6,8 +6,9 @@
 // "Recent releases" card, the activity trail, and each building's own history.
 // None of them answered "show me everything this organisation has released".
 // This does, as a single newest-first list that opens each row back on the
-// assessment review page - the same page that now carries the report download
-// and the link into the building's full history.
+// assessment review page - the same page that carries the full assessment and
+// the link into the building's history - while the report PDF itself is
+// reachable from the row, without opening anything.
 //
 // The subscription is INDEXED and bounded, exactly as the queue's are:
 // database.rules.json declares `.indexOn: ["status", ...]` on
@@ -17,10 +18,10 @@
 // recent slice; a busy estate can release more than the cap, so the list says
 // so rather than implying it is exhaustive.
 //
-// Each row's building name, customer name and RAG risk are resolved by cached
-// single-node reads (the queue's pattern), and every one degrades to the raw id
-// rather than a broken row or link when the record is dangling. The release
-// attribution (workflow.releasedBy) is resolved through the same gated
+// Each row's building name, customer name, template, RAG risk and report are
+// resolved by the shared cached single-node reads in releaseShared, and every
+// one degrades to the raw id (or to calm words) rather than a broken row. The
+// release attribution (workflow.releasedBy) is resolved through the same gated
 // /orgMembers read the rest of the area uses.
 // ============================================================================
 
@@ -29,18 +30,19 @@ import { equalTo, limitToLast, orderByChild, query } from 'firebase/database';
 import { useAuth } from '../../auth/AuthProvider';
 import { keys } from '../../query/keys';
 import { useRtdbQuery, type RtdbQueryBuilder } from '../../query/useRtdbQuery';
-import type {
-  Assessment,
-  Building,
-  Customer,
-  Job,
-  OrgMember,
-} from '../../types';
+import type { Assessment, OrgMember } from '../../types';
 import { Card, CardHeader } from '../ui/Card';
 import { DataTable } from '../ui/DataTable';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { RagChip } from '../customers/shared';
 import { actorName } from '../lib/actorName';
+import {
+  ReportLink,
+  releasedAt,
+  templateLabel,
+  useCustomerName,
+  useReleaseBuilding,
+} from './releaseShared';
 import styles from './ReleasedList.module.css';
 
 /** Upper bound on the released-assessments window. Deep enough that the common
@@ -63,23 +65,10 @@ const dateTimeFormat = new Intl.DateTimeFormat('en-GB', {
   hour12: false,
 });
 
-/** The best available release timestamp. releaseAssessment stamps releasedAt,
- *  so it is present on everything released since; acceptedAt (the immediately
- *  prior transition) and finally the conducted date cover older records, so a
- *  row always sorts and dates against a real, recorded moment. */
-function releasedAt(assessment: Assessment): number {
-  return (
-    assessment.workflow?.releasedAt ??
-    assessment.workflow?.acceptedAt ??
-    assessment.conductedAt
-  );
-}
-
-/** Resolves an assessment row's building: job -> siteId -> building, two cached
- *  single-node reads the review page re-uses for free. Renders the name, or the
- *  raw building id if the record is dangling - never a broken cell. */
+/** The row's building name, or the raw building id if the record is dangling -
+ *  never a broken cell. */
 function BuildingName({ jobId, buildingId }: { jobId: string; buildingId: string }) {
-  const building = useBuilding(jobId, buildingId);
+  const { building } = useReleaseBuilding(jobId, buildingId);
   return (
     <span className={styles.buildingName}>
       {building?.name ?? buildingId}
@@ -92,43 +81,30 @@ function BuildingName({ jobId, buildingId }: { jobId: string; buildingId: string
  *  is dangling, a plain text placeholder stands in so colour is never asked to
  *  carry a meaning the row does not yet know. */
 function BuildingRisk({ jobId, buildingId }: { jobId: string; buildingId: string }) {
-  const building = useBuilding(jobId, buildingId);
+  const { building } = useReleaseBuilding(jobId, buildingId);
   if (!building) {
     return <span className={styles.muted}>Risk unavailable</span>;
   }
   return <RagChip level={building.riskLevel} />;
 }
 
-/** Shared job -> siteId -> building resolution for the two building cells. Both
- *  cells read the same keys, so the second is served from cache. */
-function useBuilding(jobId: string, buildingId: string): Building | null {
-  const { claims, paths } = useAuth();
-  const orgId = claims?.orgId ?? '';
-  const jobQuery = useRtdbQuery<Job | null>({
-    key: keys.job(orgId, jobId),
-    path: paths && jobId ? paths.db.job(orgId, jobId) : '',
-    enabled: Boolean(orgId && paths && jobId),
-  });
-  const siteId = jobQuery.data?.siteId ?? '';
-  const buildingQuery = useRtdbQuery<Building | null>({
-    key: keys.building(orgId, siteId, buildingId),
-    path: paths && siteId ? paths.db.building(orgId, siteId, buildingId) : '',
-    enabled: Boolean(orgId && paths && siteId && buildingId),
-  });
-  return buildingQuery.data ?? null;
+/** The customer's name, degrading to the raw customer id when the record is
+ *  dangling. */
+function CustomerName({ customerId }: { customerId: string }) {
+  return <span className={styles.wrap}>{useCustomerName(customerId)}</span>;
 }
 
-/** The customer's name from a cached single-node read, degrading to the raw
- *  customer id when the record is dangling. */
-function CustomerName({ customerId }: { customerId: string }) {
-  const { claims, paths } = useAuth();
-  const orgId = claims?.orgId ?? '';
-  const customerQuery = useRtdbQuery<Customer | null>({
-    key: keys.customer(orgId, customerId),
-    path: paths && customerId ? paths.db.customer(orgId, customerId) : '',
-    enabled: Boolean(orgId && paths && customerId),
-  });
-  return <span>{customerQuery.data?.name ?? customerId}</span>;
+/** The report affordance needs a subject for its accessible name, and that
+ *  subject is the building this release covers. */
+function RowReport({ row }: { row: ReleasedRow }) {
+  const { building } = useReleaseBuilding(row.jobId, row.buildingId);
+  return (
+    <ReportLink
+      buildingId={row.buildingId}
+      assessmentId={row.id}
+      subject={building?.name ?? row.buildingId}
+    />
+  );
 }
 
 export function ReleasedList() {
@@ -205,7 +181,7 @@ export function ReleasedList() {
         <Card flush>
           <CardHeader
             title="Released assessments"
-            hint="Open a row to review the assessment, download its report, or reach the building's full history."
+            hint="Download a report straight from its row, or open the row to review the assessment and reach the building's full history."
             action={
               <span className={styles.count} aria-label={`${rows.length} released assessments`}>
                 {rows.length}
@@ -224,6 +200,14 @@ export function ReleasedList() {
               {
                 header: 'Customer',
                 cell: (row) => <CustomerName customerId={row.customerId} />,
+              },
+              {
+                header: 'Template',
+                cell: (row) => (
+                  <span className={styles.wrap}>
+                    {templateLabel(row.templateSnapshot)}
+                  </span>
+                ),
               },
               {
                 header: 'Released',
@@ -251,6 +235,15 @@ export function ReleasedList() {
                 cell: (row) => (
                   <BuildingRisk jobId={row.jobId} buildingId={row.buildingId} />
                 ),
+              },
+              {
+                header: 'Report',
+                align: 'end',
+                width: '1%',
+                // Its own trailing cell, so the download sits above the row's
+                // stretched link rather than competing with it (DataTable gives
+                // every non-link cell the higher stacking context).
+                cell: (row) => <RowReport row={row} />,
               },
             ]}
             rows={rows}

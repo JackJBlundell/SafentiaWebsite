@@ -108,16 +108,18 @@ export interface OverdueCounts {
  * roll-ups, the reports page - goes through here, so no two surfaces can ever
  * disagree about whether the same action is overdue.
  *
- * An action is overdue when it is still open and the WHOLE due day has passed:
- * dueBy is stored as midnight UTC on the due day (the service-schedule
- * convention), so the action only reads overdue from `dueBy + 24h` onwards -
- * "due by the 9th" means the 9th itself is still on time, not one second past
- * midnight. Actions with no dueBy set are never overdue - absence of a
- * deadline is not a breach of one.
+ * An action is overdue when it is still outstanding (open OR in progress) and
+ * the WHOLE due day has passed: dueBy is stored as midnight UTC on the due day
+ * (the service-schedule convention), so the action only reads overdue from
+ * `dueBy + 24h` onwards - "due by the 9th" means the 9th itself is still on
+ * time, not one second past midnight. Work being in progress does not stop the
+ * clock: an in-progress action past its due date is still a breached deadline.
+ * A signed-off action is closed and never overdue. Actions with no dueBy set
+ * are never overdue - absence of a deadline is not a breach of one.
  */
 export function isActionOverdue(action: Action, now: number): boolean {
   return (
-    action.status === 'open' &&
+    (action.status === 'open' || action.status === 'inProgress') &&
     action.dueBy !== undefined &&
     now >= action.dueBy + DAY_MS
   );

@@ -7,14 +7,28 @@
 // ============================================================================
 
 import { useParams } from 'react-router-dom';
+import { equalTo, orderByChild, query } from 'firebase/database';
 import { Button } from '../../components/Button';
 import { useTheme } from '../../design/ThemeProvider';
 import { riskPresentation } from '../../design/rag';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import { Link } from 'react-router-dom';
-import type { Action, Building, Customer, CustomerContact, Site } from '../../types';
+import type {
+  Action,
+  Assessment,
+  Building,
+  Customer,
+  CustomerContact,
+  OrgMember,
+  OrgSettings,
+  Site,
+} from '../../types';
+import { actorName } from '../lib/actorName';
+import { RAG_CONFIG_DEFAULTS } from '../settings/ragDerivation';
 import { Card, CardHeader } from '../ui/Card';
+import { RiskReasonDisclosure } from '../ui/RiskExplanation';
+import { buildRiskExplanation, type RiskManualOverride } from '../ui/riskReasons';
 import { ComplianceGlance } from '../ui/ComplianceGlance';
 import { DescriptionList, PageGrid, type DescriptionItem } from '../ui/Grid';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
@@ -66,6 +80,28 @@ export function BuildingDetail() {
     path: ready ? db!.customerContacts(orgId, customerId) : '',
     enabled: ready && Boolean(customerId),
   });
+  // The three reads behind the risk explanation. The organisation's OWN RAG
+  // thresholds (never hardcoded ones), and the building's assessments via the
+  // buildingId index - the same cache key the history panel below uses, so the
+  // two share one subscription - so a manual risk override set at release is
+  // named as an override instead of being explained as a derivation.
+  const orgSettings = useRtdbQuery<OrgSettings | null>({
+    key: keys.orgSettings(orgId),
+    path: ready ? db!.orgSettings(orgId) : '',
+    enabled: ready,
+  });
+  const assessments = useRtdbQuery<Record<string, Assessment> | null>({
+    key: keys.buildingAssessments(orgId, buildingId),
+    path: ready ? db!.assessments(orgId) : '',
+    enabled: ready && Boolean(buildingId),
+    build: (node) =>
+      query(node, orderByChild('buildingId'), equalTo(buildingId)),
+  });
+  const members = useRtdbQuery<Record<string, OrgMember> | null>({
+    key: keys.orgMembers(orgId),
+    path: ready ? db!.orgMembers(orgId) : '',
+    enabled: ready,
+  });
 
   if (building.isLoading) {
     return <LoadingNote>Loading building</LoadingNote>;
@@ -94,6 +130,65 @@ export function BuildingDetail() {
   // The big status chip: fixed safety colour plus label and icon, so colour is
   // never the sole carrier. `pending` reads honestly as "Not yet assessed".
   const rag = riskPresentation(theme, record.riskLevel ?? 'pending');
+
+  // WHY the chip says what it says. Everything the release pipeline fed into
+  // the shared derivation is re-stated here from live data: the organisation's
+  // thresholds, the finding counts stored on the building, and the action-plan
+  // state. `dueBy < now` matches releaseAssessment's own overdue test rather
+  // than the dashboards' one-day grace, so the account matches the calculation
+  // that actually ran.
+  const now = Date.now();
+  const openActions = Object.values(actions.data ?? {}).filter(
+    (action) => action.status === 'open',
+  );
+  const actionState =
+    actions.data === undefined
+      ? undefined
+      : {
+          hasOpenHighAction: openActions.some(
+            (action) => action.severity === 'H' || action.lifeProtection === true,
+          ),
+          hasOverdueAction: openActions.some(
+            (action) => typeof action.dueBy === 'number' && action.dueBy < now,
+          ),
+        };
+  // The override that drove the headline risk is the one on the assessment
+  // whose release set it: the most recently released assessment. `null` once
+  // the read has landed and there is no override, which is what lets the
+  // explanation claim to be complete.
+  const latestRelease = Object.values(assessments.data ?? {})
+    .filter(
+      (assessment) =>
+        assessment.status === 'released' &&
+        assessment.workflow?.releasedAt !== undefined,
+    )
+    .sort(
+      (a, b) => (b.workflow?.releasedAt ?? 0) - (a.workflow?.releasedAt ?? 0),
+    )[0];
+  const override = latestRelease?.manualRiskLevel;
+  const manualOverride: RiskManualOverride | null | undefined =
+    assessments.data === undefined
+      ? undefined
+      : override
+        ? {
+            level: override.level,
+            byName: actorName(
+              members.data,
+              override.byUid,
+              members.data !== undefined,
+            ),
+            at: override.at,
+          }
+        : null;
+  const riskExplanation = buildRiskExplanation({
+    level: record.riskLevel ?? 'pending',
+    distribution: record.ragDistribution,
+    lastAssessedAt: record.lastAssessedAt,
+    config: orgSettings.data?.ragConfig ?? RAG_CONFIG_DEFAULTS,
+    actions: actionState,
+    manualOverride,
+    formatDate,
+  });
 
   // Only the recorded facts; DescriptionList drops the absent ones.
   const details = record.details;
@@ -199,6 +294,13 @@ export function BuildingDetail() {
                   ? `Last assessed ${formatDate(record.lastAssessedAt)}`
                   : 'This building has not been assessed yet.'}
               </p>
+              {/* The reasoning lives HERE, in flow, rather than in a floating
+                  tooltip: the aside is a scroll box of its own above 1024px, and
+                  an expanding region cannot be clipped by it or missed by a
+                  keyboard or touch user. */}
+              {orgSettings.data !== undefined && (
+                <RiskReasonDisclosure explanation={riskExplanation} />
+              )}
             </Card>
 
             <Card>
@@ -239,6 +341,11 @@ export function BuildingDetail() {
         <ComplianceGlance
           single
           heading="Building risk status"
+          riskSummary={
+            orgSettings.data === undefined
+              ? undefined
+              : riskExplanation.summary
+          }
           buildings={[{ siteId, buildingId, building: record }]}
           actions={
             actions.data === undefined

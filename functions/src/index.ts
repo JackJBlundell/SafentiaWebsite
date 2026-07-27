@@ -17,6 +17,9 @@ export { onMembershipChange } from './functions/onMembershipChange';
 // claims from /customerMembers records (FR-E22).
 export { onCustomerMembershipChange } from './functions/onCustomerMembershipChange';
 export { createInvitation } from './functions/createInvitation';
+// Read-only lookup /invite runs on load, so the page knows which address the
+// invitation names and whether that account already exists.
+export { previewInvitation } from './functions/previewInvitation';
 export { acceptInvitation } from './functions/acceptInvitation';
 // Switch which organisation a multi-org user is acting in (re-mints their claims).
 export { setActiveOrganisation } from './functions/setActiveOrganisation';
@@ -102,6 +105,17 @@ export { releaseAssessment } from './functions/releaseAssessment';
 // The contact's manual sign-off of a released report: records the typed name
 // against the report, with the uid and timestamp taken from the session.
 export { acceptReport } from './functions/acceptReport';
+// A customer admin invites a colleague into the portal with a role: the first
+// portal-side write beyond acceptReport, and the first customer-role gate. Org
+// and customer are taken from the verified portal token, never the payload.
+export { portalInviteTeammate } from './functions/portalInviteTeammate';
+
+// --- Platform oversight (super admin) ----------------------------------------
+// Records a super admin's read-only drill-down into a tenant as a
+// `platform.access` entry in that tenant's own /activity trail (story 2069 AC2),
+// so an organisation can see when the platform operator looked. Actor and org
+// come from the verified token and validated input, never spoofable client data.
+export { recordPlatformAccess } from './functions/recordPlatformAccess';
 
 // --- Public site --------------------------------------------------------------
 // Book-a-demonstration form: stores the lead at /platform/leads and notifies sales.

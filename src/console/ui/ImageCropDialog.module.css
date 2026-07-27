@@ -62,7 +62,7 @@
 }
 
 .stage:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
 }
 
@@ -82,12 +82,12 @@
 .slider {
   inline-size: 100%;
   min-block-size: var(--min-touch-target);
-  accent-color: var(--brand-primary);
+  accent-color: var(--brand-ink);
   cursor: pointer;
 }
 
 .slider:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid var(--brand-ink);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
