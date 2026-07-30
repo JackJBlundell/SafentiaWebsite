@@ -17,6 +17,9 @@
 //      seconds and tapping it deep-links to the job (1034). The notification names
 //      the scheduled day - and calls out a SAME-DAY booking specifically, since the
 //      07:00 "jobs due today" digest has already run by the time most of them land.
+//      A branded email goes alongside (lib/jobEmails), because an assessor who has
+//      not opened the app has no other way to learn their diary changed; their own
+//      `jobScheduled` preference silences that email and nothing else.
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -35,6 +38,12 @@ import { assertObject, requireString, requireTimestamp, TEXT_LIMITS } from '../l
 import { assertRateLimit } from '../lib/rateLimit';
 import { assertValidSlot, assertNoSlotClash } from '../lib/jobSlots';
 import { sendNotification } from '../lib/notifications';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import {
+  sendJobChangeEmail,
+  sendVisitCustomerEmails,
+  formatVisitDate,
+} from '../lib/jobEmails';
 import { isUkToday, ukWhenPhrase } from '../lib/ukCalendar';
 import type {
   CreateJobInput,
@@ -45,7 +54,11 @@ import type {
   OrgMember,
 } from '../shared/types';
 
-export const createJob = onCall<CreateJobInput>(callableOptions, (request) =>
+export const createJob = onCall<CreateJobInput>(
+  // The assignment email needs the provider secret mounted; without it the
+  // send degrades to a logged intent (lib/email), never an error.
+  { ...callableOptions, secrets: EMAIL_PROVIDER_SECRETS },
+  (request) =>
   runCallable<CreateJobResult>(
     createLogger({ fn: 'createJob' }),
     async () => {
@@ -201,6 +214,54 @@ export const createJob = onCall<CreateJobInput>(callableOptions, (request) =>
           title: today ? 'New job today' : 'New job assigned',
           body: `You have been assigned an assessment at ${building.name}, scheduled for ${when}.`,
           link: `safentia://job/${jobId}`,
+        },
+        logger,
+      );
+      // ...and the same news by email, for the assessor who has not opened the
+      // app today. Best-effort and silent on the member's own opt-out; the
+      // notification above is unconditional either way.
+      await sendJobChangeEmail(
+        paths,
+        orgId,
+        assessorUid,
+        {
+          jobId,
+          buildingName: building.name,
+          customerId,
+          scheduledFor,
+          scheduledUntil,
+          subject: today
+            ? `New job today: ${building.name}`
+            : `New job assigned: ${building.name}`,
+          heading: today
+            ? 'A new job in your diary today'
+            : 'A new job in your diary',
+          // The email names the DATE where the notification says 'today': it is
+          // read hours or days after it lands, by which time a relative phrase
+          // would be a lie.
+          body: `You have been assigned an assessment at ${building.name}, scheduled for ${formatVisitDate(scheduledFor, scheduledUntil)}.`,
+          extraParagraphs: [
+            'Open the job for the building, its records and the assessment you will be carrying out.',
+          ],
+        },
+        logger,
+      );
+      // ...and the CUSTOMER's contacts hear that someone is coming to their
+      // building. Best-effort in exactly the same way: the job is written, and
+      // a duty-holder who cannot be emailed must not undo that.
+      await sendVisitCustomerEmails(
+        paths,
+        orgId,
+        {
+          jobId,
+          customerId,
+          siteId,
+          buildingId,
+          buildingName: building.name,
+          assessorUid,
+          scheduledFor,
+          scheduledUntil,
+          kind: 'scheduled',
         },
         logger,
       );

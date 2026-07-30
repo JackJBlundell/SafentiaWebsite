@@ -79,7 +79,11 @@ export function extractIssues(
 ): DraftIssue[] {
   const map = answers ?? {};
   const issues: DraftIssue[] = [];
-  for (const section of orderedSections(template.sections)) {
+  // The snapshot comes from whatever template the job pinned, and a template is
+  // fully customer-authored: a section list that is absent or malformed must
+  // yield "no issues", not throw. Drafting is an aid - it can be empty, but it
+  // must never be the reason an assessor cannot finish on site.
+  for (const section of orderedSections(template?.sections ?? [])) {
     for (const question of section.questions ?? []) {
       if (question.type !== 'nonConformity') continue;
       const answer = map[question.id];

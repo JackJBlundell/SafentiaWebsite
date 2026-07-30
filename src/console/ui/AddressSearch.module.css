@@ -33,6 +33,18 @@
   background: var(--color-surface-sunken);
 }
 
+/* The polite status line. It stays in the DOM so screen readers announce a
+   change of text rather than the arrival of the region itself. */
+.status {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.status:empty {
+  display: none;
+}
+
 .listbox {
   position: absolute;
   top: 100%;

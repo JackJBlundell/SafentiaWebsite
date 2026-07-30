@@ -2,8 +2,8 @@
 // SettingsRoutes - the settings area's router, admin gate and sub-nav.
 //
 // Mirrors StaffRoutes: the shell hides the nav item from non-admins, and this
-// gate covers the direct-URL case. The sub-nav switches between the two
-// settings surfaces (organisation profile / risk scoring): a left column of
+// gate covers the direct-URL case. The sub-nav switches between the settings
+// surfaces (organisation profile / risk scoring / reminders): a left column of
 // links beside the content on desktop, collapsing to the familiar horizontal
 // tabs on smaller screens. Same links, same DOM, two presentations.
 // ============================================================================
@@ -13,13 +13,15 @@ import { useAuth } from '../../auth/AuthProvider';
 import { EmptyState } from '../ui/Page';
 import { OrganisationSettingsPage } from './OrganisationSettingsPage';
 import { RagSettingsPage } from './RagSettingsPage';
-import { ReviewRemindersPage } from './ReviewRemindersPage';
+import { NotificationSettingsPage } from './NotificationSettingsPage';
 import styles from './SettingsRoutes.module.css';
 
 const SUB_NAV = [
   { to: '/app/settings', label: 'Organisation', end: true },
   { to: '/app/settings/rag', label: 'Risk scoring', end: false },
-  { to: '/app/settings/reminders', label: 'Review reminders', end: false },
+  // The path stays /reminders (it is bookmarked and linked from email footers)
+  // while the surface now covers every scheduled reminder, not reviews alone.
+  { to: '/app/settings/reminders', label: 'Reminders', end: false },
 ] as const;
 
 export function SettingsRoutes() {
@@ -52,7 +54,7 @@ export function SettingsRoutes() {
         <Routes>
           <Route index element={<OrganisationSettingsPage />} />
           <Route path="rag" element={<RagSettingsPage />} />
-          <Route path="reminders" element={<ReviewRemindersPage />} />
+          <Route path="reminders" element={<NotificationSettingsPage />} />
         </Routes>
       </div>
     </div>

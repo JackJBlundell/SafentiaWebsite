@@ -1,0 +1,36 @@
+/* AppScreenshot - a device mockup standing on its own.
+ *
+ * The capture already contains the phone, so there is no bezel to fit inside and
+ * nothing to clip: the styling here only has to size it, sit it in the page and
+ * lift it off the background. */
+
+/* Fills whatever box the page gives it. The hero sizes it and bleeds it past
+ * the fold; a component that hard-coded its own width could not be asked to. */
+.wrap {
+  display: block;
+  width: 100%;
+}
+
+.shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* The mockup is transparent around the device, so the shadow has to follow the
+   * phone's actual silhouette - a box-shadow would draw a rectangle in mid-air
+   * around it. Two drop-shadows: a tight one for contact, a long soft one for
+   * depth, matching the elevation the CSS frame used to carry. */
+  filter:
+    drop-shadow(0 1px 2px color-mix(in srgb, var(--shadow-color) 20%, transparent))
+    drop-shadow(0 32px 48px color-mix(in srgb, var(--shadow-color) 35%, transparent));
+}
+
+/* A drop-shadow this size is expensive to composite on a low-powered device, and
+ * it is decoration rather than information - drop it where the visitor has asked
+ * for less motion and effect. */
+@media (prefers-reduced-motion: reduce) {
+  .shot {
+    filter: drop-shadow(
+      0 1px 2px color-mix(in srgb, var(--shadow-color) 25%, transparent)
+    );
+  }
+}

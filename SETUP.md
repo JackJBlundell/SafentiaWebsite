@@ -58,12 +58,23 @@ FIREBASE_DATABASE_URL=<rtdb-url> FIREBASE_STORAGE_BUCKET=<bucket> \
   npx ts-node src/scripts/backfillReportMetadata.ts --apply
 ```
 
-What it does: walks `/{env}/reports` (both roots), resolves each report's
-owning customer via `/{env}/buildingCustomerIndex`, and sets
+What it does: walks `/{env}/reports` (both roots unless `--env=live` or
+`--env=test` narrows it), resolves each report's owning customer via
+`/{env}/buildingCustomerIndex` - falling back to the building record's own
+`customerId` when that index entry is missing, which is the very condition that
+produced an unreadable report in the first place - and sets
 `customMetadata.customerId` on the Storage object where it is absent or empty.
-Already-stamped objects are never touched, so re-running is safe. The summary
-lists any report whose customer could not be resolved (no index entry) - check
-those by hand before launch.
+The PDF is not re-rendered and the report record is not rewritten, so the
+customer's recorded acceptance survives untouched. Already-stamped objects are
+never touched, so re-running is safe. The summary lists any report whose
+customer could not be resolved, and any object whose existing stamp DISAGREES
+with the current owner (a building that changed hands - reported only, never
+rewritten); check both by hand.
+
+Run it once before opening the portal, and again after any incident where a
+customer reports "the file could not be opened for your account". Where the
+fallback fires, also run `backfillBuildingCustomerIndex.ts`: the missing index
+entry denies the portal's database reads as well as the file.
 
 ## Backups and restore
 

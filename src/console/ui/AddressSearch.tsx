@@ -7,8 +7,10 @@
 // typing. Selecting a suggestion fills the input AND reports the coordinates
 // through onSelect, so forms can pin the location without a coordinates field.
 //
-// This is the console's only third-party call besides Firebase / reCAPTCHA;
-// the Privacy policy names it. Only the typed search text leaves the browser.
+// It is the text half of AddressField, which owns the map half; nothing else
+// should reach for it directly, so there is one address control in the console.
+//
+// The Mapbox call itself lives in geocode.ts, which the map half shares.
 // ============================================================================
 
 import {
@@ -21,14 +23,10 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { webConfig } from '../../config/env';
-import type { GeoPoint } from '../../types';
+import { forwardGeocode, type AddressSelection, type GeocodeMatch } from './geocode';
 import styles from './AddressSearch.module.css';
 
-/** What picking a suggestion yields: the display address plus its point. */
-export interface AddressSelection {
-  address: string;
-  geo: GeoPoint;
-}
+export type { AddressSelection };
 
 export interface AddressSearchProps {
   id: string;
@@ -39,48 +37,18 @@ export interface AddressSearchProps {
   /** Fired only when a suggestion is picked (click or Enter). */
   onSelect: (selection: AddressSelection) => void;
   disabled?: boolean;
-}
-
-interface Suggestion {
-  id: string;
-  placeName: string;
-  geo: GeoPoint;
+  /** Extra ids for the input's description, e.g. a field-level hint. */
+  describedBy?: string;
 }
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 3;
 
-/** The shape we read from a Mapbox geocoding response; everything else in the
- *  payload is ignored. */
-interface MapboxFeature {
-  id?: string;
-  place_name?: string;
-  center?: [number, number];
-}
-
-function toSuggestions(payload: unknown): Suggestion[] {
-  const features = (payload as { features?: MapboxFeature[] })?.features;
-  if (!Array.isArray(features)) {
-    return [];
-  }
-  const suggestions: Suggestion[] = [];
-  for (const feature of features) {
-    if (
-      typeof feature?.place_name === 'string' &&
-      Array.isArray(feature.center) &&
-      typeof feature.center[0] === 'number' &&
-      typeof feature.center[1] === 'number'
-    ) {
-      suggestions.push({
-        id: feature.id ?? `${feature.center[0]},${feature.center[1]}`,
-        placeName: feature.place_name,
-        // Mapbox centres are [lng, lat].
-        geo: { lat: feature.center[1], lng: feature.center[0] },
-      });
-    }
-  }
-  return suggestions;
-}
+/** What the field is doing right now, for the polite status line. `failed` is
+ *  deliberately absent: a failed lookup says nothing at all, because the typed
+ *  text still stands and an outage two streets away is not the assessor's
+ *  problem to read about. */
+type SearchStatus = 'idle' | 'searching' | 'empty';
 
 export function AddressSearch({
   id,
@@ -89,11 +57,14 @@ export function AddressSearch({
   onChange,
   onSelect,
   disabled = false,
+  describedBy,
 }: AddressSearchProps) {
   const token = webConfig.mapboxAccessToken.trim();
   const listId = useId();
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const statusId = useId();
+  const [suggestions, setSuggestions] = useState<GeocodeMatch[]>([]);
   const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<SearchStatus>('idle');
   const [activeIndex, setActiveIndex] = useState(-1);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Monotonic request counter: only the latest response may render, so a slow
@@ -111,6 +82,7 @@ export function AddressSearch({
     }
     requestSeq.current += 1;
     setOpen(false);
+    setStatus('idle');
     setActiveIndex(-1);
   }, []);
 
@@ -138,37 +110,25 @@ export function AddressSearch({
   }, [open, close]);
 
   const search = useCallback(
-    async (query: string) => {
+    async (text: string) => {
       const seq = ++requestSeq.current;
-      try {
-        const response = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-            query,
-          )}.json?access_token=${encodeURIComponent(
-            token,
-          )}&country=gb&limit=5&types=address,postcode,place`,
-        );
-        if (!response.ok) {
-          throw new Error(`Geocoding failed: ${response.status}`);
-        }
-        const payload: unknown = await response.json();
-        if (seq !== requestSeq.current) {
-          return;
-        }
-        const results = toSuggestions(payload);
-        setSuggestions(results);
-        setOpen(results.length > 0);
-        setActiveIndex(-1);
-      } catch (error) {
-        // The search is a convenience, never a gate: on any failure the field
-        // silently behaves as a plain text input - but the failure is logged,
-        // because "silently" must never mean "undiagnosable".
-        console.warn('[Safentia] address search unavailable', error);
-        if (seq === requestSeq.current) {
-          setSuggestions([]);
-          setOpen(false);
-        }
+      setStatus('searching');
+      const results = await forwardGeocode(text, token);
+      if (seq !== requestSeq.current) {
+        return;
       }
+      if (results === null) {
+        // The search is a convenience, never a gate: on failure the field
+        // behaves as a plain text input, with no message to act on.
+        setSuggestions([]);
+        setOpen(false);
+        setStatus('idle');
+        return;
+      }
+      setSuggestions(results);
+      setOpen(results.length > 0);
+      setStatus(results.length === 0 ? 'empty' : 'idle');
+      setActiveIndex(-1);
     },
     [token],
   );
@@ -182,8 +142,8 @@ export function AddressSearch({
     if (timerRef.current) {
       clearTimeout(timerRef.current);
     }
-    const query = next.trim();
-    if (query.length < MIN_QUERY_LENGTH) {
+    const text = next.trim();
+    if (text.length < MIN_QUERY_LENGTH) {
       // Invalidate any in-flight request so a stale response cannot reopen.
       requestSeq.current += 1;
       setSuggestions([]);
@@ -191,13 +151,13 @@ export function AddressSearch({
       return;
     }
     timerRef.current = setTimeout(() => {
-      void search(query);
+      void search(text);
     }, DEBOUNCE_MS);
   };
 
-  const pick = (suggestion: Suggestion) => {
-    onChange(suggestion.placeName);
-    onSelect({ address: suggestion.placeName, geo: suggestion.geo });
+  const pick = (suggestion: GeocodeMatch) => {
+    onChange(suggestion.address);
+    onSelect({ address: suggestion.address, geo: suggestion.geo });
     setSuggestions([]);
     close();
   };
@@ -229,6 +189,12 @@ export function AddressSearch({
 
   // Without a token this is a plain address input by design.
   const searchable = token !== '';
+  const statusText =
+    status === 'searching'
+      ? 'Searching addresses'
+      : status === 'empty'
+        ? 'No matching addresses. The address you type will be used as it is.'
+        : '';
 
   return (
     <div className={styles.root} ref={rootRef}>
@@ -248,6 +214,11 @@ export function AddressSearch({
         aria-expanded={searchable ? open : undefined}
         aria-controls={searchable ? listId : undefined}
         aria-autocomplete={searchable ? 'list' : undefined}
+        aria-describedby={
+          [describedBy, searchable ? statusId : undefined]
+            .filter(Boolean)
+            .join(' ') || undefined
+        }
         aria-activedescendant={
           searchable && open && activeIndex >= 0
             ? `${listId}-option-${activeIndex}`
@@ -271,10 +242,17 @@ export function AddressSearch({
                 pick(suggestion);
               }}
             >
-              {suggestion.placeName}
+              {suggestion.address}
             </li>
           ))}
         </ul>
+      )}
+      {/* Always mounted so an insertion is never what has to be announced; the
+          stylesheet collapses it while it is empty. */}
+      {searchable && (
+        <p id={statusId} className={styles.status} role="status">
+          {statusText}
+        </p>
       )}
     </div>
   );

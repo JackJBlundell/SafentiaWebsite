@@ -6,12 +6,14 @@
 //
 // ARCHITECTURE NOTE (read before editing):
 //   By project-lead decision there is NO shared npm package. This file is the
-//   canonical contract and is MIRRORED, identically, into two places:
-//     - Safentia/src/types/index.ts                         (mobile app)
+//   canonical contract and is MIRRORED, identically, into THREE places:
+//     - FireRite/src/types/index.ts                         (mobile app)
+//     - fireritesite/src/types/index.ts                     (web console)
 //     - fireritesite/functions/src/shared/types/index.ts    (Cloud Functions)
-//   When you change one, change the other in the SAME change set. The drift this
-//   risks is documented, with the sync rule, in SCHEMA_CHANGES.md. Treat the two
-//   files as one contract that happens to live in two repos.
+//   When you change one, change ALL of them in the SAME change set: a `diff`
+//   across the three must come back empty. The drift this risks is documented,
+//   with the sync rule, in SCHEMA_CHANGES.md. Treat the three files as one
+//   contract that happens to live across two repos.
 //
 // Why string-literal unions plus `const` arrays: the unions give us compile-time
 // safety; the arrays give us a runtime allow-list the seed, the Functions input
@@ -53,6 +55,17 @@ export type CustomerRoleSet = { [R in CustomerRole]?: true };
 /** Lifecycle of a person's membership (section 4.1 account states). */
 export type MemberStatus = 'active' | 'locked' | 'archived';
 export const MEMBER_STATUSES = ['active', 'locked', 'archived'] as const;
+
+/**
+ * The standings a PORTAL account can be moved between once it exists
+ * (updateCustomerMember). `archived` is deliberately absent: a portal seat ends
+ * by archiving the whole CUSTOMER - which cascades to every one of their
+ * accounts and records why each was locked - or by removing the contact, so
+ * offering `archived` per account would be a second, quieter route to the same
+ * effect with none of that bookkeeping.
+ */
+export type PortalAccountStatus = 'active' | 'locked';
+export const PORTAL_ACCOUNT_STATUSES = ['active', 'locked'] as const;
 
 // ----------------------------------------------------------------------------
 // Custom claims carried on the Firebase ID token (section 4.1)
@@ -176,6 +189,10 @@ export interface OrgContact {
   email?: string;
   phone?: string;
   address?: string;
+  /** Public website, shown in the report cover's contact strip beside the phone
+   *  and email. Stored as the admin typed it (e.g. "wmcompliance.co.uk"); the
+   *  renderer does not linkify it, so no scheme is required. */
+  website?: string;
 }
 
 export interface OrgProfile {
@@ -186,6 +203,18 @@ export interface OrgProfile {
   /** Optional font family the org wants applied (whitelabel typography). Falls
    *  back to the design-system default when absent. */
   fontFamily?: string;
+  /**
+   * Decorative image for the report cover's top-left panel - the organisation's
+   * own photograph rather than anything about the building being assessed (the
+   * building's own photo sits in the panel below it). A tenant-scoped Storage
+   * path, validated exactly as logoUrl is.
+   *
+   * Absent is a first-class state, not a gap: the renderer paints a panel from
+   * the org's brand colours instead, so a cover always looks composed. That is
+   * deliberately preferred to shipping a stock photograph, which would carry a
+   * licence and would look like someone else's brand on every report.
+   */
+  coverImageUrl?: string;
 }
 
 /** Phase 3 billing block; present in the schema now, populated later. */
@@ -234,6 +263,30 @@ export interface OrgSettings {
    *  the built-in default in lib/reviewWindows, so an org that never configures
    *  this still gets sensible reminders. */
   reviewReminderDays?: number[];
+  /**
+   * Master switch for the FRA-review reminder sweep. Absent means ON, so an org
+   * that has never touched it keeps the reminders it already had; only an
+   * explicit false stops the sweep for the whole organisation (admin notices
+   * and customer emails alike, including the overdue notice).
+   */
+  reviewRemindersEnabled?: boolean;
+  /** How many days ahead of an open information request's response deadline the
+   *  deadline sweep chases the assigned assessor. Descending, e.g. [3, 1].
+   *  Absent (or malformed) falls back to the built-in default: the ladder is
+   *  short because the request's own window is a week. */
+  infoRequestReminderDays?: number[];
+  /** Master switch for the information-request half of the deadline sweep.
+   *  Absent means ON; an explicit false stops those chases - including the
+   *  overdue notice - for the whole organisation. */
+  infoRequestRemindersEnabled?: boolean;
+  /** How many days ahead of an open action's due date the deadline sweep chases
+   *  the responsible party and the org's admins. Descending, e.g. [30, 7, 1].
+   *  Absent (or malformed) falls back to the built-in default. */
+  actionReminderDays?: number[];
+  /** Master switch for the action half of the deadline sweep. Absent means ON;
+   *  an explicit false stops the admin digest and the responsible-party emails
+   *  for the whole organisation. */
+  actionRemindersEnabled?: boolean;
 }
 
 export interface Organisation {
@@ -258,6 +311,17 @@ export interface EmailPreferences {
   infoRequested?: boolean;
   /** A deadline the recipient owns is approaching or has passed. */
   deadlineReminder?: boolean;
+  /** A visit in this assessor's own diary: assigned, moved, cancelled, or listed
+   *  in the morning "jobs due today" digest. One key for the whole diary,
+   *  because an assessor who wants the day's changes wants all of them. */
+  jobScheduled?: boolean;
+  /** The verdict on an assessment this assessor carried out: an auditor accepted
+   *  it, or it was released. ONE key for both, on the `jobScheduled` reasoning -
+   *  an assessor who wants to hear their work cleared review wants to hear it was
+   *  issued too. Deliberately NOT the `released` key above: that one is the
+   *  ADMINISTRATORS' "a report is available" notice, and the same event read by a
+   *  different person must not be silenced by one switch. */
+  assessmentOutcome?: boolean;
 }
 
 export interface OrgMember {
@@ -283,6 +347,13 @@ export interface CustomerMember {
   jobTitle?: string;
   /** Contact phone, carried onto a responsible party chosen from this account. */
   phone?: string;
+  /**
+   * Set when archiving the CUSTOMER locked this account, so restoring the
+   * customer reactivates exactly the accounts that archive locked - and not one
+   * that was locked on its own account beforehand. Written only by
+   * manageCustomer's archive/restore cascade, never from a client.
+   */
+  lockedByCustomerArchive?: true;
 }
 
 /** Reverse index for login routing - `/userOrgs/{uid}/{orgId}: true`. */
@@ -314,6 +385,19 @@ export interface Customer {
   photoUrl?: string;
   /** Customer-level risk score (rolls up from buildings). */
   score?: number;
+  /**
+   * Optional end of the engagement with this customer, as epoch millis at
+   * midnight UTC (the platform's date-only convention, as ServiceScheduleItem
+   * uses). When the day has fully passed, the nightly customerContracts sweep
+   * ARCHIVES the customer - which withdraws their portal access and silences
+   * their reminders - and tells the org's admins it has done so.
+   *
+   * It is a convenience over the archive action, never a second source of truth
+   * for access: `status` alone says whether a customer is live. Restoring an
+   * archived customer clears a date that has already passed, so a restore can
+   * never be undone by the next morning's sweep.
+   */
+  contractEndDate?: number;
   status: MemberStatus;
 }
 
@@ -333,6 +417,26 @@ export interface CustomerContact {
   /** Job title, e.g. "Facilities Director" - shown wherever the contact is
    *  offered as a responsible party. */
   jobTitle?: string;
+  /**
+   * Whether this person is sent a copy of every released fire risk assessment
+   * report for their customer.
+   *
+   * ABSENT MEANS YES, and that is what makes the migration free: before this
+   * field existed every contact holding an email address was mailed every
+   * released report, so an unset record keeps behaving exactly as it always
+   * did and nothing has to be backfilled. Only an explicit `false` takes
+   * somebody off the distribution - which also means an older client that
+   * cannot write this field can never silently stop a report reaching someone.
+   * Readers must therefore test `receivesReports !== false`, never truthiness.
+   *
+   * It governs the RELEASE report email alone. Review reminders, visit notices
+   * and action or deadline emails reach a contact for a different reason - a
+   * booked visit, or remedial work recorded against them personally - so they
+   * are not gated by this flag. Nor is the release digest, which is addressed
+   * through `Action.responsibleContactId`: being off the report distribution is
+   * not a reason to stop telling somebody about work they owe.
+   */
+  receivesReports?: boolean;
   /** Portal permissions this contact should hold once their account exists. */
   portalRoles?: CustomerRoleSet;
   /** The customer's primary contact. Reassigned, never removed. */
@@ -411,10 +515,19 @@ export interface ResponsibleParty {
   role?: string;
   email?: string;
   phone?: string;
-  /** When chosen from the customer's accounts (a customer member), the member's
-   *  uid, so the chosen person stays linked to the source account (e.g. to notify
-   *  them when the assessment is reviewed/accepted/released). Absent for a
-   *  manually typed party. */
+  /**
+   * The CustomerContact this party is, under the building's customer. This is
+   * what makes the record actionable: every automated email to a responsible
+   * party - release, action assignment, deadline chase - resolves the person
+   * through this id, so a party without one is a name on a page that nobody can
+   * be told about.
+   *
+   * The platform only ever writes a party chosen from the customer's contact
+   * directory, so this is present on anything recorded since. It stays OPTIONAL
+   * for one reason: parties captured before that (and any imported by an admin)
+   * carry a typed name alone, and a report must still render them honestly
+   * rather than refusing to open.
+   */
   contactId?: string;
 }
 
@@ -624,8 +737,18 @@ export interface Template {
   sections: TemplateSection[];
 }
 
-export type CertificatePosition = 'top' | 'bottom';
-export const CERTIFICATE_POSITIONS = ['top', 'bottom'] as const;
+/**
+ * Where the accreditation PDF is spliced into the report. `afterCover` puts it
+ * on page 2, immediately behind the title page and ahead of the contents - the
+ * convention in the industry documents this report is modelled on, and now the
+ * only supported position.
+ *
+ * `top` and `bottom` are retained ONLY so stored templates authored before this
+ * change still parse; both are read as `afterCover` at render time (see
+ * report/certificate.ts). Nothing offers them any more.
+ */
+export type CertificatePosition = 'afterCover' | 'top' | 'bottom';
+export const CERTIFICATE_POSITIONS = ['afterCover'] as const;
 
 /** A PDF spliced into the generated report. The pages are merged verbatim - the
  *  report renderer never rewrites them, so accreditation artwork stays intact. */
@@ -833,7 +956,16 @@ export interface Action {
   /** The flag composite carried onto the action (brief 8 downstream + 1057). */
   locationFlagUrl?: string;
   images?: AnswerPhoto[];
+  /** The responsible person's name AS RECORDED when the action was raised. Kept
+   *  alongside the contact id, not derived from it: an action plan is a dated
+   *  record of who was accountable at the time, and a contact later renamed or
+   *  removed must not silently rewrite history. */
   responsible?: string;
+  /** The CustomerContact accountable for this remedial work. The email seams
+   *  (manageAction's assignment mail, deadlineReminders' chase) resolve the
+   *  address through this rather than by matching on `responsible`, which is why
+   *  name-matched lookups no longer decide whether someone gets told. */
+  responsibleContactId?: string;
   dueBy?: number;
   /** The "LTP" flag - this remedial action protects life. */
   lifeProtection: boolean;
@@ -843,6 +975,18 @@ export interface Action {
   /** A note captured when the action is closed (signed off), recording HOW it
    *  was resolved (story 2044 AC2). Absent on open/in-progress actions. */
   completionNote?: string;
+  /** Optional proof the remedial work was actually done, supplied at sign-off -
+   *  a photo of the completed work or a contractor's PDF. Reuses the document
+   *  shape because it IS one: a tenant Storage object with server-stamped
+   *  provenance, never a client-supplied URL. Cleared by a reopen exactly as
+   *  the completion note is; the status-history entry keeps the copy. */
+  completionEvidence?: SafentiaDocument;
+  /** The duty-holder's own latest word on this action, recorded from the
+   *  customer portal (respondToAction). A CLAIM, never a closure: only a staff
+   *  sign-off sets `status: 'signedOff'` and the provenance pair above, so this
+   *  field tells the organisation there is something to verify. Cleared by a
+   *  reopen exactly as the completion note is - the trail keeps the copy. */
+  customerResponse?: ActionCustomerResponse;
   /** Append-only status-change trail (story 2044 AC3), oldest first, so a
    *  building owner can see when an action moved through its lifecycle without
    *  digging through the org-wide activity log. */
@@ -856,6 +1000,35 @@ export interface ActionStatusChange {
   byUid: string;
   at: number;
   note?: string;
+  /** The supporting evidence attached to a `signedOff` move. Held here as well
+   *  as on the record so the trail still shows what was produced as proof after
+   *  a later reopen clears the record's own copy. */
+  evidence?: SafentiaDocument;
+  /** Present ONLY on an entry a customer recorded about their own work. It is
+   *  what separates "the duty-holder says the work is done" from "we verified
+   *  and signed it off" in one trail, so a reader can never mistake a claim for
+   *  an organisation's sign-off. */
+  response?: ActionResponseState;
+}
+
+/** What a customer may claim about an action they are responsible for
+ *  arranging: the work is in hand, or it is done and awaiting verification.
+ *  Deliberately NOT an ActionStatus - a duty-holder can report progress but
+ *  can never close their own compliance record. */
+export type ActionResponseState = 'inHand' | 'completed';
+export const ACTION_RESPONSE_STATES = ['inHand', 'completed'] as const;
+
+/** The duty-holder's account of progress on an action, recorded through the
+ *  respondToAction callable. `byUid` and `at` come from the verified portal
+ *  session and the server clock, never the client, so a response can no more be
+ *  back-dated or mis-attributed than a report acceptance can. */
+export interface ActionCustomerResponse {
+  state: ActionResponseState;
+  /** The customer's dated note - what was done, by whom, when. Optional: a
+   *  bare state change is a legitimate response on its own. */
+  note?: string;
+  byUid: string;
+  at: number;
 }
 
 // ----------------------------------------------------------------------------
@@ -964,6 +1137,15 @@ export interface Notification {
   link?: string;
   readAt?: number;
 }
+
+/**
+ * The actor recorded on an /activity entry the PLATFORM wrote rather than a
+ * person - a scheduled sweep archiving a customer whose contract has ended, for
+ * instance. It can never collide with a real uid (Firebase uids are 28 opaque
+ * characters), and the console renders it as an automation rather than looking
+ * it up in the staff directory and calling it a former member.
+ */
+export const SYSTEM_ACTOR_UID = 'system';
 
 export interface ActivityEntry {
   actorUid: string;
@@ -1177,6 +1359,26 @@ export interface SubmitAssessmentResult {
   status: AssessmentStatus;
 }
 
+// --- changeAssessmentTemplate (the assessor on the job, while in progress) ---
+/**
+ * Swap the template an in-progress assessment is being conducted against. This
+ * DELETES every answer already recorded: question ids are template-specific, so
+ * answers cannot be carried across, and leaving them would silently attach a
+ * previous template's evidence to a new question set. The client must warn
+ * before calling.
+ */
+export interface ChangeAssessmentTemplateInput {
+  assessmentId: string;
+  /** The PUBLISHED template to switch to. Its current version is pinned. */
+  templateId: string;
+}
+export interface ChangeAssessmentTemplateResult {
+  templateName: string;
+  templateVersion: number;
+  /** How many recorded answers the change deleted, for the confirmation copy. */
+  answersRemoved: number;
+}
+
 // --- setActiveOrganisation (any member of the target org) ---
 // Switches which organisation the signed-in user is acting in, by re-minting
 // their custom claims for that org. The client force-refreshes its token after,
@@ -1296,6 +1498,9 @@ export interface UpdateOrgProfileInput {
     /** null (or empty string) removes the override; the platform default applies. */
     fontFamily?: string | null;
     logoUrl?: string | null;
+    /** Same tenant-scoped Storage reference as logoUrl; null removes it and the
+     *  report cover falls back to a panel painted from the brand colours. */
+    coverImageUrl?: string | null;
   };
 }
 export interface UpdateOrgProfileResult {
@@ -1312,6 +1517,21 @@ export interface UpdateOrgSettingsInput {
    *  offsets, e.g. [60, 30, 7]. Explicit null clears it back to the built-in
    *  default; absent leaves the stored value unchanged. */
   reviewReminderDays?: number[] | null;
+  /** Master on/off for the review reminder sweep. Absent leaves the stored
+   *  value unchanged; false stops the sweep for the whole organisation. */
+  reviewRemindersEnabled?: boolean;
+  /** Information-request reminder schedule: descending positive day offsets,
+   *  e.g. [3, 1]. Explicit null clears it back to the built-in default; absent
+   *  leaves the stored value unchanged. */
+  infoRequestReminderDays?: number[] | null;
+  /** Master on/off for the information-request chases. */
+  infoRequestRemindersEnabled?: boolean;
+  /** Action reminder schedule: descending positive day offsets, e.g.
+   *  [30, 7, 1]. Explicit null clears it back to the built-in default; absent
+   *  leaves the stored value unchanged. */
+  actionReminderDays?: number[] | null;
+  /** Master on/off for the action chases. */
+  actionRemindersEnabled?: boolean;
 }
 export interface UpdateOrgSettingsResult {
   updated: true;
@@ -1327,6 +1547,38 @@ export interface UpdateMemberInput {
   status?: MemberStatus;
 }
 export interface UpdateMemberResult {
+  updated: true;
+}
+
+// --- updateCustomerMember (the CUSTOMER-PORTAL twin of updateMember) ---
+// Changes the roles - and optionally the standing - of a portal account that
+// ALREADY EXISTS. Before this, `CustomerContact.portalRoles` was only an INTENT:
+// acceptInvitation read it once to mint the account's /customerMembers record and
+// nothing ever re-read it, so editing a contact's roles afterwards moved nothing
+// and the only correction available was revoke-and-re-invite, which is not a
+// correction but a new account.
+//
+// TWO legitimate callers, authorised on their own terms and never
+// interchangeable: an ORG STAFF admin acting on a customer in their own
+// organisation, and a PORTAL admin acting on a teammate of their own customer
+// (whose org and customer come from the verified portal token, never the
+// payload). The server writes the linked contact's `portalRoles` in the SAME
+// atomic update, so the intent and the live grant stop disagreeing.
+export interface UpdateCustomerMemberInput {
+  /** The customer whose portal account this is. A STAFF caller must send it; a
+   *  PORTAL caller's customer comes from their token, so anything sent here is
+   *  ignored rather than trusted. */
+  customerId?: string;
+  /** The account to change: a uid under /customerMembers/{orgId}/{customerId}. */
+  memberUid: string;
+  /** Replacement role set; omitted = unchanged. Non-empty when sent - an
+   *  account with no roles is a seat nobody can explain. */
+  roles?: CustomerRoleSet;
+  /** Target standing; omitted = unchanged. Locking strips their portal claims on
+   *  the next token refresh, seconds later, without deleting anything. */
+  status?: PortalAccountStatus;
+}
+export interface UpdateCustomerMemberResult {
   updated: true;
 }
 
@@ -1520,17 +1772,31 @@ export interface ManageActionInput {
    *  can never be forged by a plain field edit. */
   action: 'create' | 'update' | 'start' | 'signOff' | 'reopen';
   /** create: observation + severity required. update: whitelisted fields only
-   *  (responsible, dueBy, observation). */
+   *  (responsibleContactId, dueBy, observation).
+   *
+   *  There is deliberately NO `responsible` here. Who owes an action is set by
+   *  naming a CustomerContact, and the server writes the name from that
+   *  contact's own record - a typed name could never be emailed, so it is no
+   *  longer accepted. Null clears the assignment (name and link together). */
   fields?: {
     observation?: string;
     severity?: Severity;
-    responsible?: string | null;
+    responsibleContactId?: string | null;
     dueBy?: number | null;
     lifeProtection?: boolean;
   };
   /** A note recorded on `signOff`, describing how the action was resolved
    *  (story 2044 AC2). Optional; ignored for every other verb. */
   completionNote?: string;
+  /** Optional supporting evidence recorded on `signOff`: a file the caller has
+   *  ALREADY uploaded to its own tenant Storage prefix. Only the file name and
+   *  the object path travel - the server validates the path against that prefix
+   *  and stamps uploadedBy/uploadedAt itself, so a free-text URL or another
+   *  tenant's object can never become an action's proof. Ignored elsewhere. */
+  completionEvidence?: {
+    fileName: string;
+    storagePath: string;
+  };
 }
 export interface ManageActionResult {
   actionId: string;
@@ -1601,6 +1867,25 @@ export interface AcceptReportResult {
   acceptedAt: number;
 }
 
+// --- getReportDownloadUrl (portal + staff; the report PDF, authorised live) ---
+// THE way a report PDF is opened. The stored object grants a portal token
+// nothing: the server re-derives the building's owning customer, the caller's
+// portal seat and their acceptance on EVERY request from live database state,
+// then returns a short-lived signed URL. Nothing durable is embedded in the
+// page, so the answer can never go stale the way a stamp on the file did.
+export interface GetReportDownloadUrlInput {
+  buildingId: string;
+  reportId: string;
+}
+export interface GetReportDownloadUrlResult {
+  /** A signed URL valid until `expiresAt`. Use it, do not store it - the client
+   *  asks again on the next click rather than holding a link that will expire. */
+  url: string;
+  /** Epoch millis at which the URL stops working, so a screen can say honestly
+   *  how long a link it is showing remains good for. */
+  expiresAt: number;
+}
+
 // --- portalInviteTeammate (portal; a customer admin invites a colleague) ---
 // The first WRITE a portal admin can make beyond accepting a report. The org
 // and customer are taken from the caller's verified portal claims, NEVER the
@@ -1619,6 +1904,28 @@ export interface PortalInviteTeammateInput {
 export interface PortalInviteTeammateResult {
   contactId: string;
   inviteId?: string;
+}
+
+// --- respondToAction (portal; the duty-holder reports progress on their work) ---
+// The remedial work belongs to the customer; verifying and closing it belongs to
+// the organisation. This callable records the FIRST half only: the customer says
+// the work is in hand or done, optionally with a dated note. It can never set
+// `status: 'signedOff'` or stamp `signedOffBy` - a duty-holder signing off their
+// own compliance is exactly what the product must not allow. Authorised like
+// acceptReport: portal claims, the building's owning customer re-derived from the
+// reverse index at request time, and the caller's portal seat still active.
+export interface RespondToActionInput {
+  buildingId: string;
+  actionId: string;
+  /** Where the work stands, in the customer's own words. Sent on every response
+   *  (a note-only update re-affirms the state it was already in). */
+  state: ActionResponseState;
+  /** What was done, who did it, when - free text, optional. */
+  note?: string;
+}
+export interface RespondToActionResult {
+  /** Server clock, so the screen can confirm the moment that was recorded. */
+  respondedAt: number;
 }
 
 // --- recordPlatformAccess (super admin only) ---

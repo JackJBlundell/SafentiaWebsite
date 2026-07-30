@@ -60,6 +60,26 @@ function resolveProjectId(): string | undefined {
  * case (jest, the Functions runtime re-importing modules) so we never throw on a
  * duplicate initializeApp.
  */
+/** The storageBucket the platform supplied in FIREBASE_CONFIG, when it supplied
+ *  a usable one. Parsed defensively: the variable is absent locally, and a
+ *  malformed or bucket-less value must degrade to "no answer" so the caller
+ *  falls through to the derived name rather than crashing at import time. */
+function configuredStorageBucket(): string | undefined {
+  const raw = process.env.FIREBASE_CONFIG;
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as { storageBucket?: unknown };
+    return typeof parsed.storageBucket === 'string' &&
+      parsed.storageBucket.length > 0
+      ? parsed.storageBucket
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function ensureApp(): App {
   const existing = getApps();
   if (existing.length > 0) {
@@ -90,16 +110,32 @@ function ensureApp(): App {
       ? 'https://safentia-tech-default-rtdb.europe-west1.firebasedatabase.app'
       : undefined);
 
-  const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
+  // The Storage bucket, resolved the same way as databaseURL above - most
+  // specific first - because relying on the platform to supply it turned out not
+  // to be safe:
+  //   1. FIREBASE_STORAGE_BUCKET - the explicit override the scripts set.
+  //   2. FIREBASE_CONFIG's own storageBucket, WHEN it carries a non-empty one.
+  //   3. Derived from the project id.
+  //
+  // Step 3 exists because step 2 silently failed in production. FIREBASE_CONFIG
+  // came through without a usable bucket, so `storage.bucket()` threw "Bucket
+  // name not specified or invalid" at runtime - a 500 with every auth check
+  // already passed, which reads like anything but a configuration problem. It
+  // took down getReportDownloadUrl, and the same call sits under report
+  // generation and action-evidence stamping.
+  //
+  // The derived form is `<projectId>.firebasestorage.app`: the default for
+  // projects created since the Storage domain change. A project still on the
+  // older `<projectId>.appspot.com` bucket must set the env var (or carry it in
+  // FIREBASE_CONFIG) - which is exactly what steps 1 and 2 are for, so the guess
+  // is only ever the last resort.
+  const storageBucket =
+    process.env.FIREBASE_STORAGE_BUCKET ||
+    configuredStorageBucket() ||
+    (projectId ? `${projectId}.firebasestorage.app` : undefined);
 
-  // Both keys are spread CONDITIONALLY, and that is the whole point rather than
-  // a tidiness preference. In a deployed Function the runtime supplies
-  // FIREBASE_CONFIG, which already carries the correct databaseURL and
-  // storageBucket. Passing an explicit `storageBucket: undefined` does NOT fall
-  // back to that config - it overrides it with nothing, so getStorage() came up
-  // with no bucket and every report upload died on "Bucket name not specified or
-  // invalid" AFTER the PDF had been rendered. The scripts, which do set the env
-  // vars, are unaffected either way.
+  // Both keys are spread CONDITIONALLY: passing an explicit `undefined` does NOT
+  // fall back to the platform config, it OVERRIDES it with nothing.
   return initializeApp({
     ...(databaseURL ? { databaseURL } : {}),
     ...(storageBucket ? { storageBucket } : {}),

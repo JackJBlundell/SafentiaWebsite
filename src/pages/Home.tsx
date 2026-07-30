@@ -14,9 +14,8 @@ import {
   organisationStructuredData,
   productStructuredData,
 } from "../seo/Seo";
-import { PhoneFrame } from "../components/marketing/PhoneFrame";
 import { BrowserFrame } from "../components/marketing/BrowserFrame";
-import { AssessmentMock } from "../components/marketing/AssessmentMock";
+import { AppScreenshot } from "../components/marketing/AppScreenshot";
 import { ReportMock } from "../components/marketing/ReportMock";
 import { FeatureCard } from "../components/marketing/FeatureCard";
 import { LifecycleStages } from "../components/marketing/LifecycleStages";
@@ -133,9 +132,12 @@ export function HomePage() {
                 office.
               </p>
             </div>
-            <PhoneFrame className={styles.heroVisual}>
-              <AssessmentMock />
-            </PhoneFrame>
+            <div className={styles.heroVisual}>
+              {/* Decorative backdrop. Purely presentational, so it is a div the
+                  screen reader never sees rather than anything with meaning. */}
+              <span className={styles.heroGlow} aria-hidden="true" />
+              <AppScreenshot className={styles.heroPhone} />
+            </div>
           </div>
         </Container>
       </Section>

@@ -13,6 +13,36 @@
   list-style: none;
 }
 
+/* "Releasing an assessment will send the report to no one." A warning tint and
+   a heading line, because unlike every other state on this panel it is not a
+   fact about one contact - it is a fault in the whole customer's set-up that
+   nothing else would ever announce. */
+.noRecipients {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--status-warning);
+  border-radius: var(--radius-md);
+  background: var(--status-warning-surface);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.noRecipientsLead {
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--status-warning);
+}
+
+.noRecipientsCopy {
+  overflow-wrap: anywhere;
+}
+
 .contactCard {
   display: flex;
   flex-direction: column;
@@ -80,13 +110,46 @@
   letter-spacing: 0.05em;
 }
 
+/* A value can be several stacked lines - a status chip, then the role, then what
+   the role means - so it is a column, not a run of inline spans. */
 .value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
   margin: 0;
   font-size: 0.875rem;
   color: var(--color-text);
   min-width: 0;
   /* Long addresses break inside the card instead of widening the column. */
   overflow-wrap: anywhere;
+}
+
+/* Why a state is what it is. The chip alone cannot separate "never invited"
+   from "no email to invite at", so this line carries the reason in words. */
+.portalDetail {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.roleName {
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.roleMeaning {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+/* Qualifications: an automatic grant, or an account that no longer matches the
+   contact record. Quieter than the role, never hidden behind a tooltip. */
+.roleNote {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
 }
 
 .link {
@@ -149,6 +212,40 @@
   text-align: left;
 }
 
+/* The invite step: the same shape as a confirm box, because that is what it is -
+   a deliberate grant of access, with the role chooser inside it. */
+.inviteBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  text-align: left;
+}
+
+/* Why the button beneath it is disabled - the last-admin rule, a role that would
+   grant nothing, or a change that is not a change. A paragraph inside the box
+   rather than a tooltip or a tint: the reason is the whole point. */
+.blockedNote {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* What the last invite granted, named. Stays until the card's own state catches
+   up, so the admin never has to infer the outcome from a vanished button. */
+.sentNote {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
 .confirmCopy {
   margin: 0;
   font-size: 0.875rem;
@@ -186,6 +283,20 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   overflow-wrap: anywhere;
+}
+
+/* The report-copies choice. Ruled off from the text fields above it because it
+   is the one control here that changes what the platform SENDS rather than what
+   it records, and the explanation beneath it is part of the control. */
+.reportsField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
 }
 
 .editorActions {

@@ -1,0 +1,75 @@
+/* AddressField - the address input, its map button, and the map panel. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+/* The button sits on the input's baseline, not the label's, and drops below it
+   when the field is too narrow to hold both. */
+.row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.search {
+  flex: 1 1 16rem;
+  /* Without this a long suggestion stretches the flex item past the form. */
+  min-width: 0;
+}
+
+.toggle {
+  flex: 0 0 auto;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+.hint,
+.note,
+.status {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* The pinned readout and its Remove control, which wrap onto separate lines
+   before the sentence is squeezed to a column of single words. */
+.pinnedRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.pinned {
+  flex: 1 1 16rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.status {
+  min-height: 1.25rem;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}

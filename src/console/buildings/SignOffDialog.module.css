@@ -1,0 +1,189 @@
+/* SignOffDialog - the sign-off form modal. Sized like ContactCreateDialog: one
+   short form over a dimmed page, going full-screen on a phone so the note and
+   the file picker keep their room. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background: var(--color-overlay);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 34rem;
+  max-height: calc(100vh - var(--space-xl) * 2);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-xl) var(--space-xl) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  font-size: 1.125rem;
+  color: var(--color-text);
+  letter-spacing: -0.012em;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 4px;
+}
+
+.copy {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* The one scrolling region, so the title and the confirm button stay put. */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  padding: var(--space-lg) var(--space-xl);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.sectionTitle {
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+/* The observation being closed. Quoted rather than styled as a heading: it is
+   the record's words, not the dialog's. */
+.observation {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border-left: 3px solid var(--color-border-strong);
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.hint {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+}
+
+.textarea {
+  width: 100%;
+  min-width: 0;
+  margin-top: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  font: inherit;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  resize: vertical;
+}
+
+.fileInput {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin-top: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.chosen {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.progressWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.progress {
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+}
+
+.progressLabel {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.footer {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding: var(--space-md) var(--space-xl) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 40rem) {
+  .overlay {
+    padding: 0;
+  }
+
+  .dialog {
+    max-width: none;
+    max-height: 100vh;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+  }
+
+  .head,
+  .body,
+  .footer {
+    padding-inline: var(--space-lg);
+  }
+}

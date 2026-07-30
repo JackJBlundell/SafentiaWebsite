@@ -24,12 +24,16 @@ import { resolveResponsibleParty } from '../lib/responsibleParty';
 import { SEVERITIES } from '../shared/types';
 import type {
   Action,
+  AnswerFlag,
   Assessment,
   AssessmentAnswer,
   Building,
+  Customer,
+  FloorPlan,
   Job,
   Keyed,
   MatrixAnswer,
+  OrgMember,
   OrgProfile,
   QuestionMatrix,
   QuestionType,
@@ -84,6 +88,20 @@ export interface ReportQuestionRow {
   /** Answer photographs, resolved to embeddable bytes (a failed download is
    *  dropped, never fatal - brief 18.3). Rendered as a titled strip under the row. */
   photos?: ResolvedImage[];
+  /** The floor-plan composites the assessor pinned against THIS question, one
+   *  per plan, in the order they were recorded.
+   *
+   *  A location can be pinned on ANY question whose template sets
+   *  `allowsFlagLocation`, not only on a non-conformity, and only findings ever
+   *  became actions - so before this existed a location pinned on a yes/no,
+   *  select or photo question was captured, shown in the app, and then silently
+   *  absent from the released report. The evidence belongs with the question it
+   *  evidences, so it travels on the row.
+   *
+   *  Unlike `photos`, an UNAVAILABLE composite is kept rather than dropped: the
+   *  assessor recorded a location, and a marked "image unavailable" slot tells
+   *  the reader that honestly, where silence would not. */
+  flagImages?: ResolvedImage[];
 }
 
 /** One template subject as its own table (story 1073). The report renders one of
@@ -103,14 +121,24 @@ export interface ReportAction {
   responsible: string;
   dueBy?: number;
   lifeProtection: boolean;
-  /** The flag-location composite, embedded at legible size (1057 / 1074 AC2). */
-  flagImage?: ResolvedImage;
+  /** EVERY flag-location composite for this finding, embedded at legible size
+   *  (1057 / 1074 AC2). A plural list because a building routinely has several
+   *  floor plans and one finding can be pinned on more than one of them; the
+   *  action record itself only ever cached the first, so these are resolved from
+   *  the answer the finding came from wherever that answer is in scope. */
+  flagImages: ResolvedImage[];
   /** Other titled images attached to the action (1074 AC2). */
   images: ResolvedImage[];
 }
 
 export interface ReportOverview {
+  /** The building's own name, printed as "Site" on the cover. */
+  siteName: string;
   address: string;
+  /** The customer the building belongs to, printed as "Client" on the cover.
+   *  Read from the customer record the building points at; the standardised
+   *  placeholder when the building, its customer or that record is missing. */
+  clientName: string;
   /** The responsible party as one rendered line ("Name (Role)"). Named for what
    *  it holds; the PDF prints it under the statutory heading "Responsible
    *  person" (Regulatory Reform (Fire Safety) Order 2005), which is a legal
@@ -132,7 +160,6 @@ export interface ReportOverview {
 /** Sign-off provenance from the workflow record (story 1075). */
 export interface ReportSignOff {
   conductedBy: string;
-  checkedBy: string;
   validatedBy: string;
   releasedOn?: number;
   reviewByDate?: number;
@@ -151,6 +178,18 @@ export interface ReportModel {
   certificate?: TemplateCertificate;
   /** Org logo bytes for the document header, if a logo is set and fetchable. */
   logo?: ResolvedImage;
+  /** The organisation's own decorative cover image (OrgProfile.coverImageUrl),
+   *  for the cover's top-left panel. Absent is a first-class state: the renderer
+   *  paints that panel from the brand colours instead of shipping a stock
+   *  photograph. */
+  coverImage?: ResolvedImage;
+  /** The customer that owns the building, read straight off the building record.
+   *  Nothing renders it: it travels with the model so generateAndStore can stamp
+   *  the Storage object's customerId metadata - the ONLY grant a portal user has
+   *  on the PDF (storage.rules, reports match) - even when the
+   *  buildingCustomerIndex entry the stamp normally comes from is missing.
+   *  Absent only when the building itself could not be addressed. */
+  ownerCustomerId?: string;
   overview: ReportOverview;
   /** The building photo for the overview, if present. */
   buildingPhoto?: ResolvedImage;
@@ -189,6 +228,26 @@ function clean(value: unknown): string | undefined {
 /** A string field with the standardised placeholder when missing. */
 function orNotRecorded(value: unknown): string {
   return clean(value) ?? NOT_RECORDED;
+}
+
+/**
+ * A uid rendered as the person's name. The workflow stores uids because they are
+ * immutable and survive a rename; a REPORT is read by a duty-holder, an insurer
+ * or an enforcing authority, so it must carry names.
+ *
+ * A uid absent from the directory means the member has since been removed from
+ * the organisation - their recorded work remains, so it is attributed honestly
+ * rather than printed as an opaque identifier or, worse, silently blanked.
+ */
+function memberName(
+  uid: unknown,
+  members: Keyed<OrgMember> | null,
+): string {
+  const id = clean(uid);
+  if (!id) {
+    return NOT_RECORDED;
+  }
+  return clean(members?.[id]?.name) ?? 'Former staff member';
 }
 
 /** The responsible party as one display line: the party that actually governs
@@ -410,6 +469,85 @@ function toObjectPath(urlOrPath: string | undefined): string | undefined {
 }
 
 // ----------------------------------------------------------------------------
+// Flagged locations. `answer.flags` is the SOURCE OF TRUTH for where an assessor
+// pinned something: one entry per floor plan, each carrying the flattened
+// plan-plus-pins composite. An action's `locationFlagUrl` is a denormalised copy
+// of the first of them, so the report reads the flags themselves wherever it can
+// and falls back to that copy only for actions whose answer is out of scope.
+// ----------------------------------------------------------------------------
+
+/**
+ * Caption one composite so a reader can tell the plans apart. The plan's own
+ * name is used when the building still declares that plan; a plan since deleted
+ * (or a flag written before the plan was named) falls back to its position, so
+ * the caption is always meaningful and never prints a raw id.
+ *
+ * `prefix` says what kind of evidence this is, because the caption is the only
+ * thing distinguishing a pinned plan from a photograph in the same strip.
+ */
+function flagCaption(
+  planName: string | undefined,
+  prefix: string,
+  index: number,
+  total: number,
+): string {
+  const position = total > 1 ? ` (${index + 1} of ${total})` : '';
+  return planName ? `${prefix}: ${planName}${position}` : `${prefix}${position}`;
+}
+
+/**
+ * Resolve every composite on an answer's flags to embeddable bytes, in the order
+ * recorded. Flags with no composite at all (a pin set saved before the flatten
+ * finished, or a PDF plan the app annotates without flattening) are skipped -
+ * there is nothing to draw for them - but a composite that FAILS to download is
+ * kept as an unavailable image, so the report says the location was recorded and
+ * the picture could not be attached rather than saying nothing.
+ */
+async function resolveFlagImages(
+  flags: AnswerFlag[] | undefined,
+  planNames: Map<string, string>,
+  prefix: string,
+  logger: Logger,
+): Promise<ResolvedImage[]> {
+  const usable = (Array.isArray(flags) ? flags : []).filter(
+    (flag): flag is AnswerFlag => Boolean(toObjectPath(flag?.flagImageUrl)),
+  );
+  return Promise.all(
+    usable.map(async (flag, index) => {
+      const caption = flagCaption(
+        clean(planNames.get(clean(flag.planId) ?? '')),
+        prefix,
+        index,
+        usable.length,
+      );
+      // resolveImage only returns undefined for an empty path, which the filter
+      // above has already excluded; the coalesce is belt and braces so the
+      // caller never has to reason about a hole in the list.
+      return (
+        (await resolveImage(toObjectPath(flag.flagImageUrl), caption, logger)) ?? {
+          title: caption,
+          available: false,
+        }
+      );
+    }),
+  );
+}
+
+/** The building's floor plans as planId -> display name, for flag captions. An
+ *  unaddressable building or an absent /floorPlans node simply yields an empty
+ *  map and every caption falls back to its position. */
+function planNameIndex(plans: Keyed<FloorPlan> | null): Map<string, string> {
+  const index = new Map<string, string>();
+  for (const [planId, plan] of Object.entries(plans ?? {})) {
+    const name = clean(plan?.name);
+    if (name) {
+      index.set(planId, name);
+    }
+  }
+  return index;
+}
+
+// ----------------------------------------------------------------------------
 // Section 2 assembly: the template's OWN subjects, in authored order, each a
 // table of its questions.
 // ----------------------------------------------------------------------------
@@ -430,6 +568,7 @@ function toObjectPath(urlOrPath: string | undefined): string | undefined {
 async function buildSections(
   templateSections: TemplateSection[] | undefined,
   answers: Keyed<AssessmentAnswer>,
+  planNames: Map<string, string>,
   logger: Logger,
 ): Promise<ReportSection[]> {
   const sections = Array.isArray(templateSections) ? templateSections : [];
@@ -500,6 +639,18 @@ async function buildSections(
             row.photos = usable;
           }
         }
+        // Every location the assessor pinned against this question, whatever its
+        // type. Findings ALSO carry theirs into the action plan; see
+        // renderActionCard for why that repetition is deliberate.
+        const flagImages = await resolveFlagImages(
+          answer?.flags,
+          planNames,
+          'Flagged location',
+          logger,
+        );
+        if (flagImages.length > 0) {
+          row.flagImages = flagImages;
+        }
         return row;
       }),
     );
@@ -550,10 +701,78 @@ function subjectTitleFallback(code: string): string {
 /** Sort weight so High sorts before Medium before Low (story 1074 AC1). */
 const SEVERITY_RANK: Record<Severity, number> = { H: 0, M: 1, L: 2 };
 
+/**
+ * Index the pinned template snapshot so an action can be traced back to the
+ * answer it was raised from, and therefore to ALL the locations pinned on that
+ * finding rather than the single one the action cached.
+ *
+ * An action records the section code and the question TEXT, both copied verbatim
+ * from this same snapshot when the assessment was released, so the pair
+ * addresses the question exactly. A pair that is NOT unique within the snapshot
+ * (two questions in one section worded identically) maps to `null`: an ambiguous
+ * match would attach one finding's locations to another's, and in this document
+ * a wrong location is worse than a missing one, so the join declines instead.
+ */
+function findingKey(sectionCode: string, questionText: string): string {
+  // A NUL separator cannot occur in either half, so no code/text pair can
+  // collide with a different pair by concatenation alone.
+  return `${sectionCode}\u0000${questionText}`;
+}
+
+function buildFindingIndex(
+  templateSections: TemplateSection[] | undefined,
+): Map<string, string | null> {
+  const index = new Map<string, string | null>();
+  for (const section of Array.isArray(templateSections) ? templateSections : []) {
+    const code = clean(section?.code);
+    if (!code) {
+      continue;
+    }
+    for (const question of Array.isArray(section?.questions) ? section.questions : []) {
+      const text = clean(question?.text);
+      const id = clean(question?.id);
+      if (!text || !id) {
+        continue;
+      }
+      const key = findingKey(code, text);
+      index.set(key, index.has(key) ? null : id);
+    }
+  }
+  return index;
+}
+
+/** The answer an action was raised from, or undefined when it cannot be traced
+ *  unambiguously. Actions on a building span every assessment ever run against
+ *  it, so an action from a DIFFERENT assessment is never joined: its answers are
+ *  not loaded here, and matching on question text alone would cross visits. */
+function answerForAction(
+  action: Action,
+  assessmentId: string,
+  findingIndex: Map<string, string | null>,
+  answers: Keyed<AssessmentAnswer>,
+): AssessmentAnswer | undefined {
+  if (clean(action.assessmentId) !== assessmentId) {
+    return undefined;
+  }
+  const code = clean(action.sectionCode);
+  const text = clean(action.question);
+  if (!code || !text) {
+    return undefined;
+  }
+  const questionId = findingIndex.get(findingKey(code, text));
+  return questionId ? answers[questionId] : undefined;
+}
+
 async function buildActions(
   actionsMap: Keyed<Action>,
+  assessmentId: string,
+  answers: Keyed<AssessmentAnswer>,
+  templateSections: TemplateSection[] | undefined,
+  planNames: Map<string, string>,
   logger: Logger,
 ): Promise<ReportAction[]> {
+  const findingIndex = buildFindingIndex(templateSections);
+
   const entries = Object.values(actionsMap).filter(
     // An archived action is no longer part of the live remedial plan; open and
     // signed-off both belong in the report (signed-off shows progress).
@@ -578,8 +797,27 @@ async function buildActions(
   // the lot, so the renderer receives fully-resolved buffers and stays sync.
   return Promise.all(
     entries.map(async (action) => {
-      const flagPath = toObjectPath(action.locationFlagUrl);
-      const flagImage = await resolveImage(flagPath, 'Location of finding', logger);
+      // Prefer the answer's own flags: they carry EVERY plan the finding was
+      // pinned on, whereas `locationFlagUrl` is a cache of the first one. The
+      // cached url is the fallback for an action this report cannot trace back
+      // to an answer (raised in an earlier assessment of the same building, or
+      // added to the plan by hand), where it is the only location on record.
+      const answer = answerForAction(action, assessmentId, findingIndex, answers);
+      const fromAnswer = await resolveFlagImages(
+        answer?.flags,
+        planNames,
+        'Location of finding',
+        logger,
+      );
+      const flagImages =
+        fromAnswer.length > 0
+          ? fromAnswer
+          : await resolveFlagImages(
+              [{ planId: '', pins: [], flagImageUrl: action.locationFlagUrl ?? '' }],
+              planNames,
+              'Location of finding',
+              logger,
+            );
 
       const images: ResolvedImage[] = [];
       const rawImages = Array.isArray(action.images) ? action.images : [];
@@ -601,13 +839,11 @@ async function buildActions(
         observation: orNotRecorded(action.observation),
         responsible: orNotRecorded(action.responsible),
         lifeProtection: action.lifeProtection === true,
+        flagImages,
         images,
       };
       if (typeof action.dueBy === 'number' && Number.isFinite(action.dueBy)) {
         reportAction.dueBy = action.dueBy;
-      }
-      if (flagImage) {
-        reportAction.flagImage = flagImage;
       }
       return reportAction;
     }),
@@ -660,15 +896,28 @@ export async function assembleReport(
         )
       : null;
 
-  // 4. Answers, actions, org profile - each read defensively, defaulting to empty.
-  const [answers, actionsMap, orgProfile] = await Promise.all([
+  // 4. Answers, actions, floor plans, org profile - each read defensively,
+  // defaulting to empty.
+  const [answers, actionsMap, floorPlans, orgProfile, orgMembers] = await Promise.all([
     readValue<Keyed<AssessmentAnswer>>(
       paths.db.assessmentAnswers(orgId, assessmentId),
     ),
     assessment.buildingId
       ? readValue<Keyed<Action>>(paths.db.actions(orgId, assessment.buildingId))
       : Promise.resolve(null),
+    // The plans exist only to NAME the flag composites in their captions, so an
+    // absent node costs nothing beyond a positional caption.
+    assessment.buildingId
+      ? readValue<Keyed<FloorPlan>>(
+          paths.db.floorPlans(orgId, assessment.buildingId),
+        )
+      : Promise.resolve(null),
     readValue<OrgProfile>(paths.db.orgProfile(orgId)),
+    // The staff directory, so the sign-off block can print the PEOPLE who
+    // conducted, checked and validated the assessment. The workflow records
+    // uids (immutable, and they survive a rename); a report that prints those
+    // is unreadable to the duty-holder it is written for.
+    readValue<Keyed<OrgMember>>(paths.db.orgMembers(orgId)),
   ]);
 
   // The org profile drives branding; if it is somehow missing we still produce a
@@ -678,26 +927,48 @@ export async function assembleReport(
     brand: { primary: '#1F2937', secondary: '#6B7280' },
   };
 
-  // 5. Resolve embedded images (logo, building photo) concurrently.
-  const [logo, buildingPhoto] = await Promise.all([
+  // 5. Resolve embedded images (logo, cover image, building photo) and the
+  // owning customer concurrently. Every one of them degrades to a placeholder:
+  // the cover is designed around each being absent.
+  const [logo, coverImage, buildingPhoto, customer] = await Promise.all([
     resolveImage(toObjectPath(profile.logoUrl), profile.name, logger),
+    resolveImage(toObjectPath(profile.coverImageUrl), profile.name, logger),
     resolveImage(toObjectPath(building?.photoUrl), 'Building', logger),
+    clean(building?.customerId)
+      ? readValue<Customer>(paths.db.customer(orgId, building!.customerId))
+      : Promise.resolve(null),
   ]);
 
   // 6. Build the overview from the schema only - nothing hand-entered at render
   // time (1071 AC1).
-  const overview = buildOverview(assessment, building, profile, assessmentId);
+  const overview = buildOverview(
+    assessment,
+    building,
+    profile,
+    assessmentId,
+    customer,
+  );
 
-  // 7. Sections + actions.
+  // 7. Sections + actions. Both caption their flag composites from the same plan
+  // index, so one plan reads identically wherever it appears in the document.
+  const planNames = planNameIndex(floorPlans);
   const sections = await buildSections(
     assessment.templateSnapshot?.sections,
     answers ?? {},
+    planNames,
     logger,
   );
-  const actions = await buildActions(actionsMap ?? {}, logger);
+  const actions = await buildActions(
+    actionsMap ?? {},
+    assessmentId,
+    answers ?? {},
+    assessment.templateSnapshot?.sections,
+    planNames,
+    logger,
+  );
 
   // 8. Sign-off provenance from the workflow record (story 1075).
-  const signOff = buildSignOff(assessment, building);
+  const signOff = buildSignOff(assessment, building, orgMembers);
 
   return {
     orgProfile: profile,
@@ -708,6 +979,10 @@ export async function assembleReport(
       ? { certificate: assessment.templateSnapshot.certificate }
       : {}),
     ...(logo ? { logo } : {}),
+    ...(coverImage ? { coverImage } : {}),
+    ...(clean(building?.customerId)
+      ? { ownerCustomerId: clean(building?.customerId) }
+      : {}),
     overview,
     ...(buildingPhoto ? { buildingPhoto } : {}),
     riskDistribution: building?.ragDistribution,
@@ -734,6 +1009,7 @@ function buildOverview(
   building: Building | null,
   profile: OrgProfile,
   assessmentId: string,
+  customer: Customer | null,
 ): ReportOverview {
   const article53 = Array.isArray(building?.article53Persons)
     ? building!.article53Persons.map((p) => clean(p)).filter((p): p is string => Boolean(p))
@@ -782,7 +1058,9 @@ function buildOverview(
   }
 
   return {
+    siteName: orNotRecorded(building?.name),
     address: orNotRecorded(building?.address),
+    clientName: orNotRecorded(customer?.name),
     // A missing building degrades to "not recorded"; null (RTDB absent) and
     // undefined mean the same thing to the line builder.
     responsiblePartyLine: orNotRecorded(
@@ -812,13 +1090,13 @@ function buildOverview(
 function buildSignOff(
   assessment: Assessment,
   building: Building | null,
+  members: Keyed<OrgMember> | null,
 ): ReportSignOff {
   const workflow = assessment.workflow;
   const reviewBy = building?.serviceSchedule?.fraReview?.nextDue;
   return {
-    conductedBy: orNotRecorded(assessment.conductedBy),
-    checkedBy: orNotRecorded(workflow?.checkedBy),
-    validatedBy: orNotRecorded(workflow?.validatedBy),
+    conductedBy: memberName(assessment.conductedBy, members),
+    validatedBy: memberName(workflow?.validatedBy, members),
     ...(typeof workflow?.releasedAt === 'number'
       ? { releasedOn: workflow.releasedAt }
       : {}),

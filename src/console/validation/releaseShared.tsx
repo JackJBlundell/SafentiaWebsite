@@ -94,14 +94,37 @@ export function useCustomerName(customerId: string): string {
 }
 
 /**
+ * How firmly a report is tied to the assessment it is being shown against.
+ * `assessment` - the report names this assessment. `unattributed` - the report
+ * names NO assessment (it predates `Report.assessmentId`), so it belongs to
+ * this building but to no provable assessment, and the surface must say so.
+ */
+export type ReportAttribution = 'assessment' | 'unattributed';
+
+export interface AttributedReport {
+  report: Report;
+  attribution: ReportAttribution;
+}
+
+/**
  * The report generated FOR one released assessment, from the building-scoped
  * reports node (one bounded node per building, shared by every row for that
  * building through `keys.reports`).
  *
- * Matching is strictly on `assessmentId`. AssessmentReview can afford to fall
- * back to the building's newest report because it is showing one assessment in
- * full context; a list cannot, because offering the wrong building-mate's PDF
+ * Matching is on `assessmentId` FIRST and never crosses to a report naming a
+ * DIFFERENT assessment: AssessmentReview can afford to fall back to the
+ * building's newest report because it is showing one assessment in full
+ * context; a list cannot, because offering the wrong building-mate's PDF
  * against a named row is worse than saying the report is not ready.
+ *
+ * A report carrying NO assessmentId is the one honest exception. It predates
+ * the field, so it cannot be attributed to this assessment - but neither can it
+ * be attributed to another one, and the building's own page (AssessmentHistory
+ * Panel) already lists and downloads it. Withholding it here produced the exact
+ * contradiction this hook now removes: the dashboard saying "Report not ready"
+ * about a report the building page hands over. It is returned flagged
+ * `unattributed` so the caller offers it with that caveat visible, rather than
+ * silently passing it off as this assessment's.
  *
  * Returns `undefined` while the node is still attaching, `null` when no report
  * exists for this assessment yet - generation is asynchronous and trails the
@@ -110,7 +133,7 @@ export function useCustomerName(customerId: string): string {
 export function useAssessmentReport(
   buildingId: string,
   assessmentId: string,
-): Report | null | undefined {
+): AttributedReport | null | undefined {
   const { claims, paths } = useAuth();
   const orgId = claims?.orgId ?? '';
   const reportsQuery = useRtdbQuery<Record<string, Report> | null>({
@@ -118,20 +141,27 @@ export function useAssessmentReport(
     path: paths && buildingId ? paths.db.reports(orgId, 'building', buildingId) : '',
     enabled: Boolean(orgId && paths && buildingId),
   });
-  return useMemo<Report | null | undefined>(() => {
+  return useMemo<AttributedReport | null | undefined>(() => {
     if (reportsQuery.data === undefined) {
       return undefined;
     }
-    const matches = Object.values(reportsQuery.data ?? {}).filter(
-      (report) => report.assessmentId === assessmentId,
-    );
-    if (matches.length === 0) {
-      return null;
+    const reports = Object.values(reportsQuery.data ?? {});
+    // Newest wins within a band: a regenerated report supersedes the one it
+    // replaced.
+    const newest = (candidates: Report[]): Report =>
+      candidates.reduce((best, report) =>
+        report.generatedAt > best.generatedAt ? report : best,
+      );
+
+    const named = reports.filter((report) => report.assessmentId === assessmentId);
+    if (named.length > 0) {
+      return { report: newest(named), attribution: 'assessment' };
     }
-    // Newest wins: a regenerated report supersedes the one it replaced.
-    return matches.reduce((newest, report) =>
-      report.generatedAt > newest.generatedAt ? report : newest,
-    );
+    const unattributed = reports.filter((report) => !report.assessmentId);
+    if (unattributed.length > 0) {
+      return { report: newest(unattributed), attribution: 'unattributed' };
+    }
+    return null;
   }, [reportsQuery.data, assessmentId]);
 }
 
@@ -188,13 +218,14 @@ export function ReportLink({
   assessmentId: string;
   subject: string;
 }) {
-  const report = useAssessmentReport(buildingId, assessmentId);
+  const match = useAssessmentReport(buildingId, assessmentId);
+  const report = match?.report;
   const download = useReportDownload(report?.pdfPath);
 
-  if (report === undefined) {
+  if (match === undefined) {
     return <span className={styles.reportNote}>Checking for the report</span>;
   }
-  if (report === null) {
+  if (match === null) {
     return (
       <span className={styles.reportNote}>
         Report not ready
@@ -216,7 +247,7 @@ export function ReportLink({
   if (download.state === 'resolving') {
     return <span className={styles.reportNote}>Preparing the report</span>;
   }
-  return (
+  const link = (
     <a
       className={styles.reportLink}
       href={download.url}
@@ -226,5 +257,24 @@ export function ReportLink({
       Download PDF
       <span className={styles.srOnly}> for {subject}</span>
     </a>
+  );
+  if (match.attribution === 'assessment') {
+    return link;
+  }
+  // The caveat is VISIBLE, not screen-reader-only: someone downloading a report
+  // to answer a question about this particular release has to know it is the
+  // building's report rather than provably this assessment's.
+  return (
+    <span className={styles.reportGroup}>
+      {link}
+      <span className={styles.reportNote}>
+        Not linked to this assessment
+        <span className={styles.srOnly}>
+          {' '}
+          - this report for {subject} records no assessment, so it may cover an
+          earlier one.
+        </span>
+      </span>
+    </span>
   );
 }

@@ -23,10 +23,17 @@
 // log-book entry, the PDF generation and the assessor notification: none of
 // that is duplicated here.
 //
-// A non-conformity's extras (responsible / dueBy / lifeProtection /
-// actionRequired) live on the answer's `value` as the structured object defined
-// by the app's features/assessment/data/nonConformity.ts - the documented shape
-// this server-side reader mirrors.
+// A non-conformity's extras (responsible / responsibleContactId / dueBy /
+// lifeProtection / actionRequired) live on the answer's `value` as the
+// structured object defined by the app's features/assessment/data/
+// nonConformity.ts - the documented shape this server-side reader mirrors.
+//
+// THE RESPONSIBLE PARTY IS A CONTACT, NOT A NAME. Every action minted here
+// carries `responsibleContactId`, and the release digest is addressed through
+// it. The customer's contact directory is read ONCE for the whole release and
+// serves both: it supplies each action's recorded name from the LIVE contact
+// record (the truth at the moment the action is raised) and the address the
+// digest is sent to, so neither costs a read per finding.
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -48,7 +55,7 @@ import { deriveRiskLevel, RAG_CONFIG_DEFAULTS } from '../lib/ragDerivation';
 import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import { orgEmailBrand, renderBrandedEmail } from '../lib/emailTemplates';
-import { resolveResponsibleName } from '../lib/responsibleParty';
+import { resolveResponsibleAssignment } from '../lib/responsibleParty';
 import { SEVERITIES } from '../shared/types';
 import type { EnvPaths } from '../shared/paths';
 import type { Logger } from '../lib/logging';
@@ -92,95 +99,136 @@ function formatDueDate(millis: number): string {
 }
 
 /**
- * ONE digest email to the building's linked responsible party summarising the
- * action plan the release just minted - never per-action (story 2047: the
- * duty-holder gets one actionable summary, not a inbox flood). Resolution is
- * strictly via the structured linkage: the building's responsibleParty must
- * carry a contactId, and that CustomerContact must have an email. A free-text
- * party (no contactId) or an email-less contact means we log the intent and
- * skip - guessing an address for a compliance email is worse than silence.
+ * ONE digest email per responsible CONTACT summarising the actions the release
+ * just assigned to them - never per action (story 2047: a duty-holder gets one
+ * actionable summary, not an inbox flood), and never one shared digest to the
+ * building's party covering work recorded against somebody else.
+ *
+ * Resolution is strictly through `Action.responsibleContactId`, matched against
+ * the customer's contact directory read once by the caller. An action with no
+ * contact id (a legacy or imported party that is only a name) and a contact with
+ * no email are both DEAD ENDS, and each is logged with the reason: "nobody was
+ * emailed" has to be diagnosable, and guessing an address for a statutory
+ * compliance message is worse than silence.
+ *
+ * DELIBERATELY NOT gated by `CustomerContact.receivesReports`. That flag says
+ * whether somebody wants a copy of the whole fire risk assessment report; this
+ * digest is not the report, it is the list of remedial actions THIS person has
+ * been recorded responsible for. The two answer different questions, and the
+ * digest's own is answered by the per-finding `responsibleContactId` an assessor
+ * set on purpose. Silencing it off the back of a report-distribution preference
+ * would mean a duty-holder is never told about work that is legally theirs
+ * because somebody once trimmed the report mailing list - so the opt-out stops
+ * at the report, exactly as review reminders and visit notices do.
+ *
  * Best-effort throughout: the release has already landed, so nothing here may
  * throw (the dispatchEmail contract, extended to the reads around it).
  */
-async function emailReleaseDigest(
+async function emailReleaseDigests(
   paths: EnvPaths,
   orgId: string,
   siteId: string,
   buildingId: string,
   building: Building,
   newActions: Action[],
+  directory: Keyed<CustomerContact>,
   logger: Logger,
 ): Promise<void> {
   try {
-    const party = building.responsibleParty;
-    if (!party?.contactId) {
+    // Group the release's actions by the person who owes them.
+    const byContact = new Map<string, Action[]>();
+    let unlinked = 0;
+    for (const action of newActions) {
+      if (!action.responsibleContactId) {
+        unlinked += 1;
+        continue;
+      }
+      const existing = byContact.get(action.responsibleContactId);
+      if (existing) {
+        existing.push(action);
+      } else {
+        byContact.set(action.responsibleContactId, [action]);
+      }
+    }
+    if (unlinked > 0) {
       logger.info(
-        'Release digest skipped: building has no linked responsible party',
-        { hasParty: Boolean(party) },
+        'Release digest not sent for some actions: no responsible contact is linked to them, so there is no address to send to',
+        { buildingId, actions: unlinked },
       );
-      return;
     }
-    const contactSnap = await db
-      .ref(
-        paths.db.customerContact(orgId, building.customerId, party.contactId),
-      )
-      .get();
-    const contact = contactSnap.val() as CustomerContact | null;
-    if (!contact?.email) {
-      logger.info('Release digest skipped: linked contact has no email', {
-        contactId: party.contactId,
-      });
+    if (byContact.size === 0) {
       return;
     }
 
-    // The digest's headline facts: how bad and how soon.
-    const topSeverity: Severity = newActions.some((a) => a.severity === 'H')
-      ? 'H'
-      : newActions.some((a) => a.severity === 'M')
-        ? 'M'
-        : 'L';
-    const dueDates = newActions
-      .map((a) => a.dueBy)
-      .filter((d): d is number => typeof d === 'number');
-    const earliestDue = dueDates.length > 0 ? Math.min(...dueDates) : undefined;
-
-    const count = newActions.length;
-    // The digest carries the sending organisation's own brand (name + accent),
-    // falling back to the Safentia brand when the org has not set a valid one.
+    // The sending organisation's own brand (name + accent), read once for the
+    // whole fan-out; falls back to the Safentia brand when the org has not set
+    // a valid one.
     const profileSnap = await db.ref(paths.db.orgProfile(orgId)).get();
     const brand = orgEmailBrand(profileSnap.val() as OrgProfile | null);
-    const subject = `${count} ${count === 1 ? 'action' : 'actions'} from the released assessment of ${building.name}`;
-    const body = `A fire risk assessment of ${building.name} has been released with ${count} ${count === 1 ? 'action' : 'actions'} assigned to the building's action plan.`;
-    const html = renderBrandedEmail({
-      brand,
-      preheader: body,
-      heading: subject,
-      paragraphs: [
-        body,
-        'Please review the action plan and arrange the remedial work before the due dates pass.',
-      ],
-      detailRows: [
-        { label: 'Building', value: building.name },
-        { label: 'Actions', value: String(count) },
-        { label: 'Top severity', value: SEVERITY_LABELS[topSeverity] },
-        ...(earliestDue !== undefined
-          ? [{ label: 'Earliest due', value: formatDueDate(earliestDue) }]
-          : []),
-      ],
-      // Straight to the building in the customer's own portal, where the new
-      // action plan and the released report both live. The staff console would
-      // only show this recipient a permission wall.
-      cta: {
-        label: 'View the action plan',
-        url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
-      },
-      footerNote: `You are receiving this because you are the responsible party for ${building.name} on Safentia.`,
-    });
-    await dispatchEmail({ to: contact.email, subject, body, html }, logger, {
-      orgId,
-      env: paths.env,
-      category: 'release-digest',
-    });
+
+    for (const [contactId, actions] of byContact) {
+      const contact = directory[contactId];
+      if (!contact) {
+        logger.warn(
+          'Release digest skipped: the responsible contact is no longer in the customer’s contact list',
+          { buildingId, contactId, actions: actions.length },
+        );
+        continue;
+      }
+      if (!contact.email) {
+        logger.info(
+          'Release digest skipped: the responsible contact has no email address on record',
+          { buildingId, contactId, actions: actions.length },
+        );
+        continue;
+      }
+
+      // The digest's headline facts: how bad and how soon, for THIS recipient.
+      const topSeverity: Severity = actions.some((a) => a.severity === 'H')
+        ? 'H'
+        : actions.some((a) => a.severity === 'M')
+          ? 'M'
+          : 'L';
+      const dueDates = actions
+        .map((a) => a.dueBy)
+        .filter((d): d is number => typeof d === 'number');
+      const earliestDue =
+        dueDates.length > 0 ? Math.min(...dueDates) : undefined;
+
+      const count = actions.length;
+      const subject = `${count} ${count === 1 ? 'action' : 'actions'} from the released assessment of ${building.name}`;
+      const body = `A fire risk assessment of ${building.name} has been released with ${count} ${count === 1 ? 'action' : 'actions'} recorded against you.`;
+      const html = renderBrandedEmail({
+        brand,
+        preheader: body,
+        heading: subject,
+        paragraphs: [
+          body,
+          'Please review the action plan and arrange the remedial work before the due dates pass.',
+        ],
+        detailRows: [
+          { label: 'Building', value: building.name },
+          { label: 'Actions', value: String(count) },
+          { label: 'Top severity', value: SEVERITY_LABELS[topSeverity] },
+          ...(earliestDue !== undefined
+            ? [{ label: 'Earliest due', value: formatDueDate(earliestDue) }]
+            : []),
+        ],
+        // Straight to the building in the customer's own portal, where the new
+        // action plan and the released report both live. The staff console
+        // would only show this recipient a permission wall.
+        cta: {
+          label: 'View the action plan',
+          url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
+        },
+        footerNote: `You are receiving this because you are recorded as responsible for these actions at ${building.name} on Safentia.`,
+      });
+      await dispatchEmail({ to: contact.email, subject, body, html }, logger, {
+        orgId,
+        env: paths.env,
+        category: 'release-digest',
+      });
+    }
   } catch (error) {
     // The release already landed; a failed courtesy digest must not undo it.
     logger.warn('Release digest email failed', {
@@ -191,10 +239,16 @@ async function emailReleaseDigest(
 
 /** The structured extras a non-conformity answer carries on its open `value`
  *  field - the same shape the app's nonConformity module writes. Read
- *  defensively: a remote answer may hold a primitive or nothing at all. */
+ *  defensively: a remote answer may hold a primitive or nothing at all.
+ *
+ *  `responsibleContactId` is the per-finding override that MATTERS: it is what
+ *  lets an assessor hold a different real person accountable for one item and
+ *  still have them told about it. The `responsible` name travels beside it as
+ *  the app recorded it, and is only used when no contact record answers. */
 function readNonConformityValue(answer: AssessmentAnswer): {
   actionRequired?: boolean;
   responsible?: string;
+  responsibleContactId?: string;
   dueBy?: number;
   lifeProtection?: boolean;
 } {
@@ -205,6 +259,10 @@ function readNonConformityValue(answer: AssessmentAnswer): {
       actionRequired:
         typeof v.actionRequired === 'boolean' ? v.actionRequired : undefined,
       responsible: typeof v.responsible === 'string' ? v.responsible : undefined,
+      responsibleContactId:
+        typeof v.responsibleContactId === 'string'
+          ? v.responsibleContactId
+          : undefined,
       dueBy: typeof v.dueBy === 'number' ? v.dueBy : undefined,
       lifeProtection: v.lifeProtection === true,
     };
@@ -293,6 +351,15 @@ export const releaseAssessment = onCall<ReleaseAssessmentInput>(
         const existingActions =
           (existingActionsSnap.val() as Keyed<Action> | null) ?? {};
 
+        // The customer's contact directory, read ONCE for the whole release.
+        // Every action's responsible party is one of these people, so this
+        // single read replaces a per-finding lookup twice over: it names each
+        // action's party from the live record, and it addresses the digests.
+        const contactsSnap = await db
+          .ref(paths.db.customerContacts(orgId, building.customerId))
+          .get();
+        const contacts = (contactsSnap.val() as Keyed<CustomerContact> | null) ?? {};
+
         // 3a. Build the action plan from the non-conformity findings. The
         // template snapshot says which questions ARE non-conformities and gives
         // each its section code and wording; the answer carries the finding. A
@@ -301,6 +368,10 @@ export const releaseAssessment = onCall<ReleaseAssessmentInput>(
         // nothing.
         const now = Date.now();
         const newActions: Action[] = [];
+        // Diagnostics for the release log: an action nobody can be emailed
+        // about is not an error, but it must never be invisible.
+        let actionsWithoutContact = 0;
+        let actionsWithMissingContact = 0;
         const sections = Array.isArray(assessment.templateSnapshot?.sections)
           ? assessment.templateSnapshot.sections
           : [];
@@ -319,15 +390,31 @@ export const releaseAssessment = onCall<ReleaseAssessmentInput>(
             }
             // The responsible party: the finding's own, else the visit's (the
             // assessment copy, itself defaulted from the building), else the
-            // building's default (structured party first, legacy string last).
-            // The chain itself lives in lib/responsibleParty so the release
-            // pipeline, the manual action plan and the report cannot drift in
-            // who they hold accountable.
-            const responsible = resolveResponsibleName(
-              extras.responsible,
+            // building's default. The chain itself lives in lib/responsibleParty
+            // so the release pipeline, the manual action plan and the report
+            // cannot drift in who they hold accountable - and it carries the
+            // CONTACT ID, which is what the digest below is addressed through.
+            const assignment = resolveResponsibleAssignment(
+              extras,
               assessment,
               building,
             );
+            // The name is taken from the LIVE contact record where there is
+            // one: `responsible` is the name as recorded when the action was
+            // raised, and at this instant the directory IS that record. It also
+            // means a party stored as a bare link still lands with a name on it.
+            const linkedContact = assignment.contactId
+              ? contacts[assignment.contactId]
+              : undefined;
+            const responsible = linkedContact?.name ?? assignment.name;
+            if (!assignment.contactId) {
+              actionsWithoutContact += 1;
+            } else if (!linkedContact) {
+              // The id is KEPT rather than dropped: it is the recorded intent,
+              // and a dangling link a reader can see and repair beats a silent
+              // deletion that leaves only the puzzle of the missing email.
+              actionsWithMissingContact += 1;
+            }
             // The flag composite: the first plan flag that has one (brief 8).
             const locationFlagUrl = (answer.flags ?? []).find(
               (flag) => typeof flag?.flagImageUrl === 'string',
@@ -345,6 +432,9 @@ export const releaseAssessment = onCall<ReleaseAssessmentInput>(
               ...(locationFlagUrl !== undefined ? { locationFlagUrl } : {}),
               ...(photos.length > 0 ? { images: photos } : {}),
               ...(responsible !== undefined ? { responsible } : {}),
+              ...(assignment.contactId !== undefined
+                ? { responsibleContactId: assignment.contactId }
+                : {}),
               ...(extras.dueBy !== undefined ? { dueBy: extras.dueBy } : {}),
               lifeProtection: extras.lifeProtection === true,
               status: 'open',
@@ -492,18 +582,35 @@ export const releaseAssessment = onCall<ReleaseAssessmentInput>(
 
         const logger = createLogger({ fn: 'releaseAssessment', orgId });
 
-        // 6. Story 2047: ONE digest email to the building's linked responsible
-        // party, only after the payload has landed (an email about actions that
-        // failed to write would be a lie) and only when the release actually
-        // minted actions. Best-effort; can never fail the release.
+        // Why an action may never reach anybody, said plainly and once per
+        // release rather than per finding: a party with no contact link, or a
+        // link pointing at a contact that has since been removed.
+        if (actionsWithoutContact > 0) {
+          logger.info(
+            'Some released actions carry no responsible contact, so no email can be addressed for them (an unlinked legacy or imported party)',
+            { assessmentId, actions: actionsWithoutContact },
+          );
+        }
+        if (actionsWithMissingContact > 0) {
+          logger.warn(
+            'Some released actions name a responsible contact that is no longer in the customer’s contact list',
+            { assessmentId, actions: actionsWithMissingContact },
+          );
+        }
+
+        // 6. Story 2047: ONE digest email per responsible contact, only after
+        // the payload has landed (an email about actions that failed to write
+        // would be a lie) and only when the release actually minted actions.
+        // Best-effort; can never fail the release.
         if (newActions.length > 0) {
-          await emailReleaseDigest(
+          await emailReleaseDigests(
             paths,
             orgId,
             job.siteId,
             assessment.buildingId,
             building,
             newActions,
+            contacts,
             logger,
           );
         }
@@ -512,6 +619,7 @@ export const releaseAssessment = onCall<ReleaseAssessmentInput>(
           assessmentId,
           buildingId: assessment.buildingId,
           actionsCreated: newActions.length,
+          actionsWithoutContact,
           riskLevel,
           manualOverride: manualLevel !== undefined,
         });

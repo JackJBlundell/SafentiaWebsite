@@ -86,20 +86,37 @@ service firebase.storage {
       allow write: if envMatches(env) && ownOrg(orgId) && validDocument();
     }
 
-    // --- Generated report PDFs (story 1076) -----------------------------------
-    // Readable only by the owning org. Written by generateReport via the admin
-    // SDK, which bypasses these rules, so client writes are denied here.
+    // --- Action sign-off evidence (photo or PDF proving the work was done) ----
+    // Read: the owning org's staff, AND the owning customer's portal users - the
+    // proof is only useful if the customer who has to rely on it can open it.
+    // The per-object scope is the customerId in custom metadata, exactly as the
+    // report rule below does it, and manageAction STAMPS that metadata itself
+    // from the buildingCustomerIndex - never from the uploading client - so an
+    // object can only ever be released to the customer that actually owns the
+    // building. Absent metadata denies (a rules read of a missing property
+    // fails), which is the right way round for evidence.
     //
-    // PHASE 2: customer-portal read access is deliberately NOT granted by a blanket
-    // `customerId != null` check - that would let ANY customer token read EVERY
-    // org's reports (cross-tenant leak). When the portal lands, scope it to the
-    // OWNING customer, e.g. by writing the customerId into the object's metadata
-    // and checking `resource.metadata.customerId == request.auth.token.customerId`
-    // (Storage rules cannot read RTDB), alongside an env/owner check.
-    // Organisation-level assets: the whitelabel logo. Image-bounded like photos;
-    // written by admins from the settings screen (role enforcement lives in the
-    // updateOrgProfile callable that records the URL - rules here hold the
-    // tenant, env and content boundaries).
+    // Write: admin only, and only the org's own staff. Evidence closes an action
+    // in the legal record, and a Storage write covers replace-in-place, so a
+    // member-wide grant would let any account swap the proof after sign-off.
+    match /{env}/orgs/{orgId}/buildings/{buildingId}/actionEvidence/{evidenceId} {
+      allow read: if envMatches(env)
+        && (ownOrg(orgId)
+          || (request.auth.token.portalOrgId == orgId
+            && resource.metadata.customerId == request.auth.token.customerId));
+      allow write: if envMatches(env) && ownOrg(orgId)
+        && request.auth.token.roles.admin == true
+        && validDocument();
+    }
+
+    // --- Organisation assets ---------------------------------------------------
+    // Organisation-level assets: the whitelabel logo, the report cover image and
+    // customer logos/photos. Image-bounded like photos; written by admins from
+    // the settings and customer screens (role enforcement lives in the callables
+    // that record the URL - rules here hold the tenant, env and content
+    // boundaries). One flat prefix is right for all of them: they are the same
+    // kind of object under the same admin-only, image-only ceiling, so a
+    // per-purpose prefix would add matches without adding a boundary.
     //
     // This match stays IMAGE-ONLY. Template certificates are PDFs and live one
     // segment deeper (assets/certificates/{id}, below) precisely so this ceiling
@@ -130,15 +147,34 @@ service firebase.storage {
         && request.resource.size <= 25 * 1024 * 1024;
     }
 
+    // --- Generated report PDFs (story 1076) -----------------------------------
+    // Written by the report generator via the admin SDK, which bypasses these
+    // rules, so client writes are denied outright.
     match /{env}/orgs/{orgId}/reports/{reportFile} {
-      // Staff read their org's reports; a customer's PORTAL users read exactly
-      // the reports stamped with their customerId in custom metadata (written
-      // by the report generator - the object path carries no customer segment,
-      // so metadata is the only per-object scope Storage rules can check).
-      allow read: if envMatches(env)
-        && (ownOrg(orgId)
-          || (request.auth.token.portalOrgId == orgId
-            && resource.metadata.customerId == request.auth.token.customerId));
+      // STAFF ONLY. A portal token gets NOTHING here - a customer reads their
+      // report through the getReportDownloadUrl callable, which re-derives the
+      // building's owning customer, the reader's live /customerMembers standing
+      // and their acceptance on every request and answers with a 15-minute
+      // signed URL.
+      //
+      // Why the portal branch was removed: it matched a customerId stamped into
+      // the object's custom metadata when the report was generated. Storage
+      // rules cannot read RTDB (Firestore only), so that stamp was the only
+      // per-object scope available - and it is authorisation FROZEN AT WRITE
+      // TIME. It does not follow a building that changes hands, a portal seat
+      // that is locked, or a customer that is archived; and a report generated
+      // while the building->customer index was missing was stamped empty and
+      // became permanently unopenable. The generator still writes the stamp as
+      // defence in depth, but nothing grants on it any more - do not restore
+      // this branch to "fix" a portal download, fix the callable.
+      //
+      // Staff direct read STAYS. It is scoped by the orgId claim, which is live
+      // (onMembershipChange re-mints it and trips the refresh marker the moment
+      // membership changes), so it carries none of the staleness above; and the
+      // console and the assessor app resolve report PDFs through the Storage SDK
+      // in several places. There is no portal exposure in keeping it: a portal
+      // token has no orgId claim, so ownOrg can never be true for one.
+      allow read: if envMatches(env) && ownOrg(orgId);
       allow write: if false;
     }
 

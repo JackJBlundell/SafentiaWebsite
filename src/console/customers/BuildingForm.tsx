@@ -2,11 +2,19 @@
 // BuildingForm - create or edit one building (story 2020).
 //
 // Covers every admin-settable Building/BuildingDetails field: identity,
-// physical details, alarm, and the responsible people (structured responsible
-// party plus the Article 5(3) duty-holders). Three things are deliberately
-// absent: riskLevel/ragDistribution/lastAssessedAt are DERIVED from assessments
-// and never editable; the service schedule has its own panel on the building
-// page; and the photo is managed by the uploads flow, not a form field.
+// physical details, alarm, and the responsible people (the responsible party
+// plus the Article 5(3) duty-holders). Three things are deliberately absent:
+// riskLevel/ragDistribution/lastAssessedAt are DERIVED from assessments and
+// never editable; the service schedule has its own panel on the building page;
+// and the photo is managed by the uploads flow, not a form field.
+//
+// THE RESPONSIBLE PARTY IS A CONTACT, NOT A NAME. It is picked from the
+// customer's contact directory and nowhere else - the typed-name alternative
+// that used to sit beside it is gone, and manageBuilding now refuses a party
+// without a contact link. That record is what the platform emails when an
+// assessment is released and when remedial work falls due, so a name with
+// nobody behind it was a person on a statutory record who could never be told
+// they were on it. Someone missing from the directory is added from the picker.
 // ============================================================================
 
 import { useEffect, useState, type FormEvent } from 'react';
@@ -27,11 +35,11 @@ import {
   type ResponsibleParty,
   type Site,
 } from '../../types';
-import { AddressSearch } from '../ui/AddressSearch';
+import { AddressField } from '../ui/AddressField';
 import { ErrorNotice, PageHeader, type Crumb } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
 import { ContactPicker } from './ContactPicker';
-import { isValidEmail, LoadingNote, urls, useOrgScope } from './shared';
+import { LoadingNote, urls, useOrgScope } from './shared';
 import shared from './shared.module.css';
 import styles from './BuildingForm.module.css';
 
@@ -113,18 +121,13 @@ export function BuildingForm({ mode }: { mode: 'create' | 'edit' }) {
   const [isLandlord, setIsLandlord] = useState(false);
   const [alarmType, setAlarmType] = useState('');
   const [alarmCategory, setAlarmCategory] = useState<'' | AlarmCategory>('');
-  // Responsible people. The primary path is the customer's contact roster
-  // (a picked contact is snapshotted onto the party with its contactId link);
-  // manual mode keeps the schema's support for unlinked parties.
-  const [rpMode, setRpMode] = useState<'picker' | 'manual'>('picker');
+  // Responsible people. The party comes from the customer's contact roster and
+  // only from there; the picked contact is snapshotted onto the party with its
+  // contactId link.
   const [rpContactId, setRpContactId] = useState<string | null>(null);
   // The picked contact, captured at pick time for the snapshot. Null while an
   // edit's preselected contact is untouched - the stored party then stands.
   const [rpContact, setRpContact] = useState<CustomerContact | null>(null);
-  const [rpName, setRpName] = useState('');
-  const [rpRole, setRpRole] = useState('');
-  const [rpEmail, setRpEmail] = useState('');
-  const [rpPhone, setRpPhone] = useState('');
   const [article53, setArticle53] = useState<string[]>([]);
 
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -152,16 +155,11 @@ export function BuildingForm({ mode }: { mode: 'create' | 'edit' }) {
       setIsLandlord(record.details?.isLandlord === true);
       setAlarmType(record.details?.alarmType ?? '');
       setAlarmCategory(record.details?.alarmCategory ?? '');
-      // A linked party preselects the picker; a manual party opens manual
-      // mode. The manual fields prefill either way, so switching modes never
-      // starts from a blank slate.
-      const party = record.responsibleParty;
-      setRpMode(party && !party.contactId ? 'manual' : 'picker');
-      setRpContactId(party?.contactId ?? null);
-      setRpName(party?.name ?? '');
-      setRpRole(party?.role ?? '');
-      setRpEmail(party?.email ?? '');
-      setRpPhone(party?.phone ?? '');
+      // A linked party preselects the picker. A party from before the linkage
+      // (or from an import) has no contactId to preselect, so the picker opens
+      // on nobody and the notice below names who is currently on the record -
+      // saving the form is what replaces them with a real contact.
+      setRpContactId(record.responsibleParty?.contactId ?? null);
       setArticle53(record.article53Persons ?? []);
       setPrefilled(true);
     }
@@ -217,25 +215,6 @@ export function BuildingForm({ mode }: { mode: 'create' | 'edit' }) {
       return;
     }
 
-    const trimmedRpName = rpName.trim();
-    const trimmedRpEmail = rpEmail.trim();
-    if (rpMode === 'manual') {
-      const hasRpDetail = Boolean(
-        rpRole.trim() || trimmedRpEmail || rpPhone.trim(),
-      );
-      if (!trimmedRpName && hasRpDetail) {
-        setFieldError(
-          'Enter the responsible party name, or clear their other details.',
-        );
-        return;
-      }
-      if (trimmedRpEmail && !isValidEmail(trimmedRpEmail)) {
-        setFieldError(
-          'Enter a valid email for the responsible party, or leave it empty.',
-        );
-        return;
-      }
-    }
     setFieldError(null);
 
     // An emptied optional field that WAS set on the loaded record sends an
@@ -265,34 +244,21 @@ export function BuildingForm({ mode }: { mode: 'create' | 'edit' }) {
     if (Object.keys(details).length > 0) building.details = details;
     else if (record?.details) building.details = null;
 
-    if (rpMode === 'picker') {
-      if (rpContactId && rpContact) {
-        // A fresh pick: snapshot the contact onto the party, keeping the link.
-        const party: ResponsibleParty = {
-          name: rpContact.name,
-          contactId: rpContactId,
-        };
-        if (rpContact.jobTitle) party.role = rpContact.jobTitle;
-        if (rpContact.email) party.email = rpContact.email;
-        if (rpContact.phone) party.phone = rpContact.phone;
-        building.responsibleParty = party;
-      } else if (!rpContactId && record?.responsibleParty) {
-        building.responsibleParty = null;
-      }
-      // An untouched preselection (rpContactId set, rpContact null) sends
-      // nothing: the stored party stands.
-    } else if (trimmedRpName) {
-      // Manual mode is the schema's unlinked party: no contactId.
-      const party: ResponsibleParty = { name: trimmedRpName };
-      const trimmedRpRole = rpRole.trim();
-      if (trimmedRpRole) party.role = trimmedRpRole;
-      if (trimmedRpEmail) party.email = trimmedRpEmail;
-      const trimmedRpPhone = rpPhone.trim();
-      if (trimmedRpPhone) party.phone = trimmedRpPhone;
+    if (rpContactId && rpContact) {
+      // A fresh pick: snapshot the contact onto the party, keeping the link.
+      const party: ResponsibleParty = {
+        name: rpContact.name,
+        contactId: rpContactId,
+      };
+      if (rpContact.jobTitle) party.role = rpContact.jobTitle;
+      if (rpContact.email) party.email = rpContact.email;
+      if (rpContact.phone) party.phone = rpContact.phone;
       building.responsibleParty = party;
-    } else if (record?.responsibleParty) {
+    } else if (!rpContactId && record?.responsibleParty) {
       building.responsibleParty = null;
     }
+    // An untouched preselection (rpContactId set, rpContact null) sends
+    // nothing: the stored party stands.
 
     const persons = article53.map((p) => p.trim()).filter(Boolean);
     if (persons.length > 0) building.article53Persons = persons;
@@ -361,12 +327,13 @@ export function BuildingForm({ mode }: { mode: 'create' | 'edit' }) {
             />
           </div>
           <div className={shared.field}>
-            <AddressSearch
+            {/* No `geo`: the point that matters for navigation is the site's,
+                so a building keeps the address alone. */}
+            <AddressField
               id="building-address"
               label="Address (optional)"
               value={address}
               onChange={setAddress}
-              onSelect={(selection) => setAddress(selection.address)}
             />
           </div>
         </fieldset>
@@ -488,91 +455,37 @@ export function BuildingForm({ mode }: { mode: 'create' | 'edit' }) {
           <legend className={shared.legend}>Responsible people</legend>
           <p className={shared.hint}>
             The responsible party is the default contact for assessments and
-            remedial actions on this building.
+            remedial actions on this building. Safentia emails this person when
+            an assessment is released and when their actions fall due, so they
+            must be one of the customer’s contacts — add them below if they are
+            not listed yet.
           </p>
-          {rpMode === 'picker' ? (
-            <>
-              <div className={shared.field}>
-                <ContactPicker
-                  customerId={customerId}
-                  label="Responsible party"
-                  value={rpContactId ?? undefined}
-                  onChange={(nextId, contact) => {
-                    setRpContactId(nextId);
-                    setRpContact(contact);
-                  }}
-                  allowNone
-                />
-              </div>
-              <div>
-                <Button variant="ghost" onClick={() => setRpMode('manual')}>
-                  Enter manually instead
-                </Button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className={shared.field}>
-                <label className={shared.label} htmlFor="rp-name">
-                  Responsible party name (optional)
-                </label>
-                <input
-                  id="rp-name"
-                  className={shared.input}
-                  type="text"
-                  autoComplete="off"
-                  value={rpName}
-                  onChange={(event) => setRpName(event.target.value)}
-                />
-              </div>
-              <div className={shared.field}>
-                <label className={shared.label} htmlFor="rp-role">
-                  Role or job title (optional)
-                </label>
-                <input
-                  id="rp-role"
-                  className={shared.input}
-                  type="text"
-                  autoComplete="off"
-                  value={rpRole}
-                  onChange={(event) => setRpRole(event.target.value)}
-                />
-              </div>
-              <div className={shared.fieldRow}>
-                <div className={shared.field}>
-                  <label className={shared.label} htmlFor="rp-email">
-                    Email (optional)
-                  </label>
-                  <input
-                    id="rp-email"
-                    className={shared.input}
-                    type="email"
-                    autoComplete="off"
-                    value={rpEmail}
-                    onChange={(event) => setRpEmail(event.target.value)}
-                  />
-                </div>
-                <div className={shared.field}>
-                  <label className={shared.label} htmlFor="rp-phone">
-                    Phone (optional)
-                  </label>
-                  <input
-                    id="rp-phone"
-                    className={shared.input}
-                    type="tel"
-                    autoComplete="off"
-                    value={rpPhone}
-                    onChange={(event) => setRpPhone(event.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <Button variant="ghost" onClick={() => setRpMode('picker')}>
-                  Choose from contacts instead
-                </Button>
-              </div>
-            </>
-          )}
+          {/* A party recorded before the contact linkage (or brought in by an
+              import) has a name but nothing to email. Name them plainly so the
+              admin knows what saving this form is about to replace. */}
+          {editing &&
+            existing.data?.responsibleParty &&
+            !existing.data.responsibleParty.contactId && (
+              <p className={shared.hint}>
+                This building currently records{' '}
+                <strong>{existing.data.responsibleParty.name}</strong> as the
+                responsible party, but they are not linked to a contact, so
+                nothing is emailed to them. Choose them from the list below to
+                fix that.
+              </p>
+            )}
+          <div className={shared.field}>
+            <ContactPicker
+              customerId={customerId}
+              label="Responsible party"
+              value={rpContactId ?? undefined}
+              onChange={(nextId, contact) => {
+                setRpContactId(nextId);
+                setRpContact(contact);
+              }}
+              allowNone
+            />
+          </div>
 
           <div className={shared.field}>
             <span className={shared.label} id="article53-label">

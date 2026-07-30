@@ -15,7 +15,17 @@
 
 import type { Action, Severity, SectionCode } from '../../shared/types';
 import { DUE_WINDOW_DAYS } from '../../shared/types';
-import { ASSESSMENT, BUILDING, UID, days } from '../ids';
+import { ASSESSMENT, BUILDING, CONTACT, UID, days } from '../ids';
+
+/** The customer contacts an action can be assigned to, and the name each one is
+ *  recorded under. Actions are LINKED to a contact exactly as the release
+ *  pipeline links them - the seed cannot demonstrate an assignment email, an
+ *  overdue chase or the console's contact picker with a party who is only a
+ *  typed name, because none of those resolve anybody without the link. */
+const CONTACT_NAMES: Record<string, string> = {
+  [CONTACT.meridianHelen]: 'Helen Carter',
+  [CONTACT.meridianMarcus]: 'Marcus Webb',
+};
 
 export interface SeedAction {
   buildingId: string;
@@ -32,7 +42,9 @@ interface ActionSeed {
   observation: string;
   severity: Severity;
   lifeProtection: boolean;
-  responsible: string;
+  /** The CustomerContact who owes the work (a CONTACT id). The recorded name
+   *  follows from it, never the other way round. */
+  responsibleContact: string;
   /** Key into the flag-composite URL map, if this action carries a location. */
   flagKey?: string;
   /** Photo keys (into the action-image URL map) to embed as titled images. */
@@ -58,7 +70,7 @@ const ACTION_SEEDS: ActionSeed[] = [
       'Remove the daisy-chained extension leads serving comms equipment on the Level 6 riser and provide a suitably rated permanent supply. The overloaded board is an immediate ignition risk.',
     severity: 'H',
     lifeProtection: true,
-    responsible: 'Meridian Estates Ltd (Facilities)',
+    responsibleContact: CONTACT.meridianHelen,
     flagKey: 'asmt-tower-a-flag-escape',
     photoKeys: [
       { key: 'asmt-tower-a-electrical', title: 'Overloaded distribution board, Level 6 riser' },
@@ -75,7 +87,7 @@ const ACTION_SEEDS: ActionSeed[] = [
       'Provide an alternative means of escape or reduce the single-direction travel distance from the east end of Level 6 to the protected stair.',
     severity: 'H',
     lifeProtection: true,
-    responsible: 'Meridian Estates Ltd (Facilities)',
+    responsibleContact: CONTACT.meridianHelen,
     flagKey: 'asmt-tower-a-flag-escape',
   },
   // Tower A - Medium, PEEPs.
@@ -89,7 +101,7 @@ const ACTION_SEEDS: ActionSeed[] = [
       'Prepare individual Personal Emergency Evacuation Plans for the two registered wheelchair users on Level 9 to replace the generic plan currently held.',
     severity: 'M',
     lifeProtection: true,
-    responsible: 'Skyline Managing Agents LLP',
+    responsibleContact: CONTACT.meridianMarcus,
   },
   // Tower A - Medium, obstruction.
   {
@@ -102,7 +114,7 @@ const ACTION_SEEDS: ActionSeed[] = [
       'Remove the stored furniture obstructing the Level 3 escape corridor and reinforce the clear-routes policy with staff.',
     severity: 'M',
     lifeProtection: false,
-    responsible: 'Meridian Estates Ltd (Facilities)',
+    responsibleContact: CONTACT.meridianHelen,
   },
   // Tower A - Low, emergency lighting luminaire.
   {
@@ -115,7 +127,7 @@ const ACTION_SEEDS: ActionSeed[] = [
       'Replace the non-maintained emergency luminaire that failed the duration test in the Level 11 lobby.',
     severity: 'L',
     lifeProtection: false,
-    responsible: 'Meridian Estates Ltd (Facilities)',
+    responsibleContact: CONTACT.meridianHelen,
   },
   // Tower A - Low, faded signage.
   {
@@ -128,7 +140,7 @@ const ACTION_SEEDS: ActionSeed[] = [
       'Replace the two faded photoluminescent escape signs at basement level.',
     severity: 'L',
     lifeProtection: false,
-    responsible: 'Meridian Estates Ltd (Facilities)',
+    responsibleContact: CONTACT.meridianHelen,
   },
   // Tower B - the single High item, Life Protection, with a photo.
   {
@@ -141,7 +153,7 @@ const ACTION_SEEDS: ActionSeed[] = [
       'Install directional escape signage at the basement stair head so occupants unfamiliar with the building are not misdirected.',
     severity: 'H',
     lifeProtection: true,
-    responsible: 'Meridian Estates Ltd (Facilities)',
+    responsibleContact: CONTACT.meridianHelen,
     photoKeys: [
       { key: 'asmt-tower-b-signage', title: 'Missing directional sign, basement stair' },
     ],
@@ -162,7 +174,8 @@ export function buildActions(
       observation: seed.observation,
       severity: seed.severity,
       lifeProtection: seed.lifeProtection,
-      responsible: seed.responsible,
+      responsible: CONTACT_NAMES[seed.responsibleContact],
+      responsibleContactId: seed.responsibleContact,
       dueBy: dueBySeverity(seed.severity),
       status: 'open',
     };

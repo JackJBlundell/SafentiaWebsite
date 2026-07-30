@@ -23,6 +23,7 @@ import type {
   CreateJobResult,
   Customer,
   CustomerContact,
+  GeoPoint,
   ManageBuildingInput,
   ManageBuildingResult,
   ManageCustomerContactInput,
@@ -35,7 +36,7 @@ import type {
   Site,
   Template,
 } from '../../types';
-import { AddressSearch } from '../ui/AddressSearch';
+import { AddressField } from '../ui/AddressField';
 import { Card, CardHeader } from '../ui/Card';
 import { ErrorNotice, PageHeader } from '../ui/Page';
 import { Stepper } from '../ui/Stepper';
@@ -313,12 +314,11 @@ export function CustomerWizard() {
               />
             </div>
             <div className={shared.field}>
-              <AddressSearch
+              <AddressField
                 id="wizard-org-address"
                 label="Head office address (optional)"
                 value={orgAddress}
                 onChange={setOrgAddress}
-                onSelect={(selection) => setOrgAddress(selection.address)}
               />
             </div>
             <div className={shared.fieldRow}>
@@ -608,6 +608,9 @@ function SitesStep({
   );
   const [siteName, setSiteName] = useState('');
   const [siteAddress, setSiteAddress] = useState('');
+  // Derived from the address by AddressField, never typed. A site created here
+  // carries its point just as one created in the site form does.
+  const [siteGeo, setSiteGeo] = useState<GeoPoint | null>(null);
   const [buildingNames, setBuildingNames] = useState<Record<string, string>>({});
   const [fieldError, setFieldError] = useState<string | null>(null);
 
@@ -620,11 +623,13 @@ function SitesStep({
     setFieldError(null);
     const site: ClearableFields<Site> = { name };
     if (siteAddress.trim()) site.address = siteAddress.trim();
+    if (siteGeo) site.geo = siteGeo;
     const result = await manageSite.call({ action: 'create', customerId, site });
     if (result) {
       setCreatedSites((prev) => [...prev, { siteId: result.siteId, name, buildings: [] }]);
       setSiteName('');
       setSiteAddress('');
+      setSiteGeo(null);
     }
   };
 
@@ -746,12 +751,13 @@ function SitesStep({
           </Button>
         </div>
         <div className={shared.field}>
-          <AddressSearch
+          <AddressField
             id="wizard-site-address"
             label="Address (optional)"
             value={siteAddress}
             onChange={setSiteAddress}
-            onSelect={(selection) => setSiteAddress(selection.address)}
+            geo={siteGeo}
+            onGeoChange={setSiteGeo}
           />
         </div>
       </div>

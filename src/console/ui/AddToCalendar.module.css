@@ -1,0 +1,9 @@
+/* AddToCalendar - the two calendar routes on one row, wrapping on a narrow
+   aside rather than squashing the labels. */
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}

@@ -1,0 +1,133 @@
+/* NotificationSettingsPage - the three reminder-schedule sections inside kit
+   Cards. Mirrors the RagSettingsPage layout so the settings surfaces read as one
+   system; the schedule picker reuses the LogBookPanel chip pattern so a
+   toggleable filter looks the same wherever the console offers one. */
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-lg);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.note {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  max-width: 60ch;
+}
+
+.success {
+  color: var(--status-success);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* The chosen schedule, read back as sentences rather than as the control. */
+.chipList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken, var(--color-background));
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.chipOverdue {
+  color: var(--status-danger, var(--color-text));
+  border-color: var(--status-danger, var(--color-border));
+}
+
+/* The picker itself: one toggle per offered offset, each clearing 44px. */
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-block-start: var(--space-2xs, 2px);
+}
+
+.choice {
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.choice:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+}
+
+.choiceActive {
+  border-color: var(--brand-ink);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+/* At the cap, the marks not already chosen are plainly unavailable rather than
+   silently refusing the click. */
+.choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* The master on/off row. Same labelled-row pattern as the account page's email
+   preferences, so a switch reads identically wherever it appears. */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+/* The schedule block once a category is off: still readable, plainly inactive. */
+.disabled {
+  opacity: 0.55;
+}

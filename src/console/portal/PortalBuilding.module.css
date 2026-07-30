@@ -139,3 +139,132 @@
   font-size: 0.8125rem;
   color: var(--color-text-secondary);
 }
+
+/* The proof attached when the action was signed off. Same weight as the other
+   supporting lines - it is a fact of the action, not a call to act. */
+.actionEvidence {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.actionEvidenceLink {
+  color: var(--brand-ink);
+  text-decoration: underline;
+}
+
+/* Named but not openable: the record still shows evidence was produced, which
+   is a different fact from none existing. */
+.actionEvidenceMuted {
+  color: var(--color-text-muted);
+}
+
+/* Why a viewer sees no respond control. Muted and above the list: it explains
+   the whole plan's read-only feel once, not once per action. */
+.actionRoleNote {
+  margin: var(--space-sm) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+/* What the customer last told their provider. Set apart from the assessor's own
+   lines by an indent rule, because it is the one voice on the card that is
+   theirs - and it is a claim, not a closure. */
+.responseNote {
+  margin-top: var(--space-xs);
+  padding-left: var(--space-md);
+  border-left: 2px solid var(--color-border-strong);
+}
+
+.responseState {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.responseBody {
+  margin: 2px 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.actionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.respondForm {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  max-width: 34rem;
+}
+
+/* A fieldset so the two choices are announced as one question, and so the whole
+   group disables as one while the response is in flight. */
+.respondFieldset {
+  display: grid;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.respondLegend {
+  padding: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.respondChoice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  color: var(--color-text);
+}
+
+.respondField {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.respondLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.respondTextarea {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  resize: vertical;
+}
+
+.respondTextarea:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* The division of authority, said plainly at the point of submitting. */
+.respondFootnote {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}

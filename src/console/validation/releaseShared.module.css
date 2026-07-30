@@ -9,6 +9,16 @@
   white-space: nowrap;
 }
 
+/* A link plus its caveat, stacked so the note reads as part of the same
+   affordance. Aligned to the start in both hosts (dashboard row and released
+   table cell), which is where the link sits without it. */
+.reportGroup {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+}
+
 /* Underlined, so the affordance is never carried by colour alone. */
 .reportLink {
   display: inline-flex;

@@ -1,29 +1,59 @@
 // ============================================================================
 // ActionsPanel - the building's action plan (stories 2042/2043/2045).
 //
-// One severity-ordered table of the building's remedial actions (assessment-
-// born and admin-recorded alike), with status/severity/responsible/overdue
-// filters and a "View location" link for flag-born actions. Admins
-// manage the plan through the manageAction callable ONLY - create, edit, sign
-// off and reopen - so every mutation lands with its audit entry server-side.
-// Sign off and reopen are two-step ("press, then confirm") because both change
-// the legal reading of the plan.
+// One severity-ordered LIST of the building's remedial actions (assessment-born
+// and admin-recorded alike), with status/severity/responsible/overdue filters
+// and a "View location" link for flag-born actions. Admins manage the plan
+// through the manageAction callable ONLY - create, edit, sign off and reopen -
+// so every mutation lands with its audit entry server-side.
+//
+// WHY CARDS, NOT A TABLE: an action is one long sentence (the observation) plus
+// five short facts. A table gave the sentence whatever width the short facts
+// left over, which on the tablets this is actually read on was a sliver. Each
+// action is now a card: a state rail (severity, status, LTP, overdue) reads
+// first, the observation is the headline at full measure, and the supporting
+// facts sit under it as labelled pairs that reflow to one column when narrow.
+// Nothing is hidden at any width - a compliance record must not drop columns.
 //
 // Overdue comes from orgMetrics' isActionOverdue - the console's ONE overdue
-// derivation (story 2045) - so this table can never disagree with a dashboard.
+// derivation (story 2045) - so this list can never disagree with a dashboard.
 // An overdue action that protects life (LTP) is the plan's loudest state and
 // is escalated visually beyond the ordinary overdue tone - never colour alone.
 //
-// Responsible party: there is ONE responsible party per building, chosen once
-// by an admin and inherited by everything the building produces. So the add
-// form does not start from a blank text box - it reads the building and
-// preselects that default (the `responsibleParty` the admin set), offering the
-// names already used in the plan alongside it. An admin confirms a choice
-// instead of retyping a name, which is what let the plan drift into
-// near-duplicate spellings of the same person.
+// Sign-off is a MODAL (SignOffDialog), not an inline row expansion: it closes
+// the action in the legal record and now also carries the optional supporting
+// document, neither of which belongs inches from Reopen in a cramped row.
+// Reopen keeps its lighter press-then-confirm in place, since it only returns
+// an action to work.
+//
+// A CUSTOMER CLAIM IS NOT A SIGN-OFF. The duty-holder can now report from their
+// portal that remedial work is in hand or done (respondToAction), which arrives
+// as `customerResponse` plus an attributed entry in the same status history.
+// It is shown here as reported speech, with an "Awaiting verification" badge
+// while nobody has checked - deliberately loud, because it is work waiting on
+// THIS panel. Closing the action remains an org admin's act, and only Sign off
+// does it.
+//
+// RESPONSIBLE PARTY: A CONTACT, NOT A NAME. Who owes an action is chosen from
+// the customer's contact directory, and manageAction writes the name from that
+// contact's own record - there is no text box, because Safentia emails this
+// person when the action is assigned and again as its due date approaches, and
+// a typed name is somebody who can never be told. The picker preselects the
+// building's own responsible party (the default an admin set), so the usual
+// case is confirming a choice rather than making one.
+//
+// Actions raised before the linkage carry a name and nothing to email. They are
+// shown with that name and an explicit "not linked to a contact" note, so an
+// admin can see exactly why no reminder is going out and fix it by re-picking.
 // ============================================================================
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { getDownloadURL, ref as storageRef } from 'firebase/storage';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
@@ -34,18 +64,26 @@ import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import type {
   Action,
+  ActionCustomerResponse,
+  ActionResponseState,
   ActionStatus,
   ActionStatusChange,
   Building,
   ManageActionInput,
   ManageActionResult,
+  SafentiaDocument,
   Severity,
 } from '../../types';
 import { ErrorNotice } from '../ui/Page';
-import { DataTable, type Column, type RowExpansion } from '../ui/DataTable';
+import { SkeletonRows } from '../ui/Skeleton';
 import { useCallable } from '../ui/useCallable';
 import { isActionOverdue } from '../reports/orgMetrics';
+// The one way a screen attaches a person to something, shared with the
+// customers area so the plan and the contact roster can never disagree.
+import { ContactPicker } from '../customers/ContactPicker';
+import { SignOffDialog } from './SignOffDialog';
 import styles from './ActionsPanel.module.css';
+import { fromDateInputValue, toDateInputValue } from '../lib/dateInput';
 
 const SEVERITY_ORDER: Record<Severity, number> = { H: 0, M: 1, L: 2 };
 
@@ -66,18 +104,6 @@ const STATUS_LABELS: Record<ActionStatus, string> = {
 type ResponsibleFilter = 'all' | 'unassigned' | `name:${string}`;
 const responsibleOption = (name: string): ResponsibleFilter => `name:${name}`;
 
-/** The Responsible FIELD's value encoding in the add/edit form. Same prefixing
- *  trick as the filter above (a party genuinely called "Unassigned" can never
- *  be read as the fixed entry), plus 'other' for the free-text escape hatch -
- *  a one-off contractor still has to be typeable. */
-type ResponsibleChoice = 'unassigned' | 'other' | `name:${string}`;
-const responsibleChoice = (name: string): ResponsibleChoice => `name:${name}`;
-
-/** The building's default responsible party: the structured `responsibleParty`
- *  an admin set. Empty when the building names nobody. */
-function buildingDefaultResponsible(building: Building | null | undefined): string {
-  return building?.responsibleParty?.name?.trim() || '';
-}
 
 interface ActionRow {
   id: string;
@@ -92,20 +118,6 @@ function formatDate(epochMillis: number): string {
     year: 'numeric',
     timeZone: 'UTC',
   });
-}
-
-/** Epoch millis <-> the yyyy-mm-dd a date input speaks, in UTC. */
-function toDateInputValue(epochMillis: number | undefined): string {
-  return epochMillis === undefined
-    ? ''
-    : new Date(epochMillis).toISOString().slice(0, 10);
-}
-function fromDateInputValue(value: string): number | undefined {
-  if (!value) {
-    return undefined;
-  }
-  const [year, month, day] = value.split('-').map(Number);
-  return Date.UTC(year, month - 1, day);
 }
 
 /** Date and time of a status change, in UTC to match the stored day (the panel
@@ -128,9 +140,16 @@ function actorLabel(byUid: string, viewerUid: string | undefined): string {
   return byUid === viewerUid ? 'you' : 'a team member';
 }
 
-/** The status column's chip: label-led (colour is only a supporting cue), one
- *  tone per lifecycle state so in-progress reads distinctly from open and
- *  signed-off. */
+/** How the customer's own progress claim reads to STAFF. Always attributed to
+ *  the customer and always phrased as something they SAY: the action is not
+ *  closed until someone here verifies the work and signs it off. */
+const CUSTOMER_CLAIM_LABELS: Record<ActionResponseState, string> = {
+  inHand: 'The customer says the work is in hand',
+  completed: 'The customer says the work is completed',
+};
+
+/** The status chip: label-led (colour is only a supporting cue), one tone per
+ *  lifecycle state so in-progress reads distinctly from open and signed-off. */
 const STATUS_CLASS: Record<ActionStatus, string> = {
   open: styles.statusOpen,
   inProgress: styles.statusInProgress,
@@ -145,9 +164,136 @@ function StatusChip({ status }: { status: ActionStatus }) {
   );
 }
 
+/**
+ * Resolve a stored-file reference to something a browser can open.
+ *
+ * Two shapes exist in the pipeline: a full https download URL (older flag
+ * composites) and a Storage object path (documents, and every file this panel
+ * writes). A path is exchanged for a tokened URL minted for the signed-in
+ * member, exactly as the rules intend; an https value is already usable.
+ * `failed` is a real state, not a null - a dead link is worse than honest copy.
+ */
+function useStoredFileUrl(reference: string): {
+  url: string | null;
+  failed: boolean;
+} {
+  const isDirect = /^https?:\/\//.test(reference);
+  const [url, setUrl] = useState<string | null>(isDirect ? reference : null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (isDirect) {
+      setUrl(reference);
+      return;
+    }
+    let cancelled = false;
+    setUrl(null);
+    setFailed(false);
+    getDownloadURL(storageRef(firebase.storage(), reference))
+      .then((downloadUrl) => {
+        if (!cancelled) {
+          setUrl(downloadUrl);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFailed(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reference, isDirect]);
+
+  return { url, failed };
+}
+
+/** "View location" for an action born from a flagged floor-plan answer (story
+ *  2042): the flag composite, opened full size in a new tab. */
+function LocationFlagLink({ url }: { url: string }) {
+  const resolved = useStoredFileUrl(url);
+  if (resolved.failed) {
+    return (
+      <span className={styles.locationUnavailable}>Location unavailable</span>
+    );
+  }
+  if (!resolved.url) {
+    return null;
+  }
+  return (
+    <a
+      className={styles.locationLink}
+      href={resolved.url}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      View location
+    </a>
+  );
+}
+
+/** The supporting document attached at sign-off: the proof the work was done.
+ *  Shown wherever the sign-off is shown - on the closed action and on the
+ *  history entry that recorded it - because a closure a reader cannot verify is
+ *  only half a record. */
+function EvidenceLink({ document }: { document: SafentiaDocument }) {
+  const resolved = useStoredFileUrl(document.storagePath);
+  return (
+    <p className={styles.evidence}>
+      <span className={styles.evidenceLabel}>Evidence</span>
+      {resolved.failed ? (
+        <span className={styles.evidenceUnavailable}>
+          {document.fileName} (unavailable)
+        </span>
+      ) : resolved.url ? (
+        <a
+          className={styles.evidenceLink}
+          href={resolved.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {document.fileName}
+        </a>
+      ) : (
+        <span className={styles.evidenceUnavailable}>{document.fileName}</span>
+      )}
+    </p>
+  );
+}
+
+/** The duty-holder's own report of progress, recorded from the customer portal
+ *  (respondToAction). It is a CLAIM the organisation still has to verify, so it
+ *  is presented as reported speech and, while the action is open, says outright
+ *  what is owed here: sign-off. It never moves the action to signed off - only
+ *  the Sign off control above does that. */
+function CustomerResponse({
+  response,
+  status,
+}: {
+  response: ActionCustomerResponse;
+  /** The action's current status: once it is signed off, the prompt to verify
+   *  has been answered and must stop asking. */
+  status: ActionStatus;
+}) {
+  return (
+    <div className={styles.customerResponse}>
+      <span className={styles.customerResponseLabel}>
+        {CUSTOMER_CLAIM_LABELS[response.state]} &middot;{' '}
+        {formatDateTime(response.at)}
+      </span>
+      {response.note && <span>{response.note}</span>}
+      {status !== 'signedOff' && (
+        <span className={styles.customerResponseAsk}>
+          Verify the work, then sign this action off to close it.
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** The compact per-action lifecycle trail (story 2044 AC3): what changed, when,
- *  by whom, and the completion note captured at sign-off. Oldest first, as the
- *  server appends it. */
+ *  by whom, and the completion note and evidence captured at sign-off. Oldest
+ *  first, as the server appends it. */
 function StatusHistory({
   history,
   viewerUid,
@@ -168,18 +314,30 @@ function StatusHistory({
         <li key={index} className={styles.historyItem}>
           <StatusChip status={entry.status} />
           <span className={styles.historyMeta}>
-            {formatDateTime(entry.at)} by {actorLabel(entry.byUid, viewerUid)}
+            {formatDateTime(entry.at)} by{' '}
+            {/* `response` is only ever set on an entry the CUSTOMER recorded,
+                so it is what keeps their claim from reading as a colleague's
+                move in the same trail. */}
+            {entry.response
+              ? 'the customer'
+              : actorLabel(entry.byUid, viewerUid)}
           </span>
+          {entry.response && (
+            <span className={styles.historyClaim}>
+              {CUSTOMER_CLAIM_LABELS[entry.response]}
+            </span>
+          )}
           {entry.note && (
             <span className={styles.historyNote}>{entry.note}</span>
           )}
+          {entry.evidence && <EvidenceLink document={entry.evidence} />}
         </li>
       ))}
     </ol>
   );
 }
 
-function SeverityCell({ severity }: { severity: Severity }) {
+function SeverityChip({ severity }: { severity: Severity }) {
   const { theme } = useTheme();
   const rag = severityPresentation(theme, severity);
   return (
@@ -193,60 +351,19 @@ function SeverityCell({ severity }: { severity: Severity }) {
   );
 }
 
-/**
- * "View location" for an action born from a flagged floor-plan answer (story
- * 2042). `locationFlagUrl` is the flag composite and may be stored as a full
- * https download URL or as a Storage object path (both shapes exist in the
- * pipeline - see report assembly's toObjectPath); an https value links
- * directly, a path resolves through getDownloadURL exactly like a document
- * row. Resolution failure degrades to honest muted copy, never a dead link.
- * The link opens the full-size composite in a new tab.
- */
-function LocationFlagLink({ url }: { url: string }) {
-  const isDirect = /^https?:\/\//.test(url);
-  const [resolved, setResolved] = useState<string | null>(
-    isDirect ? url : null,
-  );
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (isDirect) {
-      return;
-    }
-    let cancelled = false;
-    getDownloadURL(storageRef(firebase.storage(), url))
-      .then((downloadUrl) => {
-        if (!cancelled) {
-          setResolved(downloadUrl);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFailed(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [url, isDirect]);
-
-  if (failed) {
-    return (
-      <span className={styles.locationUnavailable}>Location unavailable</span>
-    );
-  }
-  if (!resolved) {
-    return null;
-  }
+/** One labelled supporting fact under the observation. */
+function Fact({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
-    <a
-      className={styles.locationLink}
-      href={resolved}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      View location
-    </a>
+    <div className={styles.fact}>
+      <dt className={styles.factLabel}>{label}</dt>
+      <dd className={styles.factValue}>{children}</dd>
+    </div>
   );
 }
 
@@ -254,19 +371,17 @@ function LocationFlagLink({ url }: { url: string }) {
 interface Draft {
   observation: string;
   severity: Severity;
-  responsible: string;
-  /** TRUE while the admin is typing a name the picker does not offer, so the
-   *  free-text box stays open even when it is momentarily empty (which is a
-   *  different intent from choosing Unassigned). */
-  responsibleOther: boolean;
+  /** The CustomerContact who owes the work; null is Unassigned. The name is
+   *  never held here - the server derives it from the contact record, so the
+   *  plan cannot disagree with the directory about who somebody is. */
+  responsibleContactId: string | null;
   dueBy: string;
   lifeProtection: boolean;
 }
 const EMPTY_DRAFT: Draft = {
   observation: '',
   severity: 'M',
-  responsible: '',
-  responsibleOther: false,
+  responsibleContactId: null,
   dueBy: '',
   lifeProtection: false,
 };
@@ -296,7 +411,11 @@ export function ActionsPanel({
     path: paths ? paths.db.building(orgId, siteId, buildingId) : '',
     enabled: Boolean(orgId && paths && siteId && buildingId),
   });
-  const defaultResponsible = buildingDefaultResponsible(buildingQuery.data);
+  // The building's own responsible party, as a contact link: what a new action
+  // starts on, so the usual case is confirming a choice rather than making one.
+  const defaultContactId =
+    buildingQuery.data?.responsibleParty?.contactId ?? null;
+  const customerId = buildingQuery.data?.customerId ?? '';
   const manage = useCallable<ManageActionInput, ManageActionResult>(
     'manageAction',
   );
@@ -310,14 +429,15 @@ export function ActionsPanel({
   // otherwise the id of the action being edited.
   const [formTarget, setFormTarget] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-  // Two-step confirmation: the id awaiting its confirm press, and which verb.
-  const [confirming, setConfirming] = useState<{
+  // The action whose sign-off dialog is open. Carries the observation so the
+  // dialog can restate what is being closed without re-reading the plan.
+  const [signingOff, setSigningOff] = useState<{
     id: string;
-    verb: 'signOff' | 'reopen';
+    observation: string;
   } | null>(null);
-  // The optional completion note captured while a sign-off is being confirmed
-  // (story 2044 AC2). Kept beside `confirming` so cancelling clears it.
-  const [completionNote, setCompletionNote] = useState('');
+  // Reopen keeps its two-step press-then-confirm inline: the id awaiting its
+  // confirm press.
+  const [reopening, setReopening] = useState<string | null>(null);
 
   // The Responsible filter's options: every distinct name present in the plan
   // (story 2042), plus Unassigned when any action carries no responsible. The
@@ -337,18 +457,6 @@ export function ActionsPanel({
       hasUnassigned: actions.some((action) => !action.responsible),
     };
   }, [actionsQuery.data]);
-
-  // The Responsible FIELD's options: the building's default first (it is the
-  // answer for nearly every action, so it leads and is the one preselected),
-  // then the other names already in the plan. Offering the plan's own names is
-  // what stops the same person being re-typed three ways.
-  const responsibleChoices = useMemo(
-    () => [
-      ...(defaultResponsible ? [defaultResponsible] : []),
-      ...responsibleOptions.names.filter((name) => name !== defaultResponsible),
-    ],
-    [defaultResponsible, responsibleOptions.names],
-  );
 
   const now = Date.now();
   const rows = useMemo<ActionRow[]>(() => {
@@ -394,38 +502,29 @@ export function ActionsPanel({
   const openForm = (target: string | null, seed: Draft) => {
     setFormTarget(target);
     setDraft(seed);
-    setConfirming(null);
-    setCompletionNote('');
+    setReopening(null);
     manage.clearError();
   };
 
   // A new action starts on the building's default responsible party: the admin
-  // confirms it (or picks someone else) rather than retyping a name the record
-  // already holds. If the building read has not landed yet the picker simply
-  // opens on Unassigned - the panel never blocks recording the finding.
+  // confirms it (or picks someone else) rather than choosing again from
+  // scratch. If the building read has not landed yet the picker simply opens on
+  // nobody - the panel never blocks recording the finding.
   const newDraft = (): Draft => ({
     ...EMPTY_DRAFT,
-    responsible: defaultResponsible,
+    responsibleContactId: defaultContactId,
   });
 
-  // An existing action opens on whatever it already carries. A name the picker
-  // no longer offers (typed before it left the plan) opens the free-text box
-  // holding that name, so editing an action can never silently reassign it.
+  // An existing action opens on whatever it already carries. An action raised
+  // before the contact linkage opens on nobody, which is honest: it has a name
+  // on it but no person the platform can reach, and saving is what fixes that.
   const editDraft = (action: Action): Draft => ({
     observation: action.observation,
     severity: action.severity,
-    responsible: action.responsible ?? '',
-    responsibleOther: Boolean(
-      action.responsible && !responsibleChoices.includes(action.responsible),
-    ),
+    responsibleContactId: action.responsibleContactId ?? null,
     dueBy: toDateInputValue(action.dueBy),
     lifeProtection: action.lifeProtection,
   });
-
-  const disarm = () => {
-    setConfirming(null);
-    setCompletionNote('');
-  };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -433,7 +532,6 @@ export function ActionsPanel({
       return;
     }
     const dueBy = fromDateInputValue(draft.dueBy);
-    const responsible = draft.responsible.trim();
     if (formTarget === 'new') {
       const result = await manage.call({
         action: 'create',
@@ -441,7 +539,9 @@ export function ActionsPanel({
         fields: {
           observation: draft.observation.trim(),
           severity: draft.severity,
-          ...(responsible ? { responsible } : {}),
+          ...(draft.responsibleContactId
+            ? { responsibleContactId: draft.responsibleContactId }
+            : {}),
           ...(dueBy !== undefined ? { dueBy } : {}),
           lifeProtection: draft.lifeProtection,
         },
@@ -451,7 +551,9 @@ export function ActionsPanel({
       }
     } else if (formTarget) {
       // Edit: the whitelisted fields only; an emptied optional sends null (the
-      // CLEAR intent), so a blanked responsible or due date really clears.
+      // CLEAR intent), so choosing nobody or blanking the due date really
+      // clears. Clearing the contact clears the recorded name with it - the
+      // server keeps the pair together.
       const result = await manage.call({
         action: 'update',
         buildingId,
@@ -459,7 +561,7 @@ export function ActionsPanel({
         fields: {
           observation: draft.observation.trim(),
           severity: draft.severity,
-          responsible: responsible || null,
+          responsibleContactId: draft.responsibleContactId,
           dueBy: dueBy ?? null,
           lifeProtection: draft.lifeProtection,
         },
@@ -476,74 +578,37 @@ export function ActionsPanel({
     await manage.call({ action: 'start', buildingId, actionId: id });
   };
 
-  const onConfirmVerb = async (id: string, verb: 'signOff' | 'reopen') => {
-    const note = completionNote.trim();
+  const onConfirmReopen = async (id: string) => {
     const result = await manage.call({
-      action: verb,
+      action: 'reopen',
       buildingId,
       actionId: id,
-      // The completion note only rides along with a sign-off, and only when the
-      // admin actually wrote one.
-      ...(verb === 'signOff' && note ? { completionNote: note } : {}),
     });
     if (result) {
-      disarm();
+      setReopening(null);
     }
   };
 
-  // Sign-off is a two-step press-then-confirm because it changes the legal
-  // reading of the plan; the confirm step also offers the optional completion
-  // note. Shared by open and in-progress rows.
-  const signOffControl = (id: string) => {
-    const armed = confirming?.id === id && confirming.verb === 'signOff';
-    if (!armed) {
-      return (
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setConfirming({ id, verb: 'signOff' });
-            setCompletionNote('');
-          }}
-        >
-          Sign off
-        </Button>
-      );
-    }
-    return (
-      <span className={styles.signOffConfirm}>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Completion note (optional)</span>
-          <textarea
-            className={styles.textarea}
-            rows={2}
-            value={completionNote}
-            onChange={(event) => setCompletionNote(event.target.value)}
-          />
-        </label>
-        <span className={styles.rowActions}>
-          <Button
-            onClick={() => void onConfirmVerb(id, 'signOff')}
-            disabled={manage.pending}
-          >
-            Confirm sign off
-          </Button>
-          <Button variant="secondary" onClick={disarm}>
-            Cancel
-          </Button>
-        </span>
-      </span>
-    );
-  };
+  // Sign-off opens the dialog, where the completion note and the optional
+  // supporting document have room. Shared by open and in-progress actions.
+  const signOffButton = (row: ActionRow) => (
+    <Button
+      variant="secondary"
+      onClick={() =>
+        setSigningOff({ id: row.id, observation: row.action.observation })
+      }
+    >
+      Sign off
+    </Button>
+  );
 
-  // Reopen is likewise two-step. Shared by signed-off and in-progress rows.
+  // Reopen stays a two-step press-then-confirm: it is a smaller move than
+  // sign-off (back to work, nothing captured), so it does not need a surface of
+  // its own - but it does still change the legal reading of the plan.
   const reopenControl = (id: string) => {
-    const armed = confirming?.id === id && confirming.verb === 'reopen';
-    if (!armed) {
+    if (reopening !== id) {
       return (
-        <Button
-          variant="secondary"
-          onClick={() => setConfirming({ id, verb: 'reopen' })}
-        >
+        <Button variant="secondary" onClick={() => setReopening(id)}>
           Reopen
         </Button>
       );
@@ -551,131 +616,54 @@ export function ActionsPanel({
     return (
       <>
         <Button
-          onClick={() => void onConfirmVerb(id, 'reopen')}
+          onClick={() => void onConfirmReopen(id)}
           disabled={manage.pending}
         >
           Confirm reopen
         </Button>
-        <Button variant="secondary" onClick={disarm}>
+        <Button variant="secondary" onClick={() => setReopening(null)}>
           Cancel
         </Button>
       </>
     );
   };
 
-  const columns: Array<Column<ActionRow>> = [
-    {
-      header: 'Severity',
-      cell: (row) => <SeverityCell severity={row.action.severity} />,
-      width: '1%',
-    },
-    {
-      header: 'Observation',
-      cell: (row) => (
-        <span className={styles.observation}>
-          {row.action.observation}
-          {row.action.lifeProtection && (
-            <span className={styles.ltpBadge}>Life protection</span>
-          )}
-          {row.action.locationFlagUrl && (
-            <LocationFlagLink url={row.action.locationFlagUrl} />
-          )}
-        </span>
-      ),
-    },
-    // Every column but Observation asks for a token 1% so the browser sizes it
-    // to its own content and hands the whole surplus to the free text, rather
-    // than sharing width evenly and leaving the observation a sliver.
-    {
-      header: 'Responsible',
-      cell: (row) => row.action.responsible ?? 'Unassigned',
-      desktopOnly: true,
-      width: '1%',
-    },
-    {
-      header: 'Due',
-      cell: (row) =>
-        row.action.dueBy === undefined ? (
-          'Not set'
-        ) : (
-          <span
-            className={[
-              row.overdue ? styles.overdue : '',
-              row.overdue && row.action.lifeProtection ? styles.overdueLtp : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
+  const cardActions = (row: ActionRow) => {
+    if (row.action.status === 'open') {
+      return (
+        <>
+          <Button
+            variant="secondary"
+            onClick={() => openForm(row.id, editDraft(row.action))}
           >
-            {formatDate(row.action.dueBy)}
-            {row.overdue && (
-              <span className={styles.overdueBadge}>
-                {row.action.lifeProtection ? 'Overdue · LTP' : 'Overdue'}
-              </span>
-            )}
-          </span>
-        ),
-      width: '1%',
-    },
-    {
-      header: 'Status',
-      cell: (row) => <StatusChip status={row.action.status} />,
-      width: '1%',
-    },
-  ];
-  if (isAdmin) {
-    columns.push({
-      header: 'Manage',
-      align: 'end',
-      width: '1%',
-      cell: (row) => {
-        if (row.action.status === 'open') {
-          return (
-            <span className={styles.rowActions}>
-              <Button
-                variant="secondary"
-                onClick={() => openForm(row.id, editDraft(row.action))}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => void onStart(row.id)}
-                disabled={manage.pending}
-              >
-                Start
-              </Button>
-              {signOffControl(row.id)}
-            </span>
-          );
-        }
-        if (row.action.status === 'inProgress') {
-          return (
-            <span className={styles.rowActions}>
-              {signOffControl(row.id)}
-              {reopenControl(row.id)}
-            </span>
-          );
-        }
-        if (row.action.status === 'signedOff') {
-          return <span className={styles.rowActions}>{reopenControl(row.id)}</span>;
-        }
-        return null;
-      },
-    });
-  }
-
-  // The lifecycle trail is a per-row disclosure, available to every viewer (not
-  // just admins) so a building owner can see how an action progressed.
-  const historyExpansion: RowExpansion<ActionRow> = {
-    header: 'History',
-    label: (row) => `status history for ${row.action.observation}`,
-    content: (row) => (
-      <StatusHistory
-        history={row.action.statusHistory ?? []}
-        viewerUid={user?.uid}
-      />
-    ),
+            Edit
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void onStart(row.id)}
+            disabled={manage.pending}
+          >
+            Start
+          </Button>
+          {signOffButton(row)}
+        </>
+      );
+    }
+    if (row.action.status === 'inProgress') {
+      return (
+        <>
+          {signOffButton(row)}
+          {reopenControl(row.id)}
+        </>
+      );
+    }
+    if (row.action.status === 'signedOff') {
+      return reopenControl(row.id);
+    }
+    return null;
   };
+
+  const hasActions = Object.keys(actionsQuery.data ?? {}).length > 0;
 
   return (
     <section className={styles.panel} aria-labelledby="actions-panel-heading">
@@ -794,58 +782,6 @@ export function ActionsPanel({
               </select>
             </label>
             <label className={styles.field}>
-              <span className={styles.fieldLabel}>Responsible</span>
-              <select
-                className={styles.select}
-                value={
-                  draft.responsibleOther
-                    ? 'other'
-                    : draft.responsible
-                      ? responsibleChoice(draft.responsible)
-                      : 'unassigned'
-                }
-                onChange={(event) => {
-                  const choice = event.target.value as ResponsibleChoice;
-                  setDraft((current) => ({
-                    ...current,
-                    // 'other' clears the name so the box opens empty and ready
-                    // to type; the fixed entries close it again.
-                    responsible:
-                      choice === 'unassigned' || choice === 'other'
-                        ? ''
-                        : choice.slice('name:'.length),
-                    responsibleOther: choice === 'other',
-                  }));
-                }}
-              >
-                {responsibleChoices.map((name) => (
-                  <option key={name} value={responsibleChoice(name)}>
-                    {name === defaultResponsible
-                      ? `${name} (building default)`
-                      : name}
-                  </option>
-                ))}
-                <option value="unassigned">Unassigned</option>
-                <option value="other">Someone else</option>
-              </select>
-            </label>
-            {draft.responsibleOther && (
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Responsible name</span>
-                <input
-                  className={styles.input}
-                  type="text"
-                  value={draft.responsible}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      responsible: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            )}
-            <label className={styles.field}>
               <span className={styles.fieldLabel}>Due by</span>
               <input
                 className={styles.input}
@@ -866,6 +802,27 @@ export function ActionsPanel({
               severity: High 7 days, Medium 30 days, Low 90 days.
             </p>
           )}
+          {/* The responsible party is a contact and only a contact: this is who
+              Safentia emails, so it cannot be a typed name. The picker's own
+              "Add new contact" form covers anyone not in the directory yet. */}
+          <div className={styles.field}>
+            <ContactPicker
+              customerId={customerId}
+              label="Responsible"
+              value={draft.responsibleContactId ?? undefined}
+              onChange={(nextId) =>
+                setDraft((current) => ({
+                  ...current,
+                  responsibleContactId: nextId,
+                }))
+              }
+              allowNone
+            />
+            <p className={styles.formNote}>
+              Safentia emails this person when the action is assigned to them
+              and again as the due date approaches.
+            </p>
+          </div>
           <label className={styles.checkField}>
             <input
               type="checkbox"
@@ -909,19 +866,131 @@ export function ActionsPanel({
         </p>
       )}
 
-      {rows.length === 0 && !actionsQuery.isLoading && !actionsQuery.isError ? (
+      {actionsQuery.isLoading && !actionsQuery.isError && (
+        <SkeletonRows rows={3} label="Loading the action plan" />
+      )}
+
+      {rows.length === 0 && !actionsQuery.isLoading && !actionsQuery.isError && (
         <p className={styles.emptyNote}>
-          {Object.keys(actionsQuery.data ?? {}).length === 0
-            ? 'No actions have been recorded for this building yet.'
-            : 'No actions match the current filters.'}
+          {hasActions
+            ? 'No actions match the current filters.'
+            : 'No actions have been recorded for this building yet.'}
         </p>
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          rowKey={(row) => row.id}
-          label="Action plan"
-          expansion={historyExpansion}
+      )}
+
+      {rows.length > 0 && (
+        <ul className={styles.cards} aria-label="Action plan">
+          {rows.map((row) => (
+            <li
+              key={row.id}
+              className={`${styles.card} ${
+                row.overdue && row.action.lifeProtection ? styles.cardUrgent : ''
+              }`.trim()}
+            >
+              <div className={styles.stateRail}>
+                <SeverityChip severity={row.action.severity} />
+                <StatusChip status={row.action.status} />
+                {row.action.lifeProtection && (
+                  <span className={styles.ltpBadge}>Life protection</span>
+                )}
+                {row.overdue && (
+                  <span className={styles.overdueBadge}>
+                    {row.action.lifeProtection ? 'Overdue · LTP' : 'Overdue'}
+                  </span>
+                )}
+                {/* The customer has said the work is done and nobody here has
+                    checked yet: the one state on this card that is waiting on
+                    US, so it reads in the state rail rather than only below. */}
+                {row.action.customerResponse?.state === 'completed' &&
+                  row.action.status !== 'signedOff' && (
+                    <span className={styles.verifyBadge}>
+                      Awaiting verification
+                    </span>
+                  )}
+              </div>
+
+              <p className={styles.observation}>{row.action.observation}</p>
+
+              <dl className={styles.facts}>
+                <Fact label="Responsible">
+                  {row.action.responsible ?? 'Unassigned'}
+                  {/* An action with a name but no contact behind it is one
+                      nobody is being chased about. Say so on the card, rather
+                      than leaving a silence to be discovered later. */}
+                  {row.action.responsible &&
+                    !row.action.responsibleContactId && (
+                      <span className={styles.unlinkedNote}>
+                        Not linked to a contact, so no reminders are emailed.
+                        Edit this action to choose one.
+                      </span>
+                    )}
+                </Fact>
+                <Fact label="Due">
+                  {row.action.dueBy === undefined ? (
+                    'Not set'
+                  ) : (
+                    <span className={row.overdue ? styles.overdue : undefined}>
+                      {formatDate(row.action.dueBy)}
+                    </span>
+                  )}
+                </Fact>
+                {row.action.signedOffAt !== undefined && (
+                  <Fact label="Signed off">
+                    {formatDateTime(row.action.signedOffAt)}
+                    {row.action.signedOffBy
+                      ? ` by ${actorLabel(row.action.signedOffBy, user?.uid)}`
+                      : ''}
+                  </Fact>
+                )}
+                {row.action.locationFlagUrl && (
+                  <Fact label="Location">
+                    <LocationFlagLink url={row.action.locationFlagUrl} />
+                  </Fact>
+                )}
+              </dl>
+
+              {row.action.customerResponse && (
+                <CustomerResponse
+                  response={row.action.customerResponse}
+                  status={row.action.status}
+                />
+              )}
+              {row.action.completionNote && (
+                <p className={styles.completionNote}>
+                  <span className={styles.completionLabel}>Completion note</span>
+                  {row.action.completionNote}
+                </p>
+              )}
+              {row.action.completionEvidence && (
+                <EvidenceLink document={row.action.completionEvidence} />
+              )}
+
+              {isAdmin && (
+                <div className={styles.cardActions}>{cardActions(row)}</div>
+              )}
+
+              {/* The lifecycle trail is available to every viewer, not just
+                  admins, so a building owner can see how an action progressed. */}
+              <details className={styles.history}>
+                <summary className={styles.historySummary}>
+                  History ({row.action.statusHistory?.length ?? 0})
+                </summary>
+                <StatusHistory
+                  history={row.action.statusHistory ?? []}
+                  viewerUid={user?.uid}
+                />
+              </details>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {signingOff && (
+        <SignOffDialog
+          buildingId={buildingId}
+          actionId={signingOff.id}
+          observation={signingOff.observation}
+          onClose={() => setSigningOff(null)}
         />
       )}
     </section>

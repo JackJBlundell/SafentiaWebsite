@@ -10,6 +10,12 @@
 // scheduler actually fires.
 // ============================================================================
 
+import {
+  isValidReminderDays,
+  resolveReminderDays,
+  REVIEW_REMINDER_RULES,
+} from './reminderSchedules';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Epoch millis -> whole UTC days since the epoch. */
@@ -25,65 +31,25 @@ export function utcDayNumber(millis: number): number {
  *  to `number | 'lapsed'`. */
 export type ReminderStage = number | 'lapsed';
 
-/** The built-in reminder schedule used when an org has not configured its own,
- *  or has a malformed one. Descending, matching the OrgSettings contract. Kept
- *  as the single fallback so an unconfigured org still gets sensible reminders
- *  at two months, one month and one week out. */
-export const DEFAULT_REVIEW_REMINDER_DAYS: readonly number[] = [60, 30, 7];
+/** The review ladder's rules now sit in the mirrored reminderSchedules module,
+ *  beside the information-request and action ladders, so the console control,
+ *  the callable and every sweep read ONE definition of what is legal. The
+ *  wrappers below keep the review sweep reading in its own vocabulary; the
+ *  numeric bounds are quoted from the rule set itself, never re-stated. */
+export const DEFAULT_REVIEW_REMINDER_DAYS: readonly number[] =
+  REVIEW_REMINDER_RULES.defaults;
 
-/** A configured schedule may hold at most this many marks: enough for a rich
- *  ladder, low enough that no org can turn the sweep into a daily nag. */
-export const MAX_REVIEW_REMINDER_DAYS = 8;
-
-/** No single mark may sit further out than a year: beyond that the reminder is
- *  noise, and it also bounds the values the sweep compares against. */
-export const MAX_REVIEW_REMINDER_DAY = 365;
-
-/**
- * Whether an arbitrary value is a valid configured reminder schedule: a non-
- * empty, capped array of strictly-descending positive integers, each within a
- * year. Strictly descending is deliberate - it rejects duplicates and enforces
- * the "descending day offsets" the contract documents in one test, and it means
- * the largest (earliest) mark is always element zero. This is the ONE source of
- * the rules, shared by the server validator (updateOrgSettings) and the sweep,
- * so the client, the callable and the reminder computation cannot drift.
- */
+/** Whether an arbitrary value is a valid configured review schedule (the shared
+ *  rules: non-empty, capped, strictly descending, each mark within a year). */
 export function isValidReviewReminderDays(value: unknown): value is number[] {
-  if (
-    !Array.isArray(value) ||
-    value.length === 0 ||
-    value.length > MAX_REVIEW_REMINDER_DAYS
-  ) {
-    return false;
-  }
-  // `previous` starts at +Infinity so the first entry only has to be finite and
-  // in range; each subsequent entry must be strictly smaller than the last.
-  let previous = Number.POSITIVE_INFINITY;
-  for (const entry of value) {
-    if (
-      typeof entry !== 'number' ||
-      !Number.isInteger(entry) ||
-      entry < 1 ||
-      entry > MAX_REVIEW_REMINDER_DAY ||
-      entry >= previous
-    ) {
-      return false;
-    }
-    previous = entry;
-  }
-  return true;
+  return isValidReminderDays(value, REVIEW_REMINDER_RULES);
 }
 
-/**
- * The reminder schedule to actually use: the org's configured one when it is
- * valid, otherwise the built-in default. Repairing a malformed config by
- * falling back (rather than throwing) is what keeps a single bad settings node
- * from aborting the whole cross-org sweep.
- */
+/** The review schedule to actually use: the org's configured one when it is
+ *  valid, otherwise the built-in default - so one malformed settings node can
+ *  never abort the cross-org sweep. */
 export function resolveReviewReminderDays(configured: unknown): readonly number[] {
-  return isValidReviewReminderDays(configured)
-    ? configured
-    : DEFAULT_REVIEW_REMINDER_DAYS;
+  return resolveReminderDays(configured, REVIEW_REMINDER_RULES);
 }
 
 /**

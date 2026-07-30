@@ -1,11 +1,11 @@
 // ============================================================================
 // SiteWizard - guided creation of a site, then its first buildings (two steps).
 //
-// Step 1 gathers the site details, with the Mapbox address search filling both
-// the address text and a pinned location in one pick, and a draggable map pin
-// for the exact spot; creating the site is what advances the wizard, so a site
-// always exists before buildings are offered. Step 2 is SKIPPABLE quick-add:
-// name plus an address defaulting to
+// Step 1 gathers the site details through the console's one AddressField, which
+// carries the location with the address - a picked suggestion pins it, and its
+// map mode drags the pin onto the exact spot; creating the site is what advances
+// the wizard, so a site always exists before buildings are offered. Step 2 is
+// SKIPPABLE quick-add: name plus an address defaulting to
 // the site's, with a link to each created building's edit page for the full
 // details. Validation and payload shape mirror SiteForm's create path; there
 // is no clear protocol because a wizard only ever creates.
@@ -22,14 +22,13 @@ import type {
   ManageSiteResult,
   Site,
 } from '../../types';
-import { AddressSearch } from '../ui/AddressSearch';
-import { LocationPicker } from '../ui/LocationPicker';
+import { AddressField } from '../ui/AddressField';
 import { ErrorNotice, PageHeader, type Crumb } from '../ui/Page';
 import { Stepper } from '../ui/Stepper';
 import { useCallable } from '../ui/useCallable';
 import { ContactPicker } from './ContactPicker';
 import { useUnsavedGuard } from './useUnsavedGuard';
-import { NoAccessPanel, toGeoPoint, urls, useOrgScope } from './shared';
+import { NoAccessPanel, urls, useOrgScope } from './shared';
 import shared from './shared.module.css';
 import styles from './SiteWizard.module.css';
 
@@ -52,17 +51,12 @@ export function SiteWizard() {
   // Step 1 state.
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
-  // Coordinates live as text so they can be half-typed; the map reads and
-  // writes the same pair, so the two controls cannot drift apart.
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
+  // Derived from the address, never typed: AddressField sets it from a picked
+  // suggestion or a dropped pin, and clears it when the address is edited away
+  // from what produced it.
+  const [geo, setGeo] = useState<GeoPoint | null>(null);
   const [contactId, setContactId] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
-  const geo = toGeoPoint(lat, lng);
-  const setPin = (point: GeoPoint) => {
-    setLat(String(point.lat));
-    setLng(String(point.lng));
-  };
 
   // Set once step 1 succeeds; its presence is what step 2 operates on.
   const [siteId, setSiteId] = useState<string | null>(null);
@@ -78,9 +72,7 @@ export function SiteWizard() {
   // save; Finish navigates away, which unmounts the guard.
   useUnsavedGuard(
     siteId === null
-      ? Boolean(
-          name.trim() || address.trim() || lat.trim() || lng.trim() || contactId,
-        )
+      ? Boolean(name.trim() || address.trim() || geo || contactId)
       : buildingName.trim().length > 0,
   );
 
@@ -99,14 +91,6 @@ export function SiteWizard() {
     const trimmedName = name.trim();
     if (!trimmedName) {
       setFieldError('Enter the site name.');
-      return;
-    }
-    // A typed pair that does not resolve to a point would otherwise be dropped
-    // in silence, so say so rather than creating the site without a location.
-    if ((lat.trim() !== '' || lng.trim() !== '') && !geo) {
-      setFieldError(
-        'Enter both a latitude between -90 and 90 and a longitude between -180 and 180, or leave both empty.',
-      );
       return;
     }
     setFieldError(null);
@@ -195,17 +179,13 @@ export function SiteWizard() {
               />
             </div>
             <div className={shared.field}>
-              <AddressSearch
+              <AddressField
                 id="wizard-site-address"
                 label="Address (optional)"
                 value={address}
-                // Typed edits no longer detach the pin: the coordinates are a
-                // field of their own below, so the user clears them there.
                 onChange={setAddress}
-                onSelect={(selection) => {
-                  setAddress(selection.address);
-                  setPin(selection.geo);
-                }}
+                geo={geo}
+                onGeoChange={setGeo}
               />
             </div>
             <div className={shared.field}>
@@ -216,53 +196,6 @@ export function SiteWizard() {
                 onChange={(nextId) => setContactId(nextId)}
                 allowNone
               />
-            </div>
-          </fieldset>
-
-          <fieldset className={shared.fieldset}>
-            <legend className={shared.legend}>Location (optional)</legend>
-            <p className={shared.hint}>
-              Coordinates place the site on maps. Enter both values or leave
-              both empty.
-            </p>
-            <LocationPicker
-              value={geo}
-              onChange={setPin}
-              searchId="wizard-site-map-search"
-            />
-            <div className={shared.fieldRow}>
-              <div className={shared.field}>
-                <label className={shared.label} htmlFor="wizard-site-lat">
-                  Latitude
-                </label>
-                <input
-                  id="wizard-site-lat"
-                  className={shared.input}
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  min={-90}
-                  max={90}
-                  value={lat}
-                  onChange={(event) => setLat(event.target.value)}
-                />
-              </div>
-              <div className={shared.field}>
-                <label className={shared.label} htmlFor="wizard-site-lng">
-                  Longitude
-                </label>
-                <input
-                  id="wizard-site-lng"
-                  className={shared.input}
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  min={-180}
-                  max={180}
-                  value={lng}
-                  onChange={(event) => setLng(event.target.value)}
-                />
-              </div>
             </div>
           </fieldset>
 
@@ -305,12 +238,11 @@ export function SiteWizard() {
                 />
               </div>
               <div className={shared.field}>
-                <AddressSearch
+                <AddressField
                   id="wizard-building-address"
                   label="Address (optional)"
                   value={buildingAddress}
                   onChange={setBuildingAddress}
-                  onSelect={(selection) => setBuildingAddress(selection.address)}
                 />
               </div>
 

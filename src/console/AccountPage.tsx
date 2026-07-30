@@ -152,7 +152,7 @@ function DisplayNameForm() {
   );
 }
 
-/** The four non-transactional email categories a member may quieten (story
+/** The non-transactional email categories a member may quieten (story
  *  2066), each described honestly by who actually receives that category
  *  today. Seeded from the member's own record (self-read; the rules grant a
  *  member their own orgMembers node) and saved through the self-scoped
@@ -181,6 +181,8 @@ function EmailPreferencesForm() {
   const [released, setReleased] = useState(true);
   const [infoRequested, setInfoRequested] = useState(true);
   const [deadlineReminder, setDeadlineReminder] = useState(true);
+  const [jobScheduled, setJobScheduled] = useState(true);
+  const [assessmentOutcome, setAssessmentOutcome] = useState(true);
   const [saved, setSaved] = useState(false);
 
   // Seed once from the first snapshot: absent preferences mean every category
@@ -196,6 +198,8 @@ function EmailPreferencesForm() {
     setReleased(stored?.released !== false);
     setInfoRequested(stored?.infoRequested !== false);
     setDeadlineReminder(stored?.deadlineReminder !== false);
+    setJobScheduled(stored?.jobScheduled !== false);
+    setAssessmentOutcome(stored?.assessmentOutcome !== false);
     setSeeded(true);
   }, [seeded, member.data]);
 
@@ -209,6 +213,8 @@ function EmailPreferencesForm() {
         released,
         infoRequested,
         deadlineReminder,
+        jobScheduled,
+        assessmentOutcome,
       },
     });
     if (result) {
@@ -259,11 +265,25 @@ function EmailPreferencesForm() {
       set: setInfoRequested,
     },
     {
+      id: 'pref-assessment-outcome',
+      label: 'Your assessments accepted and released',
+      note: 'When an auditor accepts an assessment you carried out, and when it is released to the customer. Applies to the assessor role, and only to your own assessments.',
+      checked: assessmentOutcome,
+      set: setAssessmentOutcome,
+    },
+    {
       id: 'pref-deadline-reminder',
       label: 'Deadlines approaching',
       note: 'Reminders as a deadline you own approaches or passes: an information request awaiting your response, or an open action on the action plan.',
       checked: deadlineReminder,
       set: setDeadlineReminder,
+    },
+    {
+      id: 'pref-job-scheduled',
+      label: 'Your job diary',
+      note: 'When a job is assigned to you, moved or cancelled, and the morning summary of the jobs in your diary that day. Applies to the assessor role.',
+      checked: jobScheduled,
+      set: setJobScheduled,
     },
   ];
 
@@ -286,6 +306,10 @@ function EmailPreferencesForm() {
           <p className={styles.note}>{toggle.note}</p>
         </div>
       ))}
+      <p className={styles.note}>
+        Turning a category off stops the email only - the matching in-app
+        notification still arrives in Safentia.
+      </p>
       <p className={styles.note}>Security and account email always sends.</p>
       {update.error && (
         <p role="alert" className={styles.error}>

@@ -148,8 +148,19 @@ function optionalDetails(
   return details;
 }
 
-/** Validate the optional responsible party; only `name` is required by type.
- *  An explicit null is the CLEAR intent on update: the whole node goes. */
+/**
+ * Validate the optional responsible party. An explicit null is the CLEAR intent
+ * on update: the whole node goes.
+ *
+ * `contactId` is REQUIRED here even though the type marks it optional. The type
+ * keeps it optional so records captured before the linkage - and any an admin
+ * imports - still read; this is the interactive write path, and a party recorded
+ * through it must be someone the platform can email about the assessments and
+ * actions the building produces. Accepting a typed name would put a person on a
+ * statutory record who can never be told they are on it, which is the whole
+ * failure the contact linkage exists to end. The rest of the party is a snapshot
+ * of that contact, kept so a report renders the person as they were named.
+ */
 function optionalParty(
   payload: Record<string, unknown>,
 ): ResponsibleParty | null | undefined {
@@ -160,17 +171,23 @@ function optionalParty(
     return null;
   }
   const raw = assertObject(payload.responsibleParty);
+  const contactId = optionalString(raw, 'contactId', TEXT_LIMITS.shortText);
+  if (!contactId) {
+    throw fail.invalidArgument(
+      'Choose the responsible party from the customer’s contacts. Safentia emails this person about the building’s assessments and actions, so they have to be a real contact.',
+      { field: 'responsibleParty' },
+    );
+  }
   const party: ResponsibleParty = {
     name: requireString(raw, 'name', TEXT_LIMITS.displayName),
+    contactId,
   };
   const role = optionalString(raw, 'role', TEXT_LIMITS.shortText);
   const email = optionalString(raw, 'email', TEXT_LIMITS.email);
   const phone = optionalString(raw, 'phone', TEXT_LIMITS.shortText);
-  const contactId = optionalString(raw, 'contactId', TEXT_LIMITS.shortText);
   if (role) party.role = role;
   if (email) party.email = email;
   if (phone) party.phone = phone;
-  if (contactId) party.contactId = contactId;
   return party;
 }
 
@@ -349,9 +366,9 @@ export const manageBuilding = onCall<ManageBuildingInput>(
         }
         const fields = readFields(payload, env, orgId);
 
-        // A linked responsible party must point at one of the building's
-        // customer's contacts - an id from anywhere else would render as a
-        // person who does not exist. Manual (unlinked) parties skip this.
+        // The responsible party must point at one of the building's customer's
+        // own contacts - an id from anywhere else would render as a person who
+        // does not exist, and would address their emails to nobody.
         const assertPartyContact = async (customerId: string) => {
           const linkedContactId = fields.responsibleParty?.contactId;
           if (!linkedContactId) {

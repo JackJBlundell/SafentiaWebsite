@@ -56,6 +56,8 @@ import {
 import { ScheduleTimeline } from './ScheduleTimeline';
 import { actorName } from '../lib/actorName';
 import styles from './JobDetail.module.css';
+import { AddToCalendar } from '../ui/AddToCalendar';
+import { resolveEnd, type CalendarEvent } from '../lib/calendarEvent';
 
 /** Native time inputs step in seconds; the slot granularity is 15 minutes. */
 const SLOT_STEP_SECONDS = 15 * 60;
@@ -159,6 +161,20 @@ export function JobDetail() {
             isAdmin={isAdmin}
             actionable={actionable}
             assessorName={assessorName}
+            // The visit as a calendar event. Built HERE because this is where
+            // the building, site and customer names have already been resolved;
+            // the card would otherwise have to re-read all three.
+            calendarEvent={{
+              uid: `job-${jobId}@safentia.app`,
+              startMs: job.scheduledFor,
+              endMs: resolveEnd(job.scheduledFor, job.scheduledUntil),
+              title: `Fire risk assessment: ${buildingName}`,
+              location:
+                buildingQuery.data?.address ?? siteQuery.data?.address ?? undefined,
+              description: `${customerName} - ${siteName}, ${buildingName}. Assessor: ${assessorName(
+                job.assessorUid,
+              )}.`,
+            }}
             assessorOptions={
               canReadMembers
                 ? sortByName(
@@ -275,6 +291,7 @@ function ScheduleCard({
   actionable,
   assessorName,
   assessorOptions,
+  calendarEvent,
 }: {
   jobId: string;
   job: Job;
@@ -282,6 +299,7 @@ function ScheduleCard({
   actionable: boolean;
   assessorName: (uid: string) => string;
   assessorOptions: [string, OrgMember][];
+  calendarEvent: CalendarEvent;
 }) {
   const rescheduleJob = useCallable<RescheduleJobInput, RescheduleJobResult>(
     'rescheduleJob',
@@ -408,6 +426,13 @@ function ScheduleCard({
           { label: 'Assessor', value: assessorName(job.assessorUid) },
         ]}
       />
+
+      {/* Offered to anyone who can see the job, not just admins: putting the
+          visit in your own calendar is not an administrative act. A cancelled
+          job is the one case it is withheld - there is nothing to attend. */}
+      {job.status !== 'cancelled' && (
+        <AddToCalendar event={calendarEvent} fileName={`safentia-job-${jobId}`} />
+      )}
 
       {isAdmin && actionable && panel === 'none' && (
         <div className={styles.asideActions}>

@@ -38,12 +38,14 @@ import {
   clearableEmail,
   requireEnum,
   requireTenantStorageRef,
+  requireTimestamp,
   TEXT_LIMITS,
 } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { issueInvitation } from '../lib/invitations';
+import { portalAccessCascade } from '../lib/customerAccess';
 import type {
   Customer,
   CustomerContact,
@@ -54,7 +56,58 @@ import type {
 /** The customer fields an admin may set. Unknown or derived keys (score,
  *  status - status moves only via the archive action) are rejected, never
  *  dropped, so a client cannot silently believe it wrote a field. */
-const CUSTOMER_FIELDS = ['name', 'address', 'email', 'phone', 'photoUrl'] as const;
+const CUSTOMER_FIELDS = [
+  'name',
+  'address',
+  'email',
+  'phone',
+  'photoUrl',
+  'contractEndDate',
+] as const;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The furthest a contract end date may be set. Long enough for the five-year
+ *  terms customers actually sign, short enough that a mis-keyed year (2925) is
+ *  rejected at the door rather than quietly stored. */
+const MAX_CONTRACT_YEARS = 10;
+
+/**
+ * The contract end date: an optional future day after which the nightly sweep
+ * archives the customer. Stored at midnight UTC whatever the client sent, so it
+ * follows the platform's date-only convention (as ServiceScheduleItem.nextDue
+ * does) and the sweep's day comparison cannot be thrown by a time component.
+ *
+ * It must be in the FUTURE: setting a date that has already passed would mean
+ * asking the platform to archive the customer tonight, which the archive action
+ * does immediately and honestly. Null clears it.
+ */
+function clearableContractEndDate(
+  payload: Record<string, unknown>,
+  now: number,
+): number | null | undefined {
+  if (payload.contractEndDate === null) {
+    return null;
+  }
+  if (payload.contractEndDate === undefined) {
+    return undefined;
+  }
+  const value = requireTimestamp(payload, 'contractEndDate');
+  const day = Math.floor(value / DAY_MS) * DAY_MS;
+  if (day <= Math.floor(now / DAY_MS) * DAY_MS) {
+    throw fail.invalidArgument(
+      'The contract end date must be in the future. To end access now, archive the customer.',
+      { field: 'contractEndDate' },
+    );
+  }
+  if (day > now + MAX_CONTRACT_YEARS * 365 * DAY_MS) {
+    throw fail.invalidArgument(
+      `The contract end date cannot be more than ${MAX_CONTRACT_YEARS} years away.`,
+      { field: 'contractEndDate' },
+    );
+  }
+  return day;
+}
 
 const ACTIONS = ['create', 'update', 'archive', 'restore'] as const;
 
@@ -121,6 +174,7 @@ export const manageCustomer = onCall<ManageCustomerInput>(
             email: clearableEmail(payload),
             phone: clearableString(payload, 'phone', TEXT_LIMITS.shortText),
             photoUrl,
+            contractEndDate: clearableContractEndDate(payload, Date.now()),
           };
         };
 
@@ -193,6 +247,9 @@ export const manageCustomer = onCall<ManageCustomerInput>(
             ...(fields.email ? { email: fields.email } : {}),
             ...(fields.phone ? { phone: fields.phone } : {}),
             ...(fields.photoUrl ? { photoUrl: fields.photoUrl } : {}),
+            ...(fields.contractEndDate
+              ? { contractEndDate: fields.contractEndDate }
+              : {}),
           };
           const customerId = db.ref(paths.db.customers(orgId)).push()
             .key as string;
@@ -309,12 +366,25 @@ export const manageCustomer = onCall<ManageCustomerInput>(
           if (fields.photoUrl !== undefined) {
             update[`${customerPath}/photoUrl`] = fields.photoUrl;
           }
+          if (fields.contractEndDate !== undefined) {
+            update[`${customerPath}/contractEndDate`] = fields.contractEndDate;
+          }
           if (Object.keys(update).length === 0) {
             throw fail.invalidArgument('No customer fields were provided.');
           }
         } else if (action === 'archive') {
           // Archive: a status flip, never a delete - history stays attributed.
           update[`${customerPath}/status`] = 'archived';
+          // ...and the flip has to MEAN something. Portal sessions are granted
+          // from the individual /customerMembers record (computePortalClaims),
+          // so a customer marked archived whose members were left active kept
+          // every one of their people signed in and reading the estate. Lock
+          // them, marked so the restore below can reactivate exactly these
+          // accounts and not one that was locked on its own account earlier.
+          Object.assign(
+            update,
+            await portalAccessCascade(paths, orgId, customerId, 'lock'),
+          );
         } else {
           // Restore: the inverse flip. Only an archived customer can return to
           // active - restoring anything else is a client error, not a no-op,
@@ -327,6 +397,20 @@ export const manageCustomer = onCall<ManageCustomerInput>(
             );
           }
           update[`${customerPath}/status`] = 'active';
+          Object.assign(
+            update,
+            await portalAccessCascade(paths, orgId, customerId, 'unlock'),
+          );
+          // A contract end date that has already passed is what archived them
+          // (or would tonight). Clearing it is what stops the sweep undoing this
+          // restore by morning; a still-future date is the admin's plan and is
+          // left exactly as they set it.
+          if (
+            typeof existing.contractEndDate === 'number' &&
+            existing.contractEndDate <= Date.now()
+          ) {
+            update[`${customerPath}/contractEndDate`] = null;
+          }
         }
 
         const activityAction =

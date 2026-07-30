@@ -30,13 +30,31 @@
   border-top: 1px solid var(--color-border);
 }
 
+/* A person is two lines: who they are and where they stand on the top line, then
+ * what their role actually lets them do underneath. The meaning sits full width
+ * rather than squeezed into the right-hand column, where it would wrap to one
+ * word per line on a phone. */
 .row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-lg) var(--space-md);
+}
+
+.rowTop {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
   min-height: var(--min-touch-target);
-  padding: var(--space-sm) var(--space-lg);
+}
+
+.rowDetail {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
 }
 
 .identity {
@@ -73,6 +91,11 @@
   color: var(--color-text-secondary);
 }
 
+/* "Role:" - the word that stops the value being a bare, unexplained noun. */
+.rolesTerm {
+  color: var(--color-text-muted);
+}
+
 /* Portal standing as a labelled chip. Colour is never the sole carrier: each
  * chip states its status in words, the tint is texture only. */
 .standing {
@@ -101,6 +124,41 @@
 
 .none {
   color: var(--color-text-muted);
+}
+
+/* --- Change a teammate's role --------------------------------------------- */
+
+/* Sits under the row's explanation, so the action reads as belonging to that
+ * person rather than to the list. */
+.rowActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  align-items: flex-start;
+  padding-top: var(--space-xs);
+}
+
+/* The confirm box: ruled off and inset so it is plainly a decision being made
+ * about ONE person, not a second form for the whole page. */
+.changeBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+  max-width: 34rem;
+  padding: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-alt);
+}
+
+/* Why the button below is disabled. Never colour alone: this is the sentence
+ * that carries the reason. */
+.blockedNote {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
 }
 
 /* --- Invite form ---------------------------------------------------------- */
@@ -213,6 +271,17 @@
   line-height: 1.4;
 }
 
+/* The "a portal admin is not an admin of your assessor's systems" line. Ruled
+ * off from the choices because it qualifies all three of them. */
+.roleScope {
+  margin: 0;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
 .success {
   margin: 0;
   font-size: 0.875rem;
@@ -227,11 +296,11 @@
 }
 
 @media (max-width: 40rem) {
-  .row {
+  .rowTop {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-xs);
-    padding-block: var(--space-md);
+    padding-block: var(--space-xs);
   }
 
   .rowMeta {

@@ -29,7 +29,12 @@ import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
 import { keys } from '../../query/keys';
 import { useRtdbQuery, type RtdbQueryBuilder } from '../../query/useRtdbQuery';
-import type { ActivityEntry, Customer, OrgMember } from '../../types';
+import type {
+  ActivityEntry,
+  Customer,
+  CustomerMember,
+  OrgMember,
+} from '../../types';
 import { Card, CardHeader } from '../ui/Card';
 import { DataTable } from '../ui/DataTable';
 import { Toolbar, ToolbarGroup } from '../ui/Grid';
@@ -133,8 +138,34 @@ export function ActivityPage() {
     enabled: enabled && canReadMembers,
   });
   const members = membersQuery.data;
+
+  // The organisation's CUSTOMER-portal accounts, so a portal person in the trail
+  // is named rather than mislabelled a former staff member. A customer accepting
+  // a report is the trail entry most likely to be relied on later - it is the
+  // duty-holder's sign-off - so getting the actor right matters more here than
+  // the one extra subscription costs. The node is {customerId: {uid: member}};
+  // the trail only knows uids, so it is flattened to one uid -> name map.
+  const portalMembersQuery = useRtdbQuery<
+    Record<string, Record<string, CustomerMember>> | null
+  >({
+    key: keys.customerMembersByOrg(orgId),
+    path: paths ? paths.db.customerMembersByOrg(orgId) : '',
+    enabled: enabled && canReadMembers,
+  });
+  const portalMembers = useMemo<Record<string, { name: string }>>(() => {
+    const flat: Record<string, { name: string }> = {};
+    for (const byUid of Object.values(portalMembersQuery.data ?? {})) {
+      for (const [uid, member] of Object.entries(byUid ?? {})) {
+        if (member?.name) {
+          flat[uid] = { name: member.name };
+        }
+      }
+    }
+    return flat;
+  }, [portalMembersQuery.data]);
+
   const actorName = (uid: string): string =>
-    resolveActorName(members, uid, members !== undefined);
+    resolveActorName(members, uid, members !== undefined, portalMembers);
 
   // The customer and building directories, for the scope filters. Both nodes
   // are org-readable by every role (the customer directory and the dashboard

@@ -1,10 +1,14 @@
 // ============================================================================
 // PhoneFrame - a CSS-drawn native app frame for product depictions.
 //
-// The site ships no raster imagery (story 2075), so every product visual is
-// drawn in CSS and inline SVG. The frame is aria-hidden: the mock UI inside is
-// a decorative depiction whose meaning the surrounding copy already carries,
-// and reading fake interface text to a screen reader would be noise.
+// Product visuals are drawn in CSS and inline SVG wherever they depict a screen
+// generically (story 2075) - a drawing never goes stale and weighs nothing. The
+// home hero is the one exception and does NOT use this frame: it carries a real
+// screenshot that already includes the device (see AppScreenshot).
+//
+// The frame is aria-hidden: the mock UI inside is a decorative depiction whose
+// meaning the surrounding copy already carries, and reading fake interface text
+// to a screen reader would be noise.
 // ============================================================================
 
 import React from 'react';

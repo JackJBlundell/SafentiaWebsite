@@ -29,7 +29,7 @@ import {
   type ResponsibleParty,
 } from '../../types';
 import { fileIsFloorPlan, newObjectId, uploadFile } from '../lib/upload';
-import { AddressSearch } from '../ui/AddressSearch';
+import { AddressField } from '../ui/AddressField';
 import { ErrorNotice, PageHeader, type Crumb } from '../ui/Page';
 import { Stepper } from '../ui/Stepper';
 import { useCallable } from '../ui/useCallable';
@@ -287,12 +287,11 @@ function DetailsStep({
           />
         </div>
         <div className={shared.field}>
-          <AddressSearch
+          <AddressField
             id="wizard-building-address"
             label="Address (optional)"
             value={address}
             onChange={setAddress}
-            onSelect={(selection) => setAddress(selection.address)}
           />
         </div>
       </fieldset>
@@ -687,7 +686,10 @@ function ContactStep({
         <legend className={shared.legend}>Responsible party (optional)</legend>
         <p className={shared.hint}>
           The responsible party is the default contact for assessments and
-          remedial actions on this building.
+          remedial actions on this building. Safentia emails this person when an
+          assessment is released and when their actions fall due, so they must
+          be one of the customer’s contacts — add them below if they are not
+          listed yet.
         </p>
 
         <div className={shared.field}>

@@ -71,14 +71,85 @@
   color: var(--color-text);
 }
 
-.roles {
+/* The role chooser. Shared with ContactsPanel's invite step, so nothing here
+   may assume the dialog's width: the rows wrap inside the narrow aside column
+   just as they do in the modal. */
+/* The role choices and the report-copies choice share one box style on purpose:
+   they are the same kind of decision - what this person is given, and what they
+   are sent - and a reader moving between them should not have to re-learn the
+   shape. */
+.roles,
+.reports {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
+  min-width: 0;
   margin: 0;
   padding: var(--space-md) var(--space-lg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+}
+
+/* Each role is its own tap target: the whole row, meaning included, is the
+   label, so the box is never a lone 20px hit area. */
+.roleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  padding-block: var(--space-xs);
+  min-width: 0;
+  cursor: pointer;
+}
+
+.roleCheckbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  /* Sits on the label's first line rather than the block's centre. */
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+  accent-color: var(--brand-ink);
+}
+
+.roleText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.roleLabel {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.roleMeaning {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* The "a portal admin is not a console admin" line. Ruled off from the choices
+   because it qualifies all three of them, not the last one. */
+.roleScope {
+  margin: 0;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* "There is no address to send to." Quieter than the invitation notice below,
+   because it qualifies a choice rather than announcing an outcome. */
+.reportBlocked {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 /* The invitation notice. The wording carries the meaning; the border and the

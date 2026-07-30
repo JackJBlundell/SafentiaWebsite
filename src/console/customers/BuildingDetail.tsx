@@ -244,10 +244,24 @@ export function BuildingDetail() {
           {partyRole ? `${partyName} (${partyRole})` : partyName}
           {partyEmail ? ` · ${partyEmail}` : ''}
           {partyPhone ? ` · ${partyPhone}` : ''}
-          {party.contactId && (
+          {party.contactId ? (
             <>
               {' '}
               <Link to={urls.customer(customerId)}>View contacts</Link>
+            </>
+          ) : (
+            // A party recorded before the contact linkage: a name on the record
+            // with nobody behind it. Every release and deadline email resolves
+            // through the contact, so this one silently reaches no-one - which
+            // has to be visible where the party is read, not just in the logs.
+            <>
+              {' '}
+              <em>
+                — not linked to a contact, so nothing is emailed to them.{' '}
+                <Link to={urls.buildingEdit(customerId, siteId, buildingId)}>
+                  Choose a contact
+                </Link>
+              </em>
             </>
           )}
         </>

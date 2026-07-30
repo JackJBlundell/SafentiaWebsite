@@ -128,3 +128,18 @@
   font-size: 0.9375rem;
   color: var(--status-error);
 }
+
+/* The customer's sign-off on a released report: stated plainly under the row,
+   in the same muted register as the rest of the metadata - it is a fact about
+   the report, not an alert. */
+.acceptance {
+  margin: var(--space-xs) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.acceptancePending {
+  margin: var(--space-xs) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}

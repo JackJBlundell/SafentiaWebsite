@@ -48,8 +48,188 @@
   color: var(--color-text-muted);
 }
 
+/* --- Hero visual: the phone, its backdrop, and the load-in ------------------
+ *
+ * The entrance is deliberately small - a short rise and fade, staggered down the
+ * copy and finishing on the phone. This is a fire-safety compliance product, not
+ * a launch page: the motion is there to make the fold feel composed as it
+ * settles, and anything more would read as salesmanship on a page whose whole
+ * argument is that it is specific and unexcitable.
+ *
+ * No reduced-motion guards are written here on purpose. global.css neutralises
+ * every animation site-wide for that preference, and `both` fill mode means an
+ * animation cut to 0.01ms still lands on its final frame - so the hero is fully
+ * visible either way and can never be left stuck at opacity 0. */
+
 .heroVisual {
   justify-self: center;
+  position: relative;
+  /* One cell, two layers: the glow centres in it, the phone starts at its top
+   * and is free to run past its bottom. Stacking them with grid-area rather
+   * than absolute positioning leaves `transform` free for the entrance
+   * animations - an absolutely-centred glow would need a translate that the
+   * scale keyframe then has to carry too. */
+  display: grid;
+  isolation: isolate;
+  width: min(340px, 100%);
+}
+
+/* Three layers behind the device, each doing one job:
+ *   1. a fine dot field, for texture that says "product" rather than "poster";
+ *   2. the aura, which lifts the phone off the page;
+ *   3. the phone's own drop shadow (in AppScreenshot).
+ * All of it is masked or faded at the edges so nothing draws a hard shape - the
+ * backdrop should be felt rather than noticed, on a page whose argument is that
+ * it is specific and unexcitable. */
+
+.heroVisual::before {
+  content: '';
+  grid-area: 1 / 1;
+  place-self: center;
+  z-index: 0;
+  width: 150%;
+  aspect-ratio: 1;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-text) 22%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+  /* Faded to nothing well before the edge, so the field has no boundary to
+   * notice - it simply thins out behind the device. */
+  mask-image: radial-gradient(circle at 50% 45%, #000 0%, transparent 62%);
+  -webkit-mask-image: radial-gradient(
+    circle at 50% 45%,
+    #000 0%,
+    transparent 62%
+  );
+  opacity: 0.55;
+  animation: heroGlowIn 1300ms ease-out 60ms both;
+  pointer-events: none;
+}
+
+.heroGlow {
+  grid-area: 1 / 1;
+  place-self: center;
+  z-index: 0;
+  width: 132%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      color-mix(in srgb, var(--brand-primary) 52%, transparent) 0%,
+      color-mix(in srgb, var(--brand-primary) 22%, transparent) 36%,
+      transparent 66%
+    );
+  /* Blur rather than a soft gradient alone: it dissolves the circle's edge so
+   * the shape reads as light behind the device, not as a drawn disc. */
+  filter: blur(34px);
+  animation: heroGlowIn 1100ms ease-out 120ms both;
+  pointer-events: none;
+}
+
+.heroPhone {
+  grid-area: 1 / 1;
+  place-self: start center;
+  z-index: 1;
+  animation: heroRise 700ms cubic-bezier(0.22, 1, 0.36, 1) 220ms both;
+}
+
+/* Dark mode: the same light, weaker. At full strength a gold aura on a dark
+ * ground glows like a warning rather than a backdrop - and amber carries
+ * meaning elsewhere in this product. */
+:global(:root[data-theme='dark']) .heroGlow {
+  background: radial-gradient(
+    circle at 50% 42%,
+    color-mix(in srgb, var(--brand-primary) 30%, transparent) 0%,
+    color-mix(in srgb, var(--brand-primary) 12%, transparent) 40%,
+    transparent 70%
+  );
+}
+
+/* The dot field is drawn from --color-text, which inverts in dark mode - light
+ * dots on a dark ground read far stronger at the same opacity. */
+:global(:root[data-theme='dark']) .heroVisual::before {
+  opacity: 0.3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme='light'])) .heroGlow {
+    background: radial-gradient(
+      circle at 50% 42%,
+      color-mix(in srgb, var(--brand-primary) 30%, transparent) 0%,
+      color-mix(in srgb, var(--brand-primary) 12%, transparent) 40%,
+      transparent 70%
+    );
+  }
+
+  :global(:root:not([data-theme='light'])) .heroVisual::before {
+    opacity: 0.3;
+  }
+}
+
+/* The whole device is shown - nothing is cropped. That puts its ASPECT RATIO in
+ * charge of the fold's depth: the mockup is a shade under 2:1, so every extra
+ * 10px of width costs about 20px of section height. The widths below are chosen
+ * against that, not against how the phone looks alone. */
+@media (min-width: 900px) {
+  .hero {
+    align-items: center;
+  }
+
+  .heroVisual {
+    width: min(300px, 100%);
+  }
+}
+
+@media (min-width: 1200px) {
+  .heroVisual {
+    width: min(340px, 100%);
+  }
+}
+
+/* --- The staggered load-in -------------------------------------------------
+ * Each step is 90ms behind the last: enough to read as a sequence, short enough
+ * that the whole fold has settled well inside half a second. */
+
+.heroTitle {
+  animation: heroRise 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.heroLead {
+  animation: heroRise 620ms cubic-bezier(0.22, 1, 0.36, 1) 90ms both;
+}
+
+.heroActions {
+  animation: heroRise 620ms cubic-bezier(0.22, 1, 0.36, 1) 180ms both;
+}
+
+.heroNote {
+  animation: heroRise 620ms cubic-bezier(0.22, 1, 0.36, 1) 270ms both;
+}
+
+@keyframes heroRise {
+  from {
+    opacity: 0;
+    /* A short travel. A long one turns a page load into an event. */
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes heroGlowIn {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* --- Shared section furniture ---------------------------------------------- */

@@ -77,6 +77,7 @@ export const keys = {
   customers: (orgId: string) => ['customers', orgId] as const,
   customer: (orgId: string, customerId: string) =>
     ['customer', orgId, customerId] as const,
+  customerMembersByOrg: (orgId: string) => ['customerMembers', orgId] as const,
   customerMembers: (orgId: string, customerId: string) =>
     ['customerMembers', orgId, customerId] as const,
   /** People at a customer organisation (contacts precede portal accounts). */

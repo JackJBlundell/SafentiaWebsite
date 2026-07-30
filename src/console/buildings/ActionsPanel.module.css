@@ -1,5 +1,11 @@
-/* ActionsPanel - severity-ordered action-plan table with filters and the
-   admin add/edit form. Tokens only; 44px minimum targets throughout. */
+/* ActionsPanel - severity-ordered action-plan CARDS with filters and the admin
+   add/edit form. Tokens only; 44px minimum targets throughout.
+
+   The list is cards rather than a table because an action is one long sentence
+   plus five short facts, and a table gave the sentence only the width the short
+   facts left over. Every card stacks the same way at every width, so a tablet
+   reader sees the same record a desktop reader does - nothing is dropped or
+   folded away. */
 
 .panel {
   display: flex;
@@ -107,6 +113,45 @@
   accent-color: var(--brand-ink);
 }
 
+/* --- The card list ------------------------------------------------------- */
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+  padding: var(--space-lg);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* Overdue AND life-protecting: the plan's loudest state. The rail is an extra
+   channel on top of the badge wording, never the only signal. */
+.cardUrgent {
+  border-color: var(--status-error);
+  box-shadow: inset 3px 0 0 var(--status-error);
+}
+
+/* The state rail: severity, status, LTP and overdue read as one line before
+   the observation, so what kind of item this is lands before what it says. */
+.stateRail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
 .severityChip {
   display: inline-flex;
   align-items: center;
@@ -116,13 +161,6 @@
   font-size: 0.8125rem;
   font-weight: 650;
   white-space: nowrap;
-}
-
-.observation {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
 }
 
 /* Status chip: the label carries the meaning; the tint only reinforces it, so
@@ -157,24 +195,209 @@
   background: var(--color-surface-sunken);
 }
 
-/* The sign-off confirmation stacks its optional note field above the confirm /
-   cancel pair; a sensible minimum keeps the textarea usable inside the narrow
-   actions cell, and it wraps rather than bursting the card on small screens. */
-.signOffConfirm {
-  display: inline-flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  min-width: min(220px, 100%);
-  text-align: start;
+/* LTP is a fact of the action at all times, not only when overdue. */
+.ltpBadge {
+  padding: 1px var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
 }
 
-/* The status-history timeline inside the disclosure panel. */
+.overdueBadge {
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--status-error-surface);
+  color: var(--status-error);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* The customer says it is done and nobody has checked: an ASK of this team, so
+   it is toned as a live prompt rather than a neutral fact - but never as an
+   error, because nothing has gone wrong. */
+.verifyBadge {
+  padding: 1px var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--status-info-surface);
+  color: var(--status-info);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* The headline. It gets the card's full measure - the whole point of leaving
+   the table behind - and wraps rather than truncating: a remedial action is
+   read to decide what to do, never scanned. */
+.observation {
+  font-size: 1rem;
+  font-weight: 550;
+  line-height: 1.5;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+  max-width: 80ch;
+}
+
+/* The supporting facts. Two or more columns where there is room, one column on
+   a narrow tablet - the label always sits directly above its value, so a fact
+   can never be read against the wrong heading. */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-md) var(--space-lg);
+  margin: 0;
+  min-width: 0;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.factLabel {
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.factValue {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* A responsible party with no contact behind them: nobody is being emailed
+   about this action, so the fact reads as a warning under the name rather than
+   sitting silently beside it. */
+.unlinkedNote {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  color: var(--status-warning);
+}
+
+.overdue {
+  color: var(--status-error);
+  font-weight: 650;
+}
+
+/* "View location" is a real link, underlined, never colour alone. */
+.locationLink {
+  color: var(--brand-ink);
+  text-decoration: underline;
+}
+
+.locationUnavailable {
+  color: var(--color-text-muted);
+}
+
+/* The closure detail: how the work was resolved, and the proof of it. */
+.completionNote,
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-md);
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.completionLabel,
+.evidenceLabel {
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.evidenceLink {
+  color: var(--brand-ink);
+  text-decoration: underline;
+}
+
+/* The customer's own report of progress. Same block treatment as the closure
+   detail - it is a fact of the action - but it carries an accent rule, because
+   it is the one voice on the card that is not ours. */
+.customerResponse {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-md);
+  border-left: 3px solid var(--status-info);
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.customerResponseLabel {
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+/* What is owed here, in a sentence: the claim is only half of a closure. */
+.customerResponseAsk {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+/* The file is named even when it cannot be opened: the record still shows that
+   evidence was produced, which is a different fact from none existing. */
+.evidenceUnavailable {
+  color: var(--color-text-muted);
+}
+
+.cardActions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* The lifecycle trail, closed by default so the card stays about the action. */
+.history {
+  min-width: 0;
+}
+
+.historySummary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.historySummary:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
 .historyList {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
   margin: 0;
-  padding: 0;
+  padding: var(--space-sm) 0 0;
   list-style: none;
 }
 
@@ -190,8 +413,15 @@
   color: var(--color-text-secondary);
 }
 
-/* Long completion notes wrap and stay inside the panel rather than stretching
-   the table. */
+/* A customer's claim inside the shared trail: stated as theirs, so an entry
+   they recorded can never be skim-read as a colleague's sign-off. */
+.historyClaim {
+  font-size: 0.875rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+/* Long completion notes wrap and stay inside the card. */
 .historyNote {
   font-size: 0.9375rem;
   color: var(--color-text);
@@ -202,64 +432,10 @@
 .historyEmpty {
   font-size: 0.9375rem;
   color: var(--color-text-muted);
+  padding-top: var(--space-sm);
 }
 
-/* LTP is a fact of the action at all times, not only when overdue. */
-.ltpBadge {
-  padding: 1px var(--space-sm);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  font-weight: 650;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-
-.overdue {
-  color: var(--status-error);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-/* The escalation beyond ordinary overdue: weight, never colour alone - the
-   badge text also changes to "Overdue · LTP". */
-.overdueLtp {
-  font-weight: 700;
-}
-
-.overdueBadge {
-  padding: 1px var(--space-sm);
-  border-radius: var(--radius-sm);
-  background: var(--status-error-surface);
-  color: var(--status-error);
-  font-size: 0.75rem;
-  font-weight: 650;
-  white-space: nowrap;
-}
-
-/* "View location" keeps the 44px target via generous line-height inside the
-   observation cell; it is a real link, underlined, never colour alone. */
-.locationLink {
-  color: var(--brand-ink);
-  text-decoration: underline;
-  font-size: 0.875rem;
-  white-space: nowrap;
-}
-
-.locationUnavailable {
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
-  white-space: nowrap;
-}
-
-.rowActions {
-  display: inline-flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
+/* --- The add / edit form -------------------------------------------------- */
 
 .form {
   display: flex;

@@ -9,7 +9,10 @@
 // assessment progressing (startAssessment refuses a cancelled job). The status,
 // the /assessorJobs index value and the /activity entry land in ONE
 // multi-location update; the assessor is then told, with the admin's reason
-// when one was given.
+// when one was given - in-app AND by branded email (lib/jobEmails), because a
+// cancellation the assessor never sees is the one that sends them across the
+// county to a visit that is not happening; their own `jobScheduled` preference
+// silences the email only.
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -28,6 +31,8 @@ import { assertObject, requireString, optionalString, TEXT_LIMITS } from '../lib
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import { sendNotification } from '../lib/notifications';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { sendJobChangeEmail, sendVisitCustomerEmails } from '../lib/jobEmails';
 import type {
   CancelJobInput,
   CancelJobResult,
@@ -35,7 +40,11 @@ import type {
   Job,
 } from '../shared/types';
 
-export const cancelJob = onCall<CancelJobInput>(callableOptions, (request) =>
+export const cancelJob = onCall<CancelJobInput>(
+  // The cancellation email needs the provider secret mounted; without it the
+  // send degrades to a logged intent (lib/email), never an error.
+  { ...callableOptions, secrets: EMAIL_PROVIDER_SECRETS },
+  (request) =>
   runCallable<CancelJobResult>(
     createLogger({ fn: 'cancelJob' }),
     async () => {
@@ -104,6 +113,47 @@ export const cancelJob = onCall<CancelJobInput>(callableOptions, (request) =>
             ? `Your assessment at ${where} has been cancelled: ${reason}`
             : `Your assessment at ${where} has been cancelled.`,
           link: `safentia://job/${jobId}`,
+        },
+        logger,
+      );
+      // And by email: a cancellation the assessor does not see is the one that
+      // sends them across the county to a visit that is not happening. The
+      // reason travels as its own paragraph so it reads as the admin's words.
+      await sendJobChangeEmail(
+        paths,
+        orgId,
+        job.assessorUid,
+        {
+          jobId,
+          buildingName: where,
+          customerId: job.customerId,
+          scheduledFor: job.scheduledFor,
+          scheduledUntil: job.scheduledUntil,
+          subject: `Job cancelled: ${where}`,
+          heading: 'A job has been cancelled',
+          body: `Your assessment at ${where} has been cancelled, so there is nothing to attend.`,
+          extraParagraphs: reason ? [`Reason given: ${reason}`] : undefined,
+          dateLabel: 'Was scheduled for',
+        },
+        logger,
+      );
+      // The customer is told too, with the admin's reason where there is one: a
+      // duty-holder who has arranged access, or warned their tenants, is owed
+      // the news that nobody is coming after all.
+      await sendVisitCustomerEmails(
+        paths,
+        orgId,
+        {
+          jobId,
+          customerId: job.customerId,
+          siteId: job.siteId,
+          buildingId: job.buildingId,
+          buildingName: where,
+          assessorUid: job.assessorUid,
+          scheduledFor: job.scheduledFor,
+          scheduledUntil: job.scheduledUntil,
+          kind: 'cancelled',
+          reason,
         },
         logger,
       );

@@ -24,6 +24,13 @@
 // to no party at all. One field, one chain, nothing to keep in step.
 // ============================================================================
 
+// THE CONTACT IS THE POINT: a responsible party is a person the platform can
+// EMAIL, so what travels down this chain is the `contactId` link, not a name.
+// resolveResponsibleAssignment below is what the action-plan paths use, and it
+// keeps the name and the id SOURCE-COHERENT: both always come from the same
+// party, because a record naming one person while the release digest emails
+// another is worse than either fact on its own.
+
 import type { Assessment, Building, ResponsibleParty } from '../shared/types';
 
 /** The party-bearing shape each resolver needs, so callers can pass a full
@@ -49,9 +56,9 @@ function named(party: ResponsibleParty | undefined): ResponsibleParty | undefine
  * default, else nobody.
  *
  * Use this wherever the whole party is wanted - to persist onto an assessment,
- * or to render a display line that includes the role. Callers that only need the
- * NAME (an action's `responsible` is a bare string) want `resolveResponsibleName`
- * instead, which additionally honours a per-finding override.
+ * or to render a display line that includes the role. Callers building an ACTION
+ * want `resolveResponsibleAssignment` instead: it additionally honours a
+ * per-finding override and carries the contact link an email needs.
  */
 export function resolveResponsibleParty(
   assessment: PartySource,
@@ -64,27 +71,82 @@ export function resolveResponsibleParty(
   return named(building?.responsibleParty);
 }
 
+/** Who an action holds accountable: the name it RECORDS, and the contact every
+ *  automated email about it resolves through. Both keys are optional because
+ *  legacy data can supply one without the other, but they are only ever filled
+ *  from the SAME party (see resolveResponsibleAssignment). */
+export interface ResponsibleAssignment {
+  name?: string;
+  contactId?: string;
+}
+
+/** A per-finding override as it sits packed on a non-conformity answer's `value`
+ *  (the shape the app's nonConformity module writes). Only the responsible-party
+ *  half is modelled here; the rest is the caller's business. */
+export interface ResponsibleOverride {
+  responsible?: string;
+  responsibleContactId?: string;
+}
+
+/** A field counts as SUPPLIED only when it names something. RTDB has no schema,
+ *  so a cleared override arrives as `''`, and treating that as an answer would
+ *  pin an action to a blank party instead of letting it inherit one that can
+ *  actually be emailed. */
+function present(value: string | undefined): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
 /**
- * The canonical responsible NAME for one action: the finding's own override
- * first (an assessor may name a different party for a single remedial item),
- * then the assessment's party, then the building's default.
+ * Who ONE action holds accountable: the finding's own override first (an
+ * assessor may name a different party for a single remedial item), then the
+ * assessment's party, then the building's default.
  *
- * DELIBERATELY nullish-coalescing rather than truthiness, and deliberately NOT
- * routed through `resolveResponsibleParty`'s blank guard: this is a lift of the
- * chain releaseAssessment has always run, and it is behaviour-preserving by
- * construction. Tightening it here would silently RE-ROUTE the responsible party
- * on already-released-shaped data (a blank override would start inheriting the
- * building's party), which is not a change to make blind inside a de-duplication.
- * The blank case is a data fault the stamping paths above no longer create.
+ * SOURCE COHERENCE IS THE INVARIANT: whichever step answers supplies BOTH the
+ * name and the contact id, and a step that has neither is skipped entirely. The
+ * alternative - taking the name from the override and the id from the building
+ * because the override happened to lack one - would email the building's party
+ * about an action recorded against somebody else, which is exactly the failure
+ * this linkage exists to end.
+ *
+ * A step that carries a name but no `contactId` still wins its position: it is
+ * an unlinked legacy or imported party (the only way one can now exist - every
+ * live write path picks from the customer's contact directory), and honouring it
+ * keeps the record honest. The action simply carries no contact id, which the
+ * email seams log as the reason nobody was told rather than skipping in silence.
  */
-export function resolveResponsibleName(
-  override: string | undefined,
+export function resolveResponsibleAssignment(
+  override: ResponsibleOverride | undefined,
   assessment: PartySource,
   building: BuildingPartySource,
-): string | undefined {
-  return (
-    override ??
-    assessment?.responsibleParty?.name ??
-    building?.responsibleParty?.name
-  );
+): ResponsibleAssignment {
+  const chain: ResponsibleAssignment[] = [
+    {
+      ...(present(override?.responsible)
+        ? { name: override?.responsible }
+        : {}),
+      ...(present(override?.responsibleContactId)
+        ? { contactId: override?.responsibleContactId }
+        : {}),
+    },
+    partyAssignment(assessment?.responsibleParty),
+    partyAssignment(building?.responsibleParty),
+  ];
+  for (const step of chain) {
+    if (step.name !== undefined || step.contactId !== undefined) {
+      return step;
+    }
+  }
+  return {};
+}
+
+/** One structured party as an assignment. A party with neither a usable name nor
+ *  a link is nothing at all, so it falls through rather than pinning an action
+ *  to an empty record. */
+function partyAssignment(
+  party: ResponsibleParty | undefined,
+): ResponsibleAssignment {
+  return {
+    ...(present(party?.name) ? { name: party?.name } : {}),
+    ...(present(party?.contactId) ? { contactId: party?.contactId } : {}),
+  };
 }

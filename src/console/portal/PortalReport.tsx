@@ -6,16 +6,16 @@
 // the contact sees a short form asking them to type their name, NOT a download
 // link; once it is recorded, the screen offers the PDF.
 //
-// READ THIS BEFORE RELYING ON THE PROMPT: acceptance is an attestation of
-// receipt, NOT an access control (project-lead decision). The contact can read
-// `pdfPath` off the report record before accepting, and the Storage rule admits
-// them on their `customerId` metadata alone - Storage rules cannot read RTDB, so
-// an acceptance condition cannot live there. Hiding the link is presentation
-// only. What the prompt produces is the ARTEFACT the organisation needs: a
-// named, timestamped, server-attributed sign-off in the audit trail. If it ever
-// has to become a real gate, `pdfPath` must leave the portal-readable record and
-// the PDF must be served as a short-lived signed URL minted by a callable that
-// checks `acceptance` first.
+// The acceptance prompt is a REAL gate now, not presentation. The PDF is no
+// longer fetched from Storage with the reader's own token: this screen asks the
+// getReportDownloadUrl callable, which re-derives the building's owning
+// customer, the reader's live portal standing and their acceptance on every
+// single request before it mints a 15-minute signed URL. Hiding the link used to
+// be the whole of the gate (the object admitted a portal token on a customerId
+// stamped into its metadata at generation time, and Storage rules cannot read
+// RTDB to ask anything better); the object now admits a portal token to nothing.
+// The prompt still produces the artefact the organisation needs either way: a
+// named, timestamped, server-attributed sign-off in the audit trail.
 //
 // The route nests under the existing building URL, so the breadcrumb walks back
 // the way the reader came. onAssessmentStageChange builds the same URL for the
@@ -25,13 +25,13 @@
 
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getDownloadURL, ref as storageRef } from 'firebase/storage';
-import { firebase } from '../../firebase';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import type {
   AcceptReportInput,
   AcceptReportResult,
+  GetReportDownloadUrlInput,
+  GetReportDownloadUrlResult,
   Report,
 } from '../../types';
 import { Button } from '../../components/Button';
@@ -52,6 +52,15 @@ function nameIsSignable(value: string): boolean {
   const trimmed = value.trim();
   return trimmed.length >= MIN_NAME_LENGTH && HAS_LETTER.test(trimmed);
 }
+
+/** Shown when the browser refused to open the tab we asked for - the usual
+ *  culprit is a pop-up blocker, because the URL is minted asynchronously and the
+ *  open therefore lands outside the click's own gesture. The link rendered
+ *  alongside this is a plain anchor the reader clicks themselves, which no
+ *  blocker interferes with, so a blocked download is a one-click recovery
+ *  rather than a dead end. */
+const DOWNLOAD_BLOCKED =
+  'Your browser blocked the report from opening in a new tab. Use the link below to open it.';
 
 export function PortalReport() {
   const { siteId = '', buildingId = '', reportId = '' } = useParams();
@@ -105,7 +114,11 @@ export function PortalReport() {
         ]}
       />
       {report.acceptance ? (
-        <AcceptedCard report={report} />
+        <AcceptedCard
+          report={report}
+          buildingId={buildingId}
+          reportId={reportId}
+        />
       ) : (
         <AcceptanceGate buildingId={buildingId} reportId={reportId} />
       )}
@@ -184,27 +197,38 @@ function AcceptanceGate({
 }
 
 /** Past the gate: the recorded sign-off and the download. */
-function AcceptedCard({ report }: { report: Report }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+function AcceptedCard({
+  report,
+  buildingId,
+  reportId,
+}: {
+  report: Report;
+  buildingId: string;
+  reportId: string;
+}) {
+  // Only ever set when the browser refused the tab we opened. Deliberately NOT
+  // a cached URL to reuse: it expires, and offering an expired link back to the
+  // reader would be exactly the dead end this design removes. Every click asks
+  // the server again, so what the reader gets is always freshly authorised.
+  const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const acceptance = report.acceptance;
+  const mintUrl = useCallable<
+    GetReportDownloadUrlInput,
+    GetReportDownloadUrlResult
+  >('getReportDownloadUrl');
 
-  // The record carries the Storage object path; the download resolves it to a
-  // short-lived URL at click time, so nothing durable is embedded in the page.
   const download = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const url = await getDownloadURL(
-        storageRef(firebase.storage(), report.pdfPath),
-      );
-      window.open(url, '_blank', 'noopener');
-    } catch {
-      setError(
-        'The report could not be downloaded. Please try again, or contact your fire safety provider.',
-      );
-    } finally {
-      setBusy(false);
+    setBlockedUrl(null);
+    // Resolves null on failure with the server's own calm copy on `error`, so
+    // an access that has since been withdrawn, an unaccepted report and a
+    // transport wobble each say the right thing without a branch here.
+    const minted = await mintUrl.call({ buildingId, reportId });
+    if (!minted) {
+      return;
+    }
+    const opened = window.open(minted.url, '_blank', 'noopener');
+    if (!opened) {
+      setBlockedUrl(minted.url);
     }
   };
 
@@ -219,10 +243,23 @@ function AcceptedCard({ report }: { report: Report }) {
           Accepted by {acceptance.name} on {formatDate(acceptance.at)}.
         </p>
       )}
-      {error && <ErrorNotice message={error} />}
+      {mintUrl.error && <ErrorNotice message={mintUrl.error} />}
+      {blockedUrl && (
+        <>
+          <ErrorNotice message={DOWNLOAD_BLOCKED} />
+          <a
+            className={styles.fallbackLink}
+            href={blockedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open the report PDF
+          </a>
+        </>
+      )}
       <div className={styles.formActions}>
-        <Button onClick={() => void download()} disabled={busy}>
-          {busy ? 'Preparing' : 'Download PDF'}
+        <Button onClick={() => void download()} disabled={mintUrl.pending}>
+          {mintUrl.pending ? 'Preparing' : 'Download PDF'}
         </Button>
       </div>
     </Card>

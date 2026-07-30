@@ -11,9 +11,10 @@
 // At-a-glance risk: the same two org-root reads the dashboard makes (shared
 // query keys, so navigating here from a dashboard tile costs no new listener)
 // feed a per-customer RagSummary strip and an overdue-actions badge on every
-// row. The dashboard's tiles drill through with ?risk=<level> / ?overdue=1,
-// which filter to the customers holding that problem and sort worst-first,
-// behind a dismissible chip; no param means the plain directory, unchanged.
+// row. The dashboard's and the reports page's tiles drill through with
+// ?risk=<level> / ?overdue=1|life / ?open=1, which filter to the customers
+// holding that problem and sort worst-first, behind a dismissible chip; no
+// param means the plain directory, unchanged.
 // ============================================================================
 
 import { useMemo, useState } from 'react';
@@ -59,6 +60,9 @@ type CustomerRow = { id: string; customer: Customer };
  *  plus its overdue action counts. */
 interface CustomerRollup {
   counts: Record<RiskLevel, number>;
+  /** Actions still open across this customer's estate - the reports page's
+   *  "Open actions" figure, per customer, so ?open=1 can narrow to holders. */
+  open: number;
   overdue: OverdueCounts;
 }
 
@@ -66,6 +70,7 @@ interface CustomerRollup {
  *  its "No buildings" wording, the badge its quiet 0. */
 const EMPTY_ROLLUP: CustomerRollup = {
   counts: { high: 0, medium: 0, low: 0, pending: 0 },
+  open: 0,
   overdue: { overdue: 0, lifeProtectionOverdue: 0 },
 };
 
@@ -76,6 +81,17 @@ function parseRiskParam(value: string | null): RiskLevel | null {
     : null;
 }
 
+/** The ?overdue= vocabulary. `1` is every overdue action - the dashboard's
+ *  long-standing drill-through, unchanged - and `life` narrows to the escalated
+ *  Life Protection subset that the reports page tiles separately. Extending
+ *  this param rather than minting a second one keeps ONE filtering scheme for
+ *  the whole console; anything else is ignored, never guessed at. */
+type OverdueFilter = 'any' | 'life';
+
+function parseOverdueParam(value: string | null): OverdueFilter | null {
+  return value === '1' ? 'any' : value === 'life' ? 'life' : null;
+}
+
 /** Filter-chip wording per drill-through. */
 const RISK_FILTER_LABELS: Record<RiskLevel, string> = {
   high: 'Showing customers with high-risk buildings',
@@ -83,7 +99,11 @@ const RISK_FILTER_LABELS: Record<RiskLevel, string> = {
   low: 'Showing customers with low-risk buildings',
   pending: 'Showing customers with buildings not yet assessed',
 };
-const OVERDUE_FILTER_LABEL = 'Showing customers with overdue actions';
+const OVERDUE_FILTER_LABELS: Record<OverdueFilter, string> = {
+  any: 'Showing customers with overdue actions',
+  life: 'Showing customers with overdue Life Protection actions',
+};
+const OPEN_FILTER_LABEL = 'Showing customers with open actions';
 
 function buildColumns(
   isAdmin: boolean,
@@ -262,6 +282,7 @@ export function CustomersList() {
     for (const [customerId, buildingRows] of byCustomer) {
       result.set(customerId, {
         counts: countBuildingsByRisk(buildingRows),
+        open: 0,
         overdue: { overdue: 0, lifeProtectionOverdue: 0 },
       });
     }
@@ -270,26 +291,41 @@ export function CustomersList() {
       const customerId = customerByBuilding.get(buildingId);
       const rollup = customerId ? result.get(customerId) : undefined;
       if (!rollup) continue;
-      const overdue = countOverdueActions(Object.values(perBuilding), now);
+      const actions = Object.values(perBuilding);
+      const overdue = countOverdueActions(actions, now);
+      // `open` is the reports page's own definition of the word - status
+      // 'open', not the wider "still outstanding" that includes in-progress
+      // work - so the tile and the list it opens count the same actions.
+      rollup.open += actions.filter((action) => action.status === 'open').length;
       rollup.overdue.overdue += overdue.overdue;
       rollup.overdue.lifeProtectionOverdue += overdue.lifeProtectionOverdue;
     }
     return result;
   }, [buildingsNode.data, actionsNode.data]);
 
-  // The dashboard drill-through params. An unknown ?risk value is ignored;
-  // ?overdue=1 only applies when no (valid) risk filter is present.
+  // The drill-through params, in precedence order: risk, then overdue, then
+  // open. An unknown value in any of them is ignored, and only the first
+  // filter present applies, so the chip can never describe two narrowings at
+  // once (nor claim one the rows do not obey).
   const riskFilter = parseRiskParam(searchParams.get('risk'));
-  const overdueFilter = riskFilter === null && searchParams.get('overdue') === '1';
+  const overdueFilter =
+    riskFilter === null ? parseOverdueParam(searchParams.get('overdue')) : null;
+  const openFilter =
+    riskFilter === null &&
+    overdueFilter === null &&
+    searchParams.get('open') === '1';
   const filterLabel = riskFilter
     ? RISK_FILTER_LABELS[riskFilter]
     : overdueFilter
-      ? OVERDUE_FILTER_LABEL
-      : null;
+      ? OVERDUE_FILTER_LABELS[overdueFilter]
+      : openFilter
+        ? OPEN_FILTER_LABEL
+        : null;
   const clearFilter = () => {
     const next = new URLSearchParams(searchParams);
     next.delete('risk');
     next.delete('overdue');
+    next.delete('open');
     setSearchParams(next, { replace: true });
   };
 
@@ -313,20 +349,34 @@ export function CustomersList() {
     // Drill-through filters wait for the roll-ups: until both org-root reads
     // land the full directory shows rather than a false "no matches" flash.
     if (rollups !== undefined) {
+      // Every drill-through narrows the same way: keep the holders, worst
+      // first, so the customer carrying most of the tile's figure is the first
+      // row the reader lands on.
+      const narrowTo = (countFor: (id: string) => number) => {
+        entries = entries
+          .filter(([id]) => countFor(id) > 0)
+          .sort((a, b) => countFor(b[0]) - countFor(a[0]));
+      };
       if (riskFilter) {
-        const countFor = (id: string) => rollups.get(id)?.counts[riskFilter] ?? 0;
-        entries = entries
-          .filter(([id]) => countFor(id) > 0)
-          .sort((a, b) => countFor(b[0]) - countFor(a[0]));
-      } else if (overdueFilter) {
-        const countFor = (id: string) => rollups.get(id)?.overdue.overdue ?? 0;
-        entries = entries
-          .filter(([id]) => countFor(id) > 0)
-          .sort((a, b) => countFor(b[0]) - countFor(a[0]));
+        narrowTo((id) => rollups.get(id)?.counts[riskFilter] ?? 0);
+      } else if (overdueFilter === 'any') {
+        narrowTo((id) => rollups.get(id)?.overdue.overdue ?? 0);
+      } else if (overdueFilter === 'life') {
+        narrowTo((id) => rollups.get(id)?.overdue.lifeProtectionOverdue ?? 0);
+      } else if (openFilter) {
+        narrowTo((id) => rollups.get(id)?.open ?? 0);
       }
     }
     return entries.map(([id, customer]) => ({ id, customer }));
-  }, [customers.data, search, showArchived, rollups, riskFilter, overdueFilter]);
+  }, [
+    customers.data,
+    search,
+    showArchived,
+    rollups,
+    riskFilter,
+    overdueFilter,
+    openFilter,
+  ]);
 
   const total = toEntries(customers.data).length;
   const columns = useMemo(() => buildColumns(isAdmin, rollups), [isAdmin, rollups]);

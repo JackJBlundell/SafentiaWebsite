@@ -40,6 +40,10 @@ export const RATE_LIMITS = {
   // AI drafting calls a paid model, so it is held tighter than the everyday
   // assessment actions - a handful of drafts per minute is ample on site.
   generateAssessmentDraft: { limit: 6, windowMs: MINUTE },
+  // Changing the template DELETES every recorded answer, so the bucket is tight:
+  // a couple of corrections at the start of a visit is the honest use, and a
+  // loop hammering this would be destroying an assessor's work each time.
+  changeAssessmentTemplate: { limit: 5, windowMs: MINUTE },
   // The public register-interest form has no signed-in caller, so its bucket is
   // keyed by client IP rather than uid (see registerInterest.ts). One genuine
   // enquiry is one call; five a minute absorbs a retry or a corrected resubmit
@@ -79,10 +83,25 @@ export const RATE_LIMITS = {
   // A portal contact signs one report off once. The allowance is generous enough
   // to absorb a retry after a dropped connection and nothing more.
   acceptReport: { limit: 10, windowMs: MINUTE },
+  // Every report download now mints a fresh signed URL, so this fires once per
+  // click rather than once per report - a reader opening several buildings'
+  // reports in a sitting, or re-clicking after a URL expired, is normal. Held
+  // well below the CRUD allowances because each call signs through the IAM API.
+  getReportDownloadUrl: { limit: 30, windowMs: MINUTE },
   // A customer admin inviting a colleague dispatches an email, so it is held as
   // tight as the staff-side createInvitation - deliberate, one at a time, not
   // bulk entry.
   portalInviteTeammate: { limit: 5, windowMs: MINUTE },
+  // Changing a portal account's role sends no email and writes one small record,
+  // so it sits with the staff-side updateMember allowance rather than the tight
+  // invite one: a staff admin correcting a customer's whole team after a
+  // reorganisation is a legitimate run of calls in one sitting.
+  updateCustomerMember: { limit: 30, windowMs: MINUTE },
+  // A duty-holder working down their action plan after a contractor's visit may
+  // legitimately respond to a run of actions in one sitting, so this sits with
+  // the everyday CRUD allowances rather than the one-shot ones - it writes one
+  // small record and one trail entry per call.
+  respondToAction: { limit: 60, windowMs: MINUTE },
   // Publishing a template (FR-E21) is a deliberate authoring milestone, not bulk
   // entry - each publish deep-validates the draft and mints an archive version,
   // so it sits with the other one-shot admin actions.

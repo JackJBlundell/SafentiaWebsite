@@ -27,6 +27,7 @@ import {
 import { ErrorNotice } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
 import styles from './ServiceSchedulePanel.module.css';
+import { fromDateInputValue, toDateInputValue } from '../lib/dateInput';
 
 /** Human titles for every statutory service key. Exhaustive by construction. */
 const SERVICE_LABELS: Record<ServiceScheduleKey, string> = {
@@ -69,22 +70,6 @@ function formatDate(epochMillis: number): string {
   });
 }
 
-/** Epoch millis -> the yyyy-mm-dd a date input wants, in UTC. */
-function toDateInputValue(epochMillis: number | undefined): string {
-  if (epochMillis === undefined) {
-    return '';
-  }
-  return new Date(epochMillis).toISOString().slice(0, 10);
-}
-
-/** yyyy-mm-dd -> epoch millis at midnight UTC (the platform convention). */
-function fromDateInputValue(value: string): number | undefined {
-  if (!value) {
-    return undefined;
-  }
-  const [year, month, day] = value.split('-').map(Number);
-  return Date.UTC(year, month - 1, day);
-}
 
 type DraftDates = Record<ServiceScheduleKey, string>;
 

@@ -116,6 +116,10 @@ function rtdbFor(env: Environment) {
       root('customerContacts', orgId, customerId),
     customerContact: (orgId: string, customerId: string, contactId: string) =>
       root('customerContacts', orgId, customerId, contactId),
+    /** The whole organisation's portal accounts, {customerId: {uid: member}}.
+     *  Staff-readable (the rules grant the org node); used where a portal uid in
+     *  a shared record has to become a name. */
+    customerMembersByOrg: (orgId: string) => root('customerMembers', orgId),
     customerMembers: (orgId: string, customerId: string) =>
       root('customerMembers', orgId, customerId),
     customerMember: (orgId: string, customerId: string, uid: string) =>
@@ -281,6 +285,17 @@ function storageFor(env: Environment) {
       category: DocumentCategory,
       docId: string,
     ): StoragePath => buildingRoot(orgId, buildingId, 'documents', category, docId),
+    /** Proof-of-completion file attached when an action is signed off. Its OWN
+     *  prefix rather than a documents category, because its Storage rule is the
+     *  only building-media rule that also admits the owning customer's portal
+     *  users - widening the documents match to do that would hand a customer
+     *  every certificate and policy the building holds. */
+    actionEvidence: (
+      orgId: string,
+      buildingId: string,
+      evidenceId: string,
+    ): StoragePath =>
+      buildingRoot(orgId, buildingId, 'actionEvidence', evidenceId),
     /** Organisation-level asset (the whitelabel logo). Its own location rather
      *  than a contrived buildingId, so Storage rules can bound it as an image
      *  and tenant-URL validation reads naturally. */

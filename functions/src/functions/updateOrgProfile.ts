@@ -2,15 +2,16 @@
 // updateOrgProfile (callable, admin-only) - Phase 2 admin, whitelabel theming.
 //
 // An admin edits their org's public profile (name, brand, contact, typography,
-// logo). Partial by design: only the fields present in the input change. Being a
-// callable means the profile write and its /activity entry land in ONE
-// multi-location update - the audit trail cannot be skipped or forged. Two
-// validations matter especially:
+// logo, report cover image). Partial by design: only the fields present in the
+// input change. Being a callable means the profile write and its /activity entry
+// land in ONE multi-location update - the audit trail cannot be skipped or
+// forged. Two validations matter especially:
 //   - Brand colours must be #RRGGBB exactly; a malformed colour would crash the
 //     themed report renderer, so it is rejected here, never stored.
-//   - logoUrl must reference an object inside the org's OWN tenant Storage root
-//     (env + orgId); accepting an arbitrary URL would let an admin point their
-//     org's logo at another tenant's object or an external host.
+//   - logoUrl and coverImageUrl must reference an object inside the org's OWN
+//     tenant Storage root (env + orgId); accepting an arbitrary URL would let an
+//     admin point their org's mark - or every report cover they issue - at
+//     another tenant's object or an external host.
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -47,8 +48,15 @@ const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 
 /** The profile fields an admin may set. Anything else in the payload is rejected
  *  rather than dropped, so a client cannot silently believe it wrote a field. */
-const PROFILE_FIELDS = ['name', 'brand', 'contact', 'fontFamily', 'logoUrl'] as const;
-const CONTACT_FIELDS = ['name', 'email', 'phone', 'address'] as const;
+const PROFILE_FIELDS = [
+  'name',
+  'brand',
+  'contact',
+  'fontFamily',
+  'logoUrl',
+  'coverImageUrl',
+] as const;
+const CONTACT_FIELDS = ['name', 'email', 'phone', 'address', 'website'] as const;
 
 export const updateOrgProfile = onCall<UpdateOrgProfileInput>(
   callableOptions,
@@ -123,10 +131,17 @@ export const updateOrgProfile = onCall<UpdateOrgProfileInput>(
           const email = optionalString(contactInput, 'email', TEXT_LIMITS.email);
           const phone = optionalString(contactInput, 'phone', TEXT_LIMITS.shortText);
           const address = optionalString(contactInput, 'address', TEXT_LIMITS.shortText);
+          // Stored exactly as typed, scheme or not: an admin writes
+          // "wmcompliance.co.uk" and the report cover prints that, so demanding
+          // https:// here would reject the form most people actually write. It
+          // is display text on a PDF, never a fetched or linkified URL, so the
+          // length bound is the whole of the safety it needs.
+          const website = optionalString(contactInput, 'website', TEXT_LIMITS.shortText);
           if (name) contact.name = name;
           if (email) contact.email = email;
           if (phone) contact.phone = phone;
           if (address) contact.address = address;
+          if (website) contact.website = website;
           update[`${profilePath}/contact`] = contact;
         }
 
@@ -150,6 +165,25 @@ export const updateOrgProfile = onCall<UpdateOrgProfileInput>(
           update[`${profilePath}/logoUrl`] = requireTenantStorageRef(
             logoUrl,
             'logoUrl',
+            env,
+            orgId,
+          );
+        }
+
+        if (profile.coverImageUrl === null) {
+          // The CLEAR intent. Absent is a designed state, not a broken one: the
+          // report cover paints its top-left panel from the brand colours
+          // instead, so removing this never leaves a hole on a client's PDF.
+          update[`${profilePath}/coverImageUrl`] = null;
+        } else if (profile.coverImageUrl !== undefined) {
+          // Same tenant boundary as the logo, and it matters more here: this
+          // image is stamped on every report the org issues, so an unvalidated
+          // URL would be a durable pointer at another tenant's object or at
+          // external, mutable content in someone else's control.
+          const coverImageUrl = requireString(profile, 'coverImageUrl', 2048);
+          update[`${profilePath}/coverImageUrl`] = requireTenantStorageRef(
+            coverImageUrl,
+            'coverImageUrl',
             env,
             orgId,
           );

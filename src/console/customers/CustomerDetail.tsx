@@ -372,6 +372,18 @@ export function CustomerDetail() {
                   { label: 'Address', value: record.address },
                   { label: 'Switchboard email', value: record.email },
                   { label: 'Phone', value: record.phone },
+                  // Only shown once set: an open-ended contract is the norm, and
+                  // an empty row would imply the field had been forgotten.
+                  ...(record.contractEndDate
+                    ? [
+                        {
+                          label: 'Contract ends',
+                          value: `${formatDate(record.contractEndDate)}${
+                            record.status === 'active' ? ' - archives automatically' : ''
+                          }`,
+                        },
+                      ]
+                    : []),
                   { label: 'Status', value: <StatusBadge status={record.status} /> },
                 ]}
               />
@@ -565,8 +577,11 @@ function ArchiveControl({ customerId, name }: { customerId: string; name: string
           Archive customer
         </Button>
         <p className={shared.note}>
-          Archiving removes this customer from active lists. Nothing is deleted,
-          and their assessment history stays intact.
+          Archiving ends the relationship: this customer leaves your active
+          lists, their people can no longer sign in to the portal, and they stop
+          receiving review reminders. Nothing is deleted - their sites, buildings
+          and assessment history stay intact, and restoring them gives their
+          people their access back.
         </p>
       </>
     );
@@ -575,8 +590,9 @@ function ArchiveControl({ customerId, name }: { customerId: string; name: string
   return (
     <>
       <p className={shared.cardCopy}>
-        Archive {name}? Their buildings and history remain, and they disappear
-        from active lists.
+        Archive {name}? Their people lose portal access immediately and their
+        review reminders stop. Their buildings and history remain, and restoring
+        them returns the access this withdraws.
       </p>
       {manageCustomer.error && <ErrorNotice message={manageCustomer.error} />}
       <div className={shared.formActions}>

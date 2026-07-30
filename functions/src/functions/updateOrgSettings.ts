@@ -26,10 +26,12 @@ import { assertObject } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import {
-  isValidReviewReminderDays,
-  MAX_REVIEW_REMINDER_DAY,
-  MAX_REVIEW_REMINDER_DAYS,
-} from '../lib/reviewWindows';
+  isValidReminderDays,
+  ACTION_REMINDER_RULES,
+  INFO_REQUEST_REMINDER_RULES,
+  REVIEW_REMINDER_RULES,
+  type ReminderScheduleRules,
+} from '../lib/reminderSchedules';
 import type {
   RagConfig,
   UpdateOrgSettingsInput,
@@ -60,19 +62,63 @@ function requireBoolean(input: Record<string, unknown>, field: string): boolean 
   return value;
 }
 
-/** Validate a supplied reminder schedule against the SAME rules the sweep uses
- *  (isValidReviewReminderDays), so the callable can never store a config the
- *  sweep would then reject and silently ignore. A trusted, in-range value is
- *  returned; anything else is refused, never coerced (brief 18.4). */
-function requireReviewReminderDays(value: unknown): number[] {
-  if (!isValidReviewReminderDays(value)) {
+/** Validate a supplied reminder schedule against the SAME rules the sweeps use
+ *  (isValidReminderDays over the concern's own rule set), so the callable can
+ *  never store a ladder a sweep would then reject and silently ignore. A
+ *  trusted, in-range value is returned; anything else is refused, never coerced
+ *  (brief 18.4). */
+function requireReminderDays(
+  value: unknown,
+  rules: ReminderScheduleRules,
+  field: string,
+): number[] {
+  if (!isValidReminderDays(value, rules)) {
     throw fail.invalidArgument(
-      `The reviewReminderDays field must be a descending list of up to ${MAX_REVIEW_REMINDER_DAYS} whole numbers of days, each between 1 and ${MAX_REVIEW_REMINDER_DAY}.`,
-      { field: 'reviewReminderDays' },
+      `The ${field} field must be a descending list of up to ${rules.maxMarks} whole numbers of days, each between 1 and ${rules.maxDay}.`,
+      { field },
     );
   }
   return value;
 }
+
+/** The three configurable reminder ladders, each with the rules it is validated
+ *  against and the audit code its change records. Table-driven because the three
+ *  differ only in name and horizon: a fourth concern is one row, not another
+ *  copy of the same twenty lines. */
+const REMINDER_SCHEDULES: ReadonlyArray<{
+  field: 'reviewReminderDays' | 'infoRequestReminderDays' | 'actionReminderDays';
+  rules: ReminderScheduleRules;
+}> = [
+  { field: 'reviewReminderDays', rules: REVIEW_REMINDER_RULES },
+  { field: 'infoRequestReminderDays', rules: INFO_REQUEST_REMINDER_RULES },
+  { field: 'actionReminderDays', rules: ACTION_REMINDER_RULES },
+];
+
+/** The master switches, with the audit code each state records. */
+const REMINDER_SWITCHES: ReadonlyArray<{
+  field:
+    | 'reviewRemindersEnabled'
+    | 'infoRequestRemindersEnabled'
+    | 'actionRemindersEnabled';
+  onAction: string;
+  offAction: string;
+}> = [
+  {
+    field: 'reviewRemindersEnabled',
+    onAction: 'orgSettings.reviewReminders.enabled',
+    offAction: 'orgSettings.reviewReminders.disabled',
+  },
+  {
+    field: 'infoRequestRemindersEnabled',
+    onAction: 'orgSettings.infoRequestReminders.enabled',
+    offAction: 'orgSettings.infoRequestReminders.disabled',
+  },
+  {
+    field: 'actionRemindersEnabled',
+    onAction: 'orgSettings.actionReminders.enabled',
+    offAction: 'orgSettings.actionReminders.disabled',
+  },
+];
 
 export const updateOrgSettings = onCall<UpdateOrgSettingsInput>(
   callableOptions,
@@ -89,10 +135,11 @@ export const updateOrgSettings = onCall<UpdateOrgSettingsInput>(
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
 
-        // 2. Validate whichever settings the caller supplied. Both fields are
+        // 2. Validate whichever settings the caller supplied. Every field is
         // optional and independent: the risk-scoring page saves ragConfig on its
-        // own, the reminders page saves reviewReminderDays on its own, so each is
-        // written only when present and the other is left untouched.
+        // own, and each section of the reminders page saves only its own ladder
+        // and switch, so a field is written only when present and the rest are
+        // left untouched.
         const input = assertObject(request.data);
         const orgSettingsPath = paths.db.orgSettings(orgId);
         const writes: Record<string, unknown> = {};
@@ -121,16 +168,32 @@ export const updateOrgSettings = onCall<UpdateOrgSettingsInput>(
           actions.push('orgSettings.ragConfig.updated');
         }
 
-        // Story 2046 AC1: an explicit null clears the reminder schedule back to
+        // Story 2046 AC1: an explicit null clears a reminder schedule back to
         // the built-in default (writing null removes the RTDB node); a supplied
-        // array is validated against the sweep's own rules and stored; an absent
-        // field leaves the stored value alone.
-        if (input.reviewReminderDays !== undefined) {
-          writes[`${orgSettingsPath}/reviewReminderDays`] =
-            input.reviewReminderDays === null
-              ? null
-              : requireReviewReminderDays(input.reviewReminderDays);
-          actions.push('orgSettings.reviewReminderDays.updated');
+        // array is validated against that sweep's own rules and stored; an
+        // absent field leaves the stored value alone. Each of the three ladders
+        // is independent, so a page section saves only its own concern.
+        for (const { field, rules } of REMINDER_SCHEDULES) {
+          const supplied = input[field];
+          if (supplied === undefined) {
+            continue;
+          }
+          writes[`${orgSettingsPath}/${field}`] =
+            supplied === null ? null : requireReminderDays(supplied, rules, field);
+          actions.push(`orgSettings.${field}.updated`);
+        }
+
+        // The master switches. Stored as plain booleans rather than cleared when
+        // true: "on" is the default, but an admin who deliberately turned a
+        // category back on should see that decision in the record rather than an
+        // absent key that merely happens to mean the same thing.
+        for (const { field, onAction, offAction } of REMINDER_SWITCHES) {
+          if (input[field] === undefined) {
+            continue;
+          }
+          const enabled = requireBoolean(input, field);
+          writes[`${orgSettingsPath}/${field}`] = enabled;
+          actions.push(enabled ? onAction : offAction);
         }
 
         // Reject an empty call rather than writing a lone audit entry for a

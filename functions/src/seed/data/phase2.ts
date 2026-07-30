@@ -300,7 +300,11 @@ export const OVERDUE_ACTION: { buildingId: string; action: Action } = {
     observation:
       'Replace the missing directional escape sign at the head of the east stair, Level 2. The route is currently unsigned at a change of direction.',
     severity: 'M',
-    responsible: 'Meridian Estates Ltd (Facilities)',
+    // Linked, like every other seeded action: an overdue action that names
+    // nobody the platform can email would demonstrate the deadline sweep
+    // skipping rather than chasing.
+    responsible: 'Helen Carter',
+    responsibleContactId: CONTACT.meridianHelen,
     dueBy: days(-5),
     lifeProtection: false,
     status: 'open',

@@ -70,6 +70,20 @@ import type {
  *  may retake it (see step 4). */
 const CLAIM_STALE_MS = 5 * 60 * 1000;
 
+/**
+ * Certificate positions a draft may ARRIVE with. `afterCover` (page 2, behind
+ * the title page) is the only position anything offers or stores; `top` and
+ * `bottom` are accepted solely because templates authored before the move still
+ * carry them, and publishing NORMALISES them away - see the write below. Left
+ * out, republishing an old template would fail validation over a field the
+ * admin cannot even see any more.
+ */
+const ACCEPTED_CERTIFICATE_POSITIONS: readonly CertificatePosition[] = [
+  ...CERTIFICATE_POSITIONS,
+  'top',
+  'bottom',
+];
+
 // ----------------------------------------------------------------------------
 // Draft validators. The generic lib/validate helpers read CALLABLE INPUT; these
 // read the DRAFT (client-authored RTDB data), so their errors carry a `where`
@@ -521,7 +535,9 @@ export const publishTemplate = onCall<PublishTemplateInput>(
           );
           if (
             typeof raw.position !== 'string' ||
-            !CERTIFICATE_POSITIONS.includes(raw.position as CertificatePosition)
+            !ACCEPTED_CERTIFICATE_POSITIONS.includes(
+              raw.position as CertificatePosition,
+            )
           ) {
             throw fail.invalidArgument(
               'The draft certificate has an unknown position.',
@@ -531,7 +547,10 @@ export const publishTemplate = onCall<PublishTemplateInput>(
           certificate = {
             url,
             name: certificateName,
-            position: raw.position as CertificatePosition,
+            // Normalised, not echoed: a legacy `top`/`bottom` draft publishes as
+            // the one supported position, so no published version carries a
+            // value the renderer only tolerates.
+            position: 'afterCover',
             // Server-stamped, like every other provenance timestamp: the client
             // does not get to date its own upload.
             uploadedAt:

@@ -1,17 +1,4 @@
-/* LocationPicker - framed map canvas with the search box floating over it. */
-
-.root {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  width: 100%;
-}
-
-.instruction {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  line-height: 1.5;
-}
+/* LocationPicker - a framed map canvas, and nothing else. */
 
 .frame {
   position: relative;
@@ -29,22 +16,15 @@
   height: 22rem;
 }
 
-.mapHidden {
-  display: none;
+/* The map takes keyboard focus to nudge the pin, so it has to show that it
+   has it - inset, because the frame clips anything drawn outside. */
+.map:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: -2px;
 }
 
-.search {
-  position: absolute;
-  top: var(--space-sm);
-  left: var(--space-sm);
-  /* Leave the map's own zoom controls, which sit top-right, uncovered. */
-  right: 3.5rem;
-  z-index: 2;
-  padding: var(--space-sm);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px var(--shadow-color);
+.mapHidden {
+  display: none;
 }
 
 .notice {

@@ -783,7 +783,7 @@ describe('SiteForm contact', () => {
   });
 });
 
-// --- BuildingForm: picker-vs-manual responsible party ------------------------------
+// --- BuildingForm: the responsible party is a contact, never a typed name ---------
 
 describe('BuildingForm responsible party', () => {
   it('sends the picked contact as a linked snapshot', async () => {
@@ -810,24 +810,21 @@ describe('BuildingForm responsible party', () => {
     });
   });
 
-  it('sends an unlinked party from manual mode', async () => {
-    const user = userEvent.setup();
+  it('offers no way to type a party who is not a contact', () => {
     renderCustomersAt('/app/customers/c1/sites/s1/buildings/b1/edit');
 
-    await user.click(
-      screen.getByRole('button', { name: 'Enter manually instead' }),
-    );
-    await user.type(
-      screen.getByLabelText('Responsible party name (optional)'),
-      'Manny Ridge',
-    );
-    await user.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    const [input] = mocks.callableCall.mock.calls[0] as unknown as [
-      { building: { responsibleParty: Record<string, unknown> } },
-    ];
-    expect(input.building.responsibleParty).toEqual({ name: 'Manny Ridge' });
-    expect('contactId' in input.building.responsibleParty).toBe(false);
+    // The party is what every automated email resolves through, so the free
+    // text escape hatch is gone - a person not in the directory is ADDED to it
+    // (the picker's own creator), never typed onto the building.
+    expect(
+      screen.queryByRole('button', { name: 'Enter manually instead' }),
+    ).toBeNull();
+    expect(
+      screen.queryByLabelText('Responsible party name (optional)'),
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Add new contact' }),
+    ).toBeInTheDocument();
   });
 });
 

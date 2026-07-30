@@ -22,7 +22,9 @@
 import {
   DUE_WINDOW_DAYS,
   type Action,
+  type ActionCustomerResponse,
   type ActionStatusChange,
+  type SafentiaDocument,
   type Severity,
 } from '../shared/types';
 
@@ -31,11 +33,16 @@ export const MANUAL_ASSESSMENT_ID = 'manual';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The fields an admin may supply on create (validated by the callable). */
+/** The fields an admin may supply on create (validated by the callable).
+ *
+ *  `responsible` is NOT a caller-supplied string: manageAction derives it from
+ *  the CustomerContact named by `responsibleContactId`, so the pair that lands
+ *  on the record always describes one real, emailable person. */
 export interface CreateActionFields {
   observation: string;
   severity: Severity;
   responsible?: string;
+  responsibleContactId?: string;
   dueBy?: number;
   lifeProtection?: boolean;
 }
@@ -62,16 +69,24 @@ export function createActionRecord(
     ...(fields.responsible !== undefined
       ? { responsible: fields.responsible }
       : {}),
+    ...(fields.responsibleContactId !== undefined
+      ? { responsibleContactId: fields.responsibleContactId }
+      : {}),
   };
 }
 
 /** The update whitelist (the contract comment on ManageActionInput). `status`,
  *  `signedOffBy` and `signedOffAt` are deliberately absent: status moves ONLY
- *  through signOff/reopen so the provenance stamp can never be forged. */
+ *  through signOff/reopen so the provenance stamp can never be forged.
+ *
+ *  `responsible` is absent too, and that is the point: re-assignment happens by
+ *  naming a CONTACT, and the callable writes the name from that contact's own
+ *  record. A free-text responsible party could never be emailed, so it is no
+ *  longer accepted from a caller at all. */
 export const UPDATABLE_ACTION_FIELDS = [
   'observation',
   'severity',
-  'responsible',
+  'responsibleContactId',
   'dueBy',
   'lifeProtection',
 ] as const;
@@ -92,13 +107,16 @@ export function startFragment(actionPath: string): Record<string, unknown> {
  * server-side by construction: the uid comes from the verified token and the
  * time from the Function's clock, never the payload. A completion note (story
  * 2044 AC2), when supplied, records HOW the action was resolved; it is only
- * written when present so an unnoted sign-off leaves the field absent.
+ * written when present so an unnoted sign-off leaves the field absent. The
+ * optional evidence document behaves the same way, and arrives here already
+ * validated against the caller's own tenant Storage prefix.
  */
 export function signOffFragment(
   actionPath: string,
   byUid: string,
   now: number,
   completionNote?: string,
+  completionEvidence?: SafentiaDocument,
 ): Record<string, unknown> {
   return {
     [`${actionPath}/status`]: 'signedOff',
@@ -107,19 +125,50 @@ export function signOffFragment(
     ...(completionNote !== undefined
       ? { [`${actionPath}/completionNote`]: completionNote }
       : {}),
+    ...(completionEvidence !== undefined
+      ? { [`${actionPath}/completionEvidence`]: completionEvidence }
+      : {}),
   };
 }
 
-/** Reopening clears the sign-off provenance AND the completion note entirely
- *  (null deletes in RTDB) - a reopened action is open again and must not carry
- *  a stale stamp or a note a later sign-off could be confused with. The note is
- *  not lost: the status-history entry that recorded the sign-off keeps it. */
+/** Reopening clears the sign-off provenance, the completion note, its evidence
+ *  AND the customer's own progress claim entirely (null deletes in RTDB) - a
+ *  reopened action is open again and must not carry a stale stamp, proof a later
+ *  sign-off could be confused with, or a customer's "this is done" against work
+ *  the organisation has just judged unfinished. Nothing is lost: the
+ *  status-history entries that recorded them all keep their copies. */
 export function reopenFragment(actionPath: string): Record<string, unknown> {
   return {
     [`${actionPath}/status`]: 'open',
     [`${actionPath}/signedOffBy`]: null,
     [`${actionPath}/signedOffAt`]: null,
     [`${actionPath}/completionNote`]: null,
+    [`${actionPath}/completionEvidence`]: null,
+    [`${actionPath}/customerResponse`]: null,
+  };
+}
+
+/**
+ * The multi-location-update fragment that records a CUSTOMER's own account of
+ * progress (respondToAction). Two deliberate limits define it:
+ *
+ *   - it writes `customerResponse` and, at most, a status of 'inProgress'. It
+ *     can never write 'signedOff', `signedOffBy` or `signedOffAt`, so a
+ *     duty-holder cannot close their own compliance record however the callable
+ *     above it is called. Verification stays with the organisation.
+ *   - the status is only moved when the action is still 'open': a customer
+ *     saying work is under way IS the same fact staff record with `start`, but
+ *     an action already in progress must not be rewritten to the same value on
+ *     every note.
+ */
+export function customerResponseFragment(
+  actionPath: string,
+  response: ActionCustomerResponse,
+  moveToInProgress: boolean,
+): Record<string, unknown> {
+  return {
+    [`${actionPath}/customerResponse`]: response,
+    ...(moveToInProgress ? { [`${actionPath}/status`]: 'inProgress' } : {}),
   };
 }
 

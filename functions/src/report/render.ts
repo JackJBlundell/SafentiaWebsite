@@ -18,6 +18,7 @@ import { computeRagMeter, type RagBand } from './ragMeter';
 import type {
   ReportAction,
   ReportModel,
+  ReportQuestionRow,
   ReportSection,
   ResolvedImage,
 } from './assemble';
@@ -30,10 +31,44 @@ import { adjustToMeetAA } from '../lib/contrast';
 // ----------------------------------------------------------------------------
 
 const PAGE_MARGIN = 50;
+/** Height of the strip kept clear at the foot of every page for the footer
+ *  furniture (the registered-company line and 'Page | N' beneath it).
+ *
+ *  The document's bottom margin is PAGE_MARGIN + FOOTER_BAND, NOT PAGE_MARGIN,
+ *  so PDFKit's own automatic page break (page.maxY()) falls on exactly the line
+ *  Layout.bottomLimit stops at. Content this class paginates and content PDFKit
+ *  paginates therefore end in the same place, and neither can run into the
+ *  furniture. The furniture itself is drawn below the margin, from the constants
+ *  here - see Layout.paintFooter. */
+const FOOTER_BAND = 30;
+/** Height of the strip kept clear at the head of every page (bar the cover) for
+ *  the running logo. It sits ABOVE the top margin, exactly as the footer sits
+ *  below the bottom one, so content never has to reason about it. */
+const HEADER_LOGO_HEIGHT = 26;
+/** Top of the running logo box. Its foot lands HEADER_LOGO_HEIGHT lower, which
+ *  is still clear of the top margin. */
+const HEADER_LOGO_TOP = 18;
+/** Width the running logo is fitted into, right-aligned to the content edge. */
+const HEADER_LOGO_WIDTH = 130;
+/** Height of the solid brand band that introduces a numbered section. */
+const SECTION_BAND_HEIGHT = 26;
+/** Text inset inside a brand band or a table cell. */
+const BAND_PAD = 7;
+/** Vertical space a subheading occupies, including its trailing gap. */
+const SUBHEADING_HEIGHT = 28;
+/** Extra space a heading reserves on top of its own height, so that a heading
+ *  and the opening lines of the block it introduces always share a page. Two
+ *  body lines plus the gap between them. */
+const ORPHAN_GUARD = 24;
 const COLOURS = {
   ink: '#1F2937', // primary text
   muted: '#6B7280', // secondary text, captions
-  hairline: '#E5E7EB', // table rules, dividers
+  hairline: '#E5E7EB', // dividers
+  /** Table cell borders. The reference document rules its tables in a dark,
+   *  clearly visible hairline rather than the near-white one used for dividers:
+   *  the grid IS the structure of Section 1 and the action plan, and it has to
+   *  survive photocopying. */
+  rule: '#4B5563',
   panel: '#F9FAFB', // light panel backgrounds
   white: '#FFFFFF',
   // RAG is a SAFETY semantic - fixed, never overridden by brand (brief 9.1).
@@ -55,12 +90,53 @@ const FONT = {
 } as const;
 
 const SIZE = {
-  title: 22,
-  sectionHeading: 15,
-  subHeading: 12,
+  title: 18,
+  sectionHeading: 11,
+  subHeading: 11,
   body: 10,
   small: 9,
   caption: 8,
+  footer: 7.5,
+} as const;
+
+/**
+ * The cover's geometry, in points on A4 (595.28 x 841.89), taken from the
+ * approved reference document rather than invented: a logo band, then a 2x2
+ * grid that is inset from the left and BLEEDS off the right page edge, a solid
+ * brand square bleeding off the left edge beside the bottom row, a deliberately
+ * empty lower third, and a full-bleed contact band above a white foot.
+ *
+ * Every number here is absolute. Nothing on the cover flows, so nothing on it
+ * can paginate (see Layout.stamp for why that matters).
+ */
+const COVER = {
+  /** Left edge of the 2x2 grid - roughly a fifth of the page in. */
+  gridLeft: 127,
+  /** Gap between the grid's two columns, and between the grid and the bleed. */
+  gutter: 6,
+  /** Width of the grid's left (image) column. */
+  leftColWidth: 191,
+  /** Top of the grid's first row. */
+  row1Top: 170,
+  /** Height of both grid rows. */
+  rowHeight: 135,
+  /** Gap between the two grid rows. */
+  rowGap: 6,
+  /** Foot of the logo band: the logo is bottom-aligned to this line. */
+  logoBaseline: 144,
+  /** Box the cover logo is fitted into (bottom-right aligned within it). */
+  logoBox: [190, 48] as [number, number],
+  /** Inset from the right page edge for the logo and the detail values. */
+  rightInset: 27,
+  /** Offset of the detail VALUE column from the detail column's left edge. */
+  valueOffset: 95,
+  /** Baseline pitch of the detail rows. */
+  detailLineHeight: 13.4,
+  /** Contact band: top edge, height, and the white foot left beneath it. */
+  bandTop: 773,
+  bandHeight: 38,
+  /** Radius of the white circle each contact icon sits in. */
+  iconRadius: 6.5,
 } as const;
 
 /** Human label + colour for each severity, so colour is never the sole carrier
@@ -116,31 +192,246 @@ function formatDate(epoch: number | undefined): string {
 // the standard its template actually follows. British English, no em dashes.
 // ----------------------------------------------------------------------------
 
+/** `text` shortened with an ellipsis until it fits `maxWidth` at the document's
+ *  CURRENT font and size. Page furniture is drawn without a wrap width (see
+ *  Layout.stamp), so this is the only thing keeping a long organisation name or
+ *  section label off its neighbour. */
+function truncateToWidth(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  maxWidth: number,
+): string {
+  if (maxWidth <= 0) {
+    return '';
+  }
+  if (doc.widthOfString(text) <= maxWidth) {
+    return text;
+  }
+  let kept = text;
+  while (kept.length > 1 && doc.widthOfString(`${kept}...`) > maxWidth) {
+    kept = kept.slice(0, -1);
+  }
+  return `${kept.trimEnd()}...`;
+}
+
+/**
+ * `text` broken into lines that each fit `maxWidth` at the document's CURRENT
+ * font and size.
+ *
+ * The cover wraps its own text rather than handing a `width` to PDFKit. That is
+ * not a preference: the cover paints at absolute positions, some of them BELOW
+ * the bottom margin (the contact band), and any PDFKit text() carrying a width
+ * down there starts a new page (see Layout.stamp). Wrapping here and stamping
+ * one line at a time keeps the cover to PDFKit's single-line path, which cannot
+ * paginate. A word longer than the line is broken by character rather than
+ * allowed to overhang.
+ */
+function wrapToWidth(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  maxWidth: number,
+): string[] {
+  if (maxWidth <= 0) {
+    return [];
+  }
+  const lines: string[] = [];
+  let line = '';
+  const push = (): void => {
+    if (line.length > 0) {
+      lines.push(line);
+      line = '';
+    }
+  };
+  for (const word of text.split(/\s+/).filter((w) => w.length > 0)) {
+    const candidate = line.length > 0 ? `${line} ${word}` : word;
+    if (doc.widthOfString(candidate) <= maxWidth) {
+      line = candidate;
+      continue;
+    }
+    push();
+    if (doc.widthOfString(word) <= maxWidth) {
+      line = word;
+      continue;
+    }
+    // A single unbreakable run (a long reference, a URL) - break it by
+    // character so it stays inside the column instead of overhanging it.
+    let chunk = '';
+    for (const char of word) {
+      if (doc.widthOfString(chunk + char) > maxWidth && chunk.length > 0) {
+        lines.push(chunk);
+        chunk = char;
+      } else {
+        chunk += char;
+      }
+    }
+    line = chunk;
+  }
+  push();
+  return lines;
+}
+
+/** A hex colour mixed towards white. `amount` is how much of the colour is
+ *  kept (1 = the colour itself, 0 = white), used to build the tonal steps the
+ *  generated cover panel is painted from when an org has no cover image. */
+function tint(hex: string, amount: number): string {
+  const value = hex.replace('#', '');
+  const full =
+    value.length === 3
+      ? value
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : value;
+  const channel = (offset: number): number => {
+    const raw = parseInt(full.slice(offset, offset + 2), 16);
+    const base = Number.isFinite(raw) ? raw : 0;
+    return Math.round(255 - (255 - base) * Math.max(0, Math.min(1, amount)));
+  };
+  return `#${[0, 2, 4]
+    .map((o) => channel(o).toString(16).padStart(2, '0'))
+    .join('')}`;
+}
+
+/**
+ * Draw one run of text at an absolute position, leaving the running cursor and
+ * the page count exactly as they were found.
+ *
+ * NEVER pass a `width` here, and NEVER drop the `lineBreak: false`. PDFKit
+ * routes any text() that ends up carrying a width through its LineWrapper, and
+ * LineWrapper starts a NEW PAGE whenever y + lineHeight passes the page's maxY
+ * - `lineBreak: false` on its own does not stop that, it only stops
+ * _initOptions defaulting `width` to the rest of the page. Page furniture and
+ * the cover's contact band sit below the bottom margin by definition, so a
+ * width-bearing call there paginates, and each spawned page paints another one
+ * that paginates again: a 10-page report rendered as 573 pages of one line each
+ * (measured 2026-07-28; the same defect was diagnosed and half-fixed on
+ * 2026-07-15). With no width PDFKit takes its single-line path, which cannot
+ * paginate.
+ */
+function stampText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+): void {
+  const cursorX = doc.x;
+  const cursorY = doc.y;
+  doc.text(text, x, y, { lineBreak: false });
+  doc.x = cursorX;
+  doc.y = cursorY;
+}
+
 // ----------------------------------------------------------------------------
 // A thin layout helper around the PDFKit document. It owns the running cursor and
 // the page chrome (header band, footer) so the section builders only describe
 // content, not pagination plumbing.
 // ----------------------------------------------------------------------------
 
+/** One numbered section in the contents: its own title plus the numbered
+ *  sub-headings emitted beneath it, listed in the same contents cell. */
+interface TocSection {
+  number: number;
+  title: string;
+  subEntries: string[];
+}
+
+/**
+ * PDFKit's reusable image handle. `doc.openImage(buffer)` embeds the bytes once
+ * and returns an object `doc.image()` accepts in place of a source; passing the
+ * Buffer itself on every page embeds a fresh copy per page instead, which on a
+ * long report multiplies the logo's bytes by the page count.
+ *
+ * Both are real pdfkit API (verified against pdfkit 0.15's images mixin, which
+ * takes the `src.width && src.height` branch) but @types/pdfkit declares
+ * neither, so they are reached through these two narrow declarations rather
+ * than by widening anything to `any`.
+ */
+interface OpenedImage {
+  readonly width: number;
+  readonly height: number;
+}
+type ImageOpeningDocument = PDFKit.PDFDocument & {
+  openImage(src: Buffer): OpenedImage;
+};
+/** An opened image, in the shape doc.image()'s declared parameter demands. */
+function asImageSource(image: OpenedImage): Buffer {
+  return image as unknown as Buffer;
+}
+
+/** The running chrome every page but the cover carries. */
+interface Chrome {
+  brand: string;
+  orgName: string;
+  /** The registered-company line printed, centred, in the footer. Composed by
+   *  the caller from the org profile; empty when the org records nothing. */
+  registeredLine: string;
+  /** The org logo, opened ONCE (see Layout.constructor) and drawn on every page
+   *  from that single embedded XObject. */
+  logo?: OpenedImage;
+}
+
 class Layout {
   readonly doc: PDFKit.PDFDocument;
   readonly contentWidth: number;
   private readonly brand: string;
-  private readonly orgName: string;
+  private readonly chrome: Chrome;
   /** Buffered index (0-based) of the reserved Table of Contents page, or -1 when
    *  no ToC page has been reserved. finalise() paints the contents here. */
   private tocPageIndex = -1;
-  /** Major sections in document order, with the page each starts on. Populated
-   *  by sectionHeading() as the report is emitted; consumed by finalise() to
-   *  fill the reserved ToC page once every start page (and the total) is known. */
-  private readonly tocEntries: Array<{ label: string; page: number }> = [];
+  /** Images opened against THIS document, memoised by the model object holding
+   *  their bytes (`null` = tried and failed). doc.openImage() embeds a fresh copy
+   *  of the bytes on every call, and an evidence image is opened to MEASURE its
+   *  cell before it is painted - twice over for the first row of a subject, which
+   *  is measured again to keep it with its heading. Without the memo a single
+   *  floor plan would be embedded three times in the file. */
+  private readonly openedImages = new WeakMap<ResolvedImage, OpenedImage | null>();
+  /** Major sections in document order. Populated by section() as the report is
+   *  emitted and by subHeading() as each one is passed; consumed by finalise()
+   *  to fill the reserved contents page. */
+  private readonly tocSections: TocSection[] = [];
 
-  constructor(doc: PDFKit.PDFDocument, brand: string, orgName: string) {
+  constructor(doc: PDFKit.PDFDocument, chrome: Chrome) {
     this.doc = doc;
-    this.brand = brand;
-    this.orgName = orgName;
+    this.brand = chrome.brand;
+    this.chrome = chrome;
     this.contentWidth =
       doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  }
+
+  /**
+   * The embedded handle for a resolved image, or undefined when there is nothing
+   * to draw (never fetched, or the bytes will not decode). Callers use the
+   * handle's intrinsic width/height to size a cell to the picture, so a plan is
+   * fitted rather than squeezed into a fixed box.
+   *
+   * A decode failure is answered here, once, rather than at paint time: a cell
+   * whose height was measured from an image that then refuses to draw would
+   * leave a hole in a bordered table.
+   */
+  openImage(image: ResolvedImage): OpenedImage | undefined {
+    if (!image.available || !image.data) {
+      return undefined;
+    }
+    const cached = this.openedImages.get(image);
+    if (cached !== undefined) {
+      return cached ?? undefined;
+    }
+    let opened: OpenedImage | null = null;
+    try {
+      const handle = (this.doc as ImageOpeningDocument).openImage(image.data);
+      if (handle && handle.width > 0 && handle.height > 0) {
+        opened = handle;
+      }
+    } catch {
+      // A corrupt or unsupported image degrades to the "unavailable" marker.
+    }
+    this.openedImages.set(image, opened);
+    return opened ?? undefined;
+  }
+
+  /** The section currently being emitted, for sub-heading numbering. */
+  private get currentSection(): TocSection | undefined {
+    return this.tocSections[this.tocSections.length - 1];
   }
 
   /** The current page's 1-based number. bufferedPageRange().count is the number
@@ -160,9 +451,12 @@ class Layout {
     this.tocPageIndex = this.doc.bufferedPageRange().count - 1;
   }
 
-  /** The current bottom limit before the footer area. */
+  /** The lowest y content may reach on this page. The document's bottom margin
+   *  already contains FOOTER_BAND, so this is also PDFKit's own page.maxY(): a
+   *  paragraph PDFKit breaks by itself stops exactly where ensureSpace would
+   *  have broken it, and neither can reach the footer furniture. */
   private get bottomLimit(): number {
-    return this.doc.page.height - this.doc.page.margins.bottom - 24;
+    return this.doc.page.height - this.doc.page.margins.bottom;
   }
 
   /** Vertical points still available on this page before the footer area. */
@@ -175,8 +469,7 @@ class Layout {
     return (
       this.doc.page.height -
       this.doc.page.margins.top -
-      this.doc.page.margins.bottom -
-      24
+      this.doc.page.margins.bottom
     );
   }
 
@@ -187,203 +480,276 @@ class Layout {
     }
   }
 
-  /** Add a page and paint its footer immediately so every page carries it. */
+  /** Add a page. addPage() parks the cursor at the top margin itself, and the
+   *  footer is NOT painted here: all page furniture is painted in one buffered
+   *  pass from finalise() - see paintFooter for why that matters. */
   newPage(): void {
-    this.suppressAutoFooter = true;
     this.doc.addPage();
-    this.suppressAutoFooter = false;
-    this.paintFooter();
-    this.doc.y = this.doc.page.margins.top;
   }
 
-  /** Guard so the pageAdded hook does not double-paint the footer on pages this
-   *  class adds itself, which paint it explicitly straight after addPage(). */
-  private suppressAutoFooter = false;
-
-  /** Catch pages PDFKit adds on its own. A text() call that overflows the bottom
-   *  margin breaks the page internally, never routing through newPage(), so such
-   *  a page would carry the 'Page N of M' stamp (applied to every buffered page
-   *  in finalise) but no org name and no hairline - a footer that looks half
-   *  drawn. Hooking pageAdded gives every page the same chrome however it began. */
-  attachAutoPageFooter(): void {
-    this.doc.on('pageAdded', () => {
-      if (this.suppressAutoFooter) return;
-      this.paintFooter();
-    });
+  /** Draw one run of page furniture at an absolute position. See stampText for
+   *  why furniture never carries a `width`. */
+  private stamp(text: string, x: number, y: number): void {
+    stampText(this.doc, text, x, y);
   }
 
-  /** Begin the document's first page chrome (footer) without adding a page. */
-  beginFirstPage(): void {
-    this.paintFooter();
-    this.doc.y = this.doc.page.margins.top;
-  }
-
-  /** Footer: hairline rule + org name (left). The page number is NOT painted
-   *  here: 'Page N of M' needs the final page count, so finalise() stamps it on
-   *  every buffered page once the document's content is complete. */
-  private paintFooter(): void {
+  /** Stamp a run centred on the page, at the current font. */
+  private stampCentred(text: string, y: number): void {
     const { doc } = this;
-    // Zero the bottom margin while painting inside the footer strip. The strip
-    // sits BELOW the margin line, and a width-constrained text() there goes
-    // through PDFKit's line wrapper, whose overflow check would otherwise
-    // auto-add a page - leaving the just-added page blank and stamping the org
-    // name on TOP of the next page's content (visually proven, 2026-07-15).
-    // Same guard finalise() uses for the page-number pass.
-    const savedBottom = doc.page.margins.bottom;
-    doc.page.margins.bottom = 0;
-    const y = doc.page.height - savedBottom + 6;
-    doc
-      .save()
-      .lineWidth(0.5)
-      .strokeColor(COLOURS.hairline)
-      .moveTo(doc.page.margins.left, y - 6)
-      .lineTo(doc.page.width - doc.page.margins.right, y - 6)
-      .stroke();
-    doc
-      .font(FONT.regular)
-      .fontSize(SIZE.caption)
-      .fillColor(COLOURS.muted)
-      .text(this.orgName, doc.page.margins.left, y, {
-        lineBreak: false,
-        width: this.contentWidth / 2,
-      });
-    doc.restore();
-    doc.page.margins.bottom = savedBottom;
+    this.stamp(text, (doc.page.width - doc.widthOfString(text)) / 2, y);
   }
 
   /**
-   * Final pass over every buffered page (bufferPages: true): stamp
-   * 'Page N of M' bottom-right, now that M is known. Call exactly once, after
-   * all content and before doc.end().
+   * The footer for one page: the registered-company line in the brand colour,
+   * centred, with 'Page | N' beneath it - the running furniture of the approved
+   * reference document.
+   *
+   * Painted only from the buffered pass in finalise(), never while content is
+   * being laid out. Painting furniture mid-flow was the original defect: PDFKit
+   * emits 'pageAdded' from INSIDE its own page break, before LineWrapper has
+   * resumed, and a footer painted from that hook moved doc.y into the footer
+   * strip. LineWrapper does not reset doc.y after continueOnNewPage(), so the
+   * interrupted paragraph carried on at the bottom of the new page, overflowed
+   * immediately, and took another page - one line per page for the rest of the
+   * paragraph.
+   *
+   * Geometry comes from the PAGE_MARGIN constant, not from doc.page.margins:
+   * PDFKit hands every page the SAME margins object (it is doc.options.margins
+   * by reference, verified against pdfkit 0.15), so reading it here is fragile
+   * and mutating it - as this code used to, to dodge the pagination above - is a
+   * document-wide side effect that any re-entrant call then reads back as zero.
    */
-  finalise(): void {
+  private paintFooter(pageNumber: number): void {
     const { doc } = this;
-    // Fill the reserved contents page first, now that every section start page
-    // is recorded. This uses switchToPage exactly as the page-number pass does.
-    this.paintToc();
-    const range = doc.bufferedPageRange();
-    const total = range.start + range.count;
-    for (let i = range.start; i < total; i += 1) {
-      doc.switchToPage(i);
-      // Zero the bottom margin while writing in the footer strip: text placed
-      // below the margin line would otherwise trigger PDFKit's automatic page
-      // break and spawn a phantom page at the end of the document.
-      const savedBottom = doc.page.margins.bottom;
-      doc.page.margins.bottom = 0;
-      const y = doc.page.height - savedBottom + 6;
-      doc
-        .font(FONT.regular)
-        .fontSize(SIZE.caption)
-        .fillColor(COLOURS.muted)
-        .text(
-          `Page ${i + 1} of ${total}`,
-          doc.page.margins.left + this.contentWidth / 2,
-          y,
-          { width: this.contentWidth / 2, align: 'right', lineBreak: false },
-        );
-      doc.page.margins.bottom = savedBottom;
+    const registeredY = doc.page.height - 55;
+
+    if (this.chrome.registeredLine) {
+      doc.font(FONT.regular).fontSize(SIZE.footer).fillColor(this.brand);
+      // Nothing wraps furniture text (see stampText), so the line is trimmed to
+      // the page rather than being allowed to run off it.
+      this.stampCentred(
+        truncateToWidth(
+          doc,
+          this.chrome.registeredLine,
+          doc.page.width - PAGE_MARGIN * 2,
+        ),
+        registeredY,
+      );
+    }
+    doc.font(FONT.regular).fontSize(SIZE.caption).fillColor(COLOURS.ink);
+    this.stampCentred(`Page | ${pageNumber}`, registeredY + 10);
+  }
+
+  /** The running logo, top-right, on every page but the cover. Drawn from the
+   *  ONE opened image the constructor embedded, so a twenty-page report carries
+   *  a single copy of the bytes rather than twenty. */
+  private paintHeaderLogo(): void {
+    const { doc } = this;
+    if (!this.chrome.logo) {
+      return;
+    }
+    try {
+      doc.image(
+        asImageSource(this.chrome.logo),
+        doc.page.width - PAGE_MARGIN - HEADER_LOGO_WIDTH,
+        HEADER_LOGO_TOP,
+        {
+          fit: [HEADER_LOGO_WIDTH, HEADER_LOGO_HEIGHT],
+          align: 'right',
+          valign: 'bottom',
+        },
+      );
+    } catch {
+      // A logo that will not draw costs the mark, never the document.
     }
   }
 
   /**
-   * Paint the Table of Contents onto the page reserved by reserveTocPage(). Runs
-   * in the buffered pass (from finalise), so the page numbers listed are final.
-   * Every position is absolute and every text() draws with lineBreak: false, so
-   * this pass can never trip PDFKit's line wrapper into spawning an extra page.
-   * The entry list is short and fixed (the major sections + sign-off), so it
-   * always fits comfortably on the single reserved page.
+   * Final pass over every buffered page (bufferPages: true): fill the reserved
+   * contents page, then paint every page's furniture. Call exactly once, after
+   * all content and before doc.end().
+   *
+   * The cover (page 1) is skipped: it carries its own chrome - its own logo
+   * band and its own full-bleed contact band - and, like the reference
+   * document, no page number.
+   */
+  finalise(): void {
+    const { doc } = this;
+    // Fill the reserved contents page first. This uses switchToPage exactly as
+    // the furniture pass does.
+    this.paintToc();
+    const range = doc.bufferedPageRange();
+    const total = range.start + range.count;
+    for (let i = range.start; i < total; i += 1) {
+      if (i === range.start) {
+        continue;
+      }
+      doc.switchToPage(i);
+      this.paintHeaderLogo();
+      this.paintFooter(i + 1 + this.pageNumberOffset);
+    }
+  }
+
+  /** Pages spliced in ahead of the report body after rendering (the template's
+   *  certificate), which the printed page numbers have to account for. */
+  private pageNumberOffset = 0;
+
+  /** Tell the footer how many pages will be inserted after the cover once the
+   *  document is merged, so 'Page | N' still matches the finished PDF. */
+  setPageNumberOffset(pages: number): void {
+    this.pageNumberOffset = Math.max(0, Math.floor(pages));
+  }
+
+  /**
+   * Paint the contents onto the page reserved by reserveTocPage(): a bordered
+   * table under a solid brand header row, the section number in a narrow left
+   * cell and the section title, bold, beside it with its numbered sub-headings
+   * listed beneath in the same cell - the reference document's contents page.
+   *
+   * It lists no page numbers, exactly as the reference does not. That is what
+   * lets the template's certificate be spliced in afterwards without the
+   * contents becoming a lie about a document it was written before.
+   *
+   * Runs in the buffered pass (from finalise). Every position is absolute and
+   * every run goes through stamp(), so this pass cannot trip PDFKit's line
+   * wrapper into spawning an extra page - which here would be appended at the
+   * END of the document, far from the page being written.
    */
   private paintToc(): void {
-    if (this.tocPageIndex < 0 || this.tocEntries.length === 0) {
+    if (this.tocPageIndex < 0 || this.tocSections.length === 0) {
       return;
     }
     const { doc } = this;
     doc.switchToPage(this.tocPageIndex);
     const left = doc.page.margins.left;
+    const numberWidth = 100;
+    const titleX = left + numberWidth;
+    const titleWidth = this.contentWidth - numberWidth;
+    const top = doc.page.margins.top;
+    const available = this.bottomLimit - top - SECTION_BAND_HEIGHT;
 
-    // Heading with the brand accent rule beneath it, exactly as sectionHeading.
-    // lineBreak: false keeps this buffered pass from ever spawning a page, but it
-    // also means doc.y is NOT advanced past the text, so the rule is placed below
-    // the measured heading height (heading y + text height + the same 4pt gap
-    // sectionHeading uses) rather than at doc.y, which would strike through it.
-    let y = doc.page.margins.top;
-    doc
-      .font(FONT.bold)
-      .fontSize(SIZE.sectionHeading)
-      .fillColor(COLOURS.ink)
-      .text('Contents', left, y, { lineBreak: false });
-    const headingHeight = doc.heightOfString('Contents', {
-      width: this.contentWidth,
-    });
-    const ruleY = y + headingHeight + 4;
-    doc
-      .save()
-      .lineWidth(2)
-      .strokeColor(this.brand)
-      .moveTo(left, ruleY)
-      .lineTo(left + 90, ruleY)
-      .stroke()
-      .restore();
+    // Measure first. A template with many subjects can list more sub-entries
+    // than one reserved page holds, and the contents page is deliberately ONE
+    // page: rather than clip arbitrarily, drop the sub-entries (the sections
+    // alone always fit) so the page still reads as a finished table.
+    const rowHeight = (section: TocSection, withSubs: boolean): number =>
+      SIZE.body +
+      10 +
+      (withSubs ? section.subEntries.length * (SIZE.small + 5) : 0) +
+      (withSubs && section.subEntries.length > 0 ? 6 : 0);
+    const total = (withSubs: boolean): number =>
+      this.tocSections.reduce((sum, s) => sum + rowHeight(s, withSubs), 0);
+    const withSubs = total(true) <= available;
 
-    // One right-aligned page number per section, in the report's reading colour.
-    const numberWidth = 48;
-    const labelWidth = this.contentWidth - numberWidth - 10;
-    y = ruleY + 22;
-    for (const entry of this.tocEntries) {
+    // Brand header row.
+    let y = top;
+    doc.save().rect(left, y, this.contentWidth, SECTION_BAND_HEIGHT).fill(this.brand).restore();
+    doc.font(FONT.bold).fontSize(SIZE.sectionHeading).fillColor(COLOURS.white);
+    this.stamp(
+      'Contents',
+      left + BAND_PAD,
+      y + (SECTION_BAND_HEIGHT - SIZE.sectionHeading) / 2 - 1,
+    );
+    y += SECTION_BAND_HEIGHT;
+
+    for (const section of this.tocSections) {
+      const height = rowHeight(section, withSubs);
+      if (y + height > this.bottomLimit) {
+        break;
+      }
       doc
-        .font(FONT.regular)
-        .fontSize(SIZE.body)
-        .fillColor(COLOURS.ink)
-        .text(entry.label, left, y, { width: labelWidth, lineBreak: false });
-      doc
-        .font(FONT.regular)
-        .fontSize(SIZE.body)
-        .fillColor(COLOURS.muted)
-        .text(String(entry.page), left + this.contentWidth - numberWidth, y, {
-          width: numberWidth,
-          align: 'right',
-          lineBreak: false,
-        });
-      y += SIZE.body + 12;
+        .save()
+        .lineWidth(0.75)
+        .strokeColor(COLOURS.rule)
+        .rect(left, y, numberWidth, height)
+        .stroke()
+        .rect(titleX, y, titleWidth, height)
+        .stroke()
+        .restore();
+
+      doc.font(FONT.bold).fontSize(SIZE.body).fillColor(COLOURS.ink);
+      this.stamp(
+        truncateToWidth(doc, `Section ${section.number}`, numberWidth - BAND_PAD * 2),
+        left + BAND_PAD,
+        y + 5,
+      );
+      this.stamp(
+        truncateToWidth(doc, section.title, titleWidth - BAND_PAD * 2),
+        titleX + BAND_PAD,
+        y + 5,
+      );
+
+      if (withSubs) {
+        let subY = y + SIZE.body + 12;
+        doc.font(FONT.regular).fontSize(SIZE.small).fillColor(COLOURS.ink);
+        for (const sub of section.subEntries) {
+          this.stamp(
+            truncateToWidth(doc, sub, titleWidth - BAND_PAD * 2),
+            titleX + BAND_PAD,
+            subY,
+          );
+          subY += SIZE.small + 5;
+        }
+      }
+      y += height;
     }
   }
 
-  /** A major section heading with a brand accent rule beneath it. When a
-   *  `tocLabel` is given, the section is recorded for the Table of Contents at
-   *  the page it actually lands on (captured AFTER ensureSpace, so a heading
-   *  pushed to a fresh page is listed on that fresh page, never the old one). */
-  sectionHeading(label: string, tocLabel?: string): void {
-    this.ensureSpace(48);
-    if (tocLabel) {
-      this.tocEntries.push({ label: tocLabel, page: this.currentPageNumber() });
-    }
+  /**
+   * Open a numbered section: a full-width solid brand band carrying the section
+   * title in white, as every section page of the reference document does. The
+   * section is numbered automatically in document order and recorded for the
+   * contents page, and its number then prefixes every sub-heading beneath it.
+   */
+  section(title: string): void {
+    this.ensureSpace(SECTION_BAND_HEIGHT + 14 + ORPHAN_GUARD);
+    const number = this.tocSections.length + 1;
+    this.tocSections.push({ number, title, subEntries: [] });
+
     const { doc } = this;
-    doc
-      .font(FONT.bold)
-      .fontSize(SIZE.sectionHeading)
-      .fillColor(COLOURS.ink)
-      .text(label, doc.page.margins.left, doc.y);
-    const ruleY = doc.y + 4;
+    const left = doc.page.margins.left;
+    const y = doc.y;
     doc
       .save()
-      .lineWidth(2)
-      .strokeColor(this.brand)
-      .moveTo(doc.page.margins.left, ruleY)
-      .lineTo(doc.page.margins.left + 90, ruleY)
-      .stroke()
+      .rect(left, y, this.contentWidth, SECTION_BAND_HEIGHT)
+      .fill(this.brand)
       .restore();
-    doc.moveDown(0.8);
+    // The band's label is a single line by construction, so it is stamped
+    // rather than flowed: a section title long enough to wrap would otherwise
+    // push text out of the band it is painted on.
+    doc.font(FONT.bold).fontSize(SIZE.sectionHeading).fillColor(COLOURS.white);
+    this.stamp(
+      truncateToWidth(
+        doc,
+        `Section ${number} - ${title}`,
+        this.contentWidth - BAND_PAD * 2,
+      ),
+      left + BAND_PAD,
+      y + (SECTION_BAND_HEIGHT - SIZE.sectionHeading) / 2 - 1,
+    );
+    doc.y = y + SECTION_BAND_HEIGHT + 14;
   }
 
-  /** A minor heading within a section. */
-  subHeading(label: string): void {
-    this.ensureSpace(28);
+  /** A minor heading within a section, numbered `N.M` in the section's sequence
+   *  and listed under that section on the contents page. Reserves room for the
+   *  first couple of lines of whatever follows as well as the heading itself, so
+   *  a heading is never left stranded at the foot of a page above its own
+   *  content. Callers whose block is bigger than that (a subject table) reserve
+   *  their own. */
+  subHeading(label: string): string {
+    this.ensureSpace(SUBHEADING_HEIGHT + ORPHAN_GUARD);
+    const section = this.currentSection;
+    const numbered = section
+      ? `${section.number}.${section.subEntries.length + 1} ${label}`
+      : label;
+    section?.subEntries.push(numbered);
     this.doc
       .font(FONT.bold)
       .fontSize(SIZE.subHeading)
       .fillColor(COLOURS.ink)
-      .text(label, this.doc.page.margins.left, this.doc.y);
-    this.doc.moveDown(0.4);
+      .text(numbered, this.doc.page.margins.left, this.doc.y);
+    this.doc.moveDown(0.5);
+    return numbered;
   }
 
   /** A justified body paragraph in the muted-ink reading colour. */
@@ -403,111 +769,489 @@ class Layout {
 }
 
 // ----------------------------------------------------------------------------
-// Header / cover block (brand + title + provenance) - story 1075.
+// The cover (story 1075), rebuilt to the approved reference document.
+//
+// The whole page is painted at ABSOLUTE positions and nothing on it flows: no
+// call here may leave the running cursor somewhere the rest of the document
+// would inherit, and every run below the bottom margin (the contact band) goes
+// through stampText. See Layout.stamp for what a width-bearing text() costs
+// down there.
+//
+// Every asset on the cover is optional. A missing logo becomes the org name set
+// as a wordmark; a missing cover image becomes a panel painted from the brand
+// colours (deliberately NOT a stock photograph - see OrgProfile.coverImageUrl);
+// a missing building photograph becomes a second solid brand block, which reads
+// as part of the composition rather than as a hole in it.
 // ----------------------------------------------------------------------------
 
-function renderHeader(
+/** Draw an image so it FILLS `w` x `h`, cropped and centred, never letterboxed.
+ *  Returns false when the image could not be drawn, so the caller can paint its
+ *  fallback instead of leaving a gap. */
+function paintCoverImage(
+  doc: PDFKit.PDFDocument,
+  data: Buffer,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): boolean {
+  try {
+    doc.save().rect(x, y, w, h).clip();
+    doc.image(data, x, y, {
+      cover: [w, h],
+      align: 'center',
+      valign: 'center',
+    });
+    doc.restore();
+    return true;
+  } catch {
+    doc.restore();
+    return false;
+  }
+}
+
+/**
+ * The generated stand-in for an absent cover image: concentric quarter-discs
+ * rippling out of the panel's bottom-left corner, in steps of the org's own
+ * brand colour from a pale wash to the full accent. It is composed from the
+ * brand alone, so it belongs to whichever organisation is printing.
+ */
+function paintBrandPanel(
+  doc: PDFKit.PDFDocument,
+  brand: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  doc.save().rect(x, y, w, h).clip();
+  doc.rect(x, y, w, h).fill(tint(brand, 0.07));
+  const cx = x;
+  const cy = y + h;
+  const steps: Array<[number, number]> = [
+    [1.15, 0.16],
+    [0.9, 0.28],
+    [0.65, 0.45],
+    [0.4, 0.72],
+    [0.17, 1],
+  ];
+  for (const [radius, strength] of steps) {
+    doc.circle(cx, cy, w * radius).fill(tint(brand, strength));
+  }
+  doc.restore();
+}
+
+/** One contact item in the cover's bottom band: an icon in a white disc and the
+ *  value beside it. The icon is a ZapfDingbats glyph where one exists (a
+ *  telephone, an envelope) and a tiny "www" wordmark for the website, exactly as
+ *  the reference document does it. */
+interface ContactItem {
+  text: string;
+  /** A ZapfDingbats character, or undefined for the "www" wordmark. */
+  dingbat?: string;
+  /** Optical correction, in points, for a glyph that does not sit centred in
+   *  its own em box - ZapfDingbats' telephone rides noticeably high. */
+  nudge?: number;
+}
+
+function coverContactItems(model: ReportModel): ContactItem[] {
+  const contact = model.orgProfile.contact;
+  const items: ContactItem[] = [];
+  const add = (value: string | undefined, dingbat?: string, nudge = 0): void => {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    if (trimmed.length > 0) {
+      items.push(dingbat ? { text: trimmed, dingbat, nudge } : { text: trimmed });
+    }
+  };
+  // ZapfDingbats a5 (0x25) is the telephone, a9 (0x29) the envelope.
+  add(contact?.phone, '%', 1.5);
+  add(contact?.email, ')');
+  add(contact?.website);
+  return items;
+}
+
+/** The cover's full-bleed contact band. Whatever the org actually records is
+ *  spread evenly across the band; a missing phone, email or website costs its
+ *  item, never a gap where one used to be. */
+function paintContactBand(
+  doc: PDFKit.PDFDocument,
+  brand: string,
+  items: ContactItem[],
+): void {
+  const bandY = COVER.bandTop;
+  doc
+    .save()
+    .rect(0, bandY, doc.page.width, COVER.bandHeight)
+    .fill(brand)
+    .restore();
+  if (items.length === 0) {
+    return;
+  }
+
+  const iconGap = 6;
+  const iconWidth = COVER.iconRadius * 2;
+  // Measure at the font each run is painted in, then centre the whole group
+  // with equal gaps between items.
+  doc.font(FONT.regular).fontSize(SIZE.small);
+  const widths = items.map(
+    (item) => iconWidth + iconGap + doc.widthOfString(item.text),
+  );
+  const totalItems = widths.reduce((sum, w) => sum + w, 0);
+  const gaps = items.length > 1 ? items.length - 1 : 0;
+  const spare = doc.page.width - PAGE_MARGIN * 2 - totalItems;
+  const gap = gaps > 0 ? Math.max(24, spare / gaps) : 0;
+  let x = Math.max(
+    PAGE_MARGIN / 2,
+    (doc.page.width - (totalItems + gap * gaps)) / 2,
+  );
+
+  const centreY = bandY + COVER.bandHeight / 2;
+  items.forEach((item, index) => {
+    doc
+      .save()
+      .circle(x + COVER.iconRadius, centreY, COVER.iconRadius)
+      .fill(COLOURS.white)
+      .restore();
+    // Optically centred in the disc: text() places the TOP of the line box, so
+    // every run here is offset by half its own line height rather than by a
+    // guessed number of points.
+    if (item.dingbat) {
+      doc.font('ZapfDingbats').fontSize(8).fillColor(brand);
+    } else {
+      doc.font(FONT.bold).fontSize(4.5).fillColor(brand);
+    }
+    const glyph = item.dingbat ?? 'www';
+    stampText(
+      doc,
+      glyph,
+      x + COVER.iconRadius - doc.widthOfString(glyph) / 2,
+      centreY - doc.currentLineHeight() / 2 + (item.nudge ?? 0),
+    );
+    doc.font(FONT.regular).fontSize(SIZE.small).fillColor(COLOURS.white);
+    stampText(
+      doc,
+      item.text,
+      x + iconWidth + iconGap,
+      centreY - doc.currentLineHeight() / 2,
+    );
+    x += widths[index] + gap;
+  });
+}
+
+function renderCover(
   layout: Layout,
   model: ReportModel,
   brand: string,
   profile: ReportProfile,
 ): void {
   const { doc } = layout;
-  const left = doc.page.margins.left;
-  const top = doc.y;
+  const pageWidth = doc.page.width;
+  const gridLeft = COVER.gridLeft;
+  const leftColWidth = COVER.leftColWidth;
+  const rightX = gridLeft + leftColWidth + COVER.gutter;
+  const rightWidth = pageWidth - rightX;
+  const row1 = COVER.row1Top;
+  const row2 = row1 + COVER.rowHeight + COVER.rowGap;
 
-  // Org logo top-right where available; degrade silently if not fetchable so the
-  // header never shows a broken-image gap.
+  // --- The logo band, above the grid ---------------------------------------
+  const logoRight = pageWidth - COVER.rightInset;
+  const [logoBoxW, logoBoxH] = COVER.logoBox;
+  let logoDrawn = false;
   if (model.logo?.available && model.logo.data) {
     try {
-      doc.image(model.logo.data, doc.page.width - doc.page.margins.right - 120, top, {
-        fit: [120, 60],
+      doc.image(model.logo.data, logoRight - logoBoxW, COVER.logoBaseline - logoBoxH, {
+        fit: [logoBoxW, logoBoxH],
         align: 'right',
+        valign: 'bottom',
       });
+      logoDrawn = true;
     } catch {
-      // A corrupt logo image must not stop the report; we simply omit it.
+      // A corrupt logo costs the mark, not the cover.
+    }
+  }
+  if (!logoDrawn) {
+    // No mark: set the organisation's name as a wordmark in its place, so the
+    // band still reads as branding rather than as a blank strip.
+    doc.font(FONT.bold).fontSize(16).fillColor(brand);
+    const name = truncateToWidth(doc, model.orgProfile.name, logoBoxW + 90);
+    stampText(doc, name, logoRight - doc.widthOfString(name), COVER.logoBaseline - 18);
+  }
+
+  // --- Row 1: the decorative panel and the title panel ----------------------
+  const coverPainted =
+    model.coverImage?.available && model.coverImage.data
+      ? paintCoverImage(
+          doc,
+          model.coverImage.data,
+          gridLeft,
+          row1,
+          leftColWidth,
+          COVER.rowHeight,
+        )
+      : false;
+  if (!coverPainted) {
+    paintBrandPanel(doc, brand, gridLeft, row1, leftColWidth, COVER.rowHeight);
+  }
+
+  doc
+    .save()
+    .rect(rightX, row1, rightWidth, COVER.rowHeight)
+    .fill(brand)
+    .restore();
+  doc.font(FONT.bold).fontSize(SIZE.title).fillColor(COLOURS.white);
+  // The title sits at the TOP-LEFT of a panel far taller than it, as in the
+  // reference. It is wrapped here rather than by PDFKit so an unusually long
+  // standard title cannot spill out of the panel.
+  let titleY = row1 + 10;
+  for (const line of wrapToWidth(
+    doc,
+    profile.documentTitle,
+    rightWidth - BAND_PAD - COVER.rightInset,
+  )) {
+    if (titleY + SIZE.title > row1 + COVER.rowHeight) {
+      break;
+    }
+    stampText(doc, line, rightX + BAND_PAD, titleY);
+    titleY += SIZE.title + 4;
+  }
+
+  // --- Row 2: the brand square bleeding off the left edge, the building
+  // photograph, and the site details on white -------------------------------
+  doc
+    .save()
+    .rect(0, row2, gridLeft - COVER.gutter, COVER.rowHeight)
+    .fill(brand)
+    .restore();
+
+  const photoPainted =
+    model.buildingPhoto?.available && model.buildingPhoto.data
+      ? paintCoverImage(
+          doc,
+          model.buildingPhoto.data,
+          gridLeft,
+          row2,
+          leftColWidth,
+          COVER.rowHeight,
+        )
+      : false;
+  if (!photoPainted) {
+    // A second solid block in the brand's secondary tone: the composition still
+    // reads as three deliberate blocks rather than as a missing photograph.
+    const secondary = adjustToMeetAA(
+      safeColour(model.orgProfile.brand?.secondary, brand),
+      PAPER,
+    );
+    doc
+      .save()
+      .rect(gridLeft, row2, leftColWidth, COVER.rowHeight)
+      .fill(secondary)
+      .restore();
+  }
+
+  const labelX = rightX + BAND_PAD;
+  const valueX = rightX + COVER.valueOffset;
+  const valueWidth = pageWidth - COVER.rightInset - valueX;
+  const details: Array<[string, string]> = [
+    ['Site:', model.overview.siteName],
+    ['Address:', model.overview.address],
+    ['Client:', model.overview.clientName],
+    ['Visit Date:', formatDate(model.overview.dateCarriedOut)],
+    ['Author:', model.signOff.conductedBy],
+    ['Review Date:', formatDate(model.signOff.reviewByDate)],
+  ];
+  // The block must never reach the contact band, however long an address is.
+  const detailLimit = COVER.bandTop - 30;
+  let detailY = row2 + 3;
+  for (const [label, value] of details) {
+    doc.font(FONT.regular).fontSize(SIZE.small);
+    const lines = wrapToWidth(doc, value, valueWidth);
+    if (detailY + COVER.detailLineHeight > detailLimit) {
+      break;
+    }
+    doc.fillColor(brand);
+    stampText(doc, truncateToWidth(doc, label, COVER.valueOffset - BAND_PAD), labelX, detailY);
+    doc.fillColor(COLOURS.ink);
+    for (const line of lines.length > 0 ? lines : ['']) {
+      if (detailY + COVER.detailLineHeight > detailLimit) {
+        break;
+      }
+      stampText(doc, line, valueX, detailY);
+      detailY += COVER.detailLineHeight;
     }
   }
 
-  // This block is the whole of page 1: the contents page is reserved immediately
-  // after it, so nothing else can flow in beneath. Drop it to the upper third
-  // rather than leaving it pinned under the top margin above a page of white,
-  // which reads as a rendering fault rather than a title page.
-  doc.y = Math.max(top, doc.page.height * 0.3);
+  // --- The full-bleed contact band above the white foot --------------------
+  paintContactBand(doc, brand, coverContactItems(model));
 
-  doc
-    .font(FONT.bold)
-    .fontSize(SIZE.title)
-    .fillColor(COLOURS.ink)
-    .text(profile.documentTitle, left, doc.y, { width: layout.contentWidth - 130 });
-  doc
-    .font(FONT.regular)
-    .fontSize(SIZE.subHeading)
-    .fillColor(brand)
-    .text(model.orgProfile.name, left, doc.y + 2);
-
-  doc.moveDown(0.5);
-  doc
-    .font(FONT.regular)
-    .fontSize(SIZE.small)
-    .fillColor(COLOURS.muted)
-    .text(
-      `Report generated on ${formatDate(model.generatedAt)}`,
-      left,
-      doc.y,
-    );
-
-  // Brand divider under the cover block.
-  const ruleY = doc.y + 8;
-  doc
-    .save()
-    .lineWidth(1.5)
-    .strokeColor(brand)
-    .moveTo(left, ruleY)
-    .lineTo(doc.page.width - doc.page.margins.right, ruleY)
-    .stroke()
-    .restore();
-  doc.y = ruleY + 14;
+  // The lower third is deliberately empty. Nothing else is emitted on this page:
+  // the caller reserves the contents page immediately afterwards.
 }
 
 // ----------------------------------------------------------------------------
 // Section 1 - Overview (story 1071).
 // ----------------------------------------------------------------------------
 
-/** A two-column key/value grid for the overview facts. */
+/** Padding inside a key/value table cell. */
+const CELL_PAD = 5;
+/** Share of the content width taken by the label column of a key/value table,
+ *  matching the reference document's roughly-a-third label column. */
+const LABEL_COLUMN_SHARE = 0.33;
+
+/**
+ * The two-column bordered table the reference document uses everywhere a fact
+ * is stated: a label column of about a third, hairline rules, and rows exactly
+ * as tall as their content needs, with a multi-paragraph value living inside one
+ * cell. The label is centred against its value; the value reads from the top.
+ *
+ * A row too tall for a whole page is NOT boxed. Nothing here can split a border
+ * across a page break, so a value that long (an action's observation can be)
+ * degrades to an unruled label-above-paragraph block, which PDFKit paginates
+ * correctly, rather than to a box drawn in the wrong place.
+ */
+/** The height of one key/value row. Stated once so the grid's painter and its
+ *  measurer (which decides whether a whole action card fits) cannot disagree. */
+function keyValueRowHeight(
+  doc: PDFKit.PDFDocument,
+  label: string,
+  value: string,
+  labelInner: number,
+  valueInner: number,
+): number {
+  // The taller of the two columns, so a row never overlaps the next.
+  const valueHeight = doc
+    .font(FONT.regular)
+    .fontSize(SIZE.body)
+    .heightOfString(value, { width: valueInner });
+  const labelHeight = doc
+    .font(FONT.bold)
+    .fontSize(SIZE.body)
+    .heightOfString(label, { width: labelInner });
+  return Math.max(valueHeight, labelHeight, SIZE.body + 4) + CELL_PAD * 2;
+}
+
+/** The key/value grid's columns and ruling, for an evidence row joining it. */
+function keyValueEvidenceStyle(layout: Layout): EvidenceRowStyle {
+  const labelWidth = Math.round(layout.contentWidth * LABEL_COLUMN_SHARE);
+  return {
+    left: layout.doc.page.margins.left,
+    labelWidth,
+    valueWidth: layout.contentWidth - labelWidth,
+    labelFont: FONT.bold,
+    labelSize: SIZE.body,
+    lineWidth: 0.75,
+    strokeColour: COLOURS.rule,
+  };
+}
+
+/** The total height renderKeyValueGrid will lay down for the same arguments,
+ *  excluding its trailing gap. Used to keep an action card and its located
+ *  evidence on one page. */
+function measureKeyValueGrid(
+  layout: Layout,
+  rows: Array<[string, string]>,
+  evidence: ResolvedImage[] = [],
+): number {
+  const { doc } = layout;
+  const labelWidth = Math.round(layout.contentWidth * LABEL_COLUMN_SHARE);
+  const valueWidth = layout.contentWidth - labelWidth;
+  let total = 0;
+  for (const [label, value] of rows) {
+    if (value.trim().length === 0) {
+      continue;
+    }
+    total += keyValueRowHeight(
+      doc,
+      label,
+      value,
+      labelWidth - CELL_PAD * 2,
+      valueWidth - CELL_PAD * 2,
+    );
+  }
+  for (const image of evidence) {
+    total += measureEvidenceRow(layout, image, keyValueEvidenceStyle(layout)).rowHeight;
+  }
+  return total;
+}
+
 function renderKeyValueGrid(
   layout: Layout,
   rows: Array<[string, string]>,
+  /** Pictures appended as further rows of THIS grid (the action plan's flagged
+   *  locations), each in a labelled cell pair matching the rows above. They are
+   *  part of the grid rather than a block beneath it so the ruling runs
+   *  unbroken from the first label to the last plan. */
+  evidence: ResolvedImage[] = [],
 ): void {
   const { doc } = layout;
-  const labelWidth = 150;
   const left = doc.page.margins.left;
-  const valueX = left + labelWidth + 10;
-  const valueWidth = layout.contentWidth - labelWidth - 10;
+  const labelWidth = Math.round(layout.contentWidth * LABEL_COLUMN_SHARE);
+  const valueX = left + labelWidth;
+  const valueWidth = layout.contentWidth - labelWidth;
+  const labelInner = labelWidth - CELL_PAD * 2;
+  const valueInner = valueWidth - CELL_PAD * 2;
 
   for (const [label, value] of rows) {
-    // Measure the taller of the two columns so the row never overlaps the next.
-    const valueHeight = doc
-      .font(FONT.regular)
+    // A row with nothing in it is not a row. An empty value cell reads as a
+    // rendering fault to whoever receives the document, and a column of them
+    // makes a report look unfinished. Note this drops only genuinely BLANK
+    // values: a field the assessor considered and could not answer carries the
+    // standardised "Not recorded", which is information and stays.
+    if (value.trim().length === 0) {
+      continue;
+    }
+    const labelHeight = doc
+      .font(FONT.bold)
       .fontSize(SIZE.body)
-      .heightOfString(value, { width: valueWidth });
-    const rowHeight = Math.max(valueHeight, SIZE.body + 4) + 6;
-    layout.ensureSpace(rowHeight);
+      .heightOfString(label, { width: labelInner });
+    const rowHeight = keyValueRowHeight(doc, label, value, labelInner, valueInner);
 
+    if (rowHeight > layout.fullPageContentHeight) {
+      layout.ensureSpace(SIZE.body * 3);
+      doc
+        .font(FONT.bold)
+        .fontSize(SIZE.body)
+        .fillColor(COLOURS.ink)
+        .text(label, left, doc.y, { width: layout.contentWidth });
+      layout.paragraph(value);
+      continue;
+    }
+
+    layout.ensureSpace(rowHeight);
     const y = doc.y;
+    doc
+      .save()
+      .lineWidth(0.75)
+      .strokeColor(COLOURS.rule)
+      .rect(left, y, labelWidth, rowHeight)
+      .stroke()
+      .rect(valueX, y, valueWidth, rowHeight)
+      .stroke()
+      .restore();
     doc
       .font(FONT.bold)
       .fontSize(SIZE.body)
-      .fillColor(COLOURS.muted)
-      .text(label, left, y, { width: labelWidth });
+      .fillColor(COLOURS.ink)
+      .text(label, left + CELL_PAD, y + (rowHeight - labelHeight) / 2, {
+        width: labelInner,
+      });
     doc
       .font(FONT.regular)
       .fontSize(SIZE.body)
       .fillColor(COLOURS.ink)
-      .text(value, valueX, y, { width: valueWidth });
+      .text(value, valueX + CELL_PAD, y + CELL_PAD, { width: valueInner });
     doc.y = y + rowHeight;
   }
-  doc.moveDown(0.3);
+
+  const style = keyValueEvidenceStyle(layout);
+  for (const image of evidence) {
+    // Reserved whole: an image row cannot be split, and the cap on the drawn
+    // height guarantees one always fits a fresh page.
+    const metrics = measureEvidenceRow(layout, image, style);
+    layout.ensureSpace(metrics.rowHeight);
+    paintEvidenceRow(layout, style, metrics);
+  }
+
+  doc.moveDown(0.6);
 }
 
 function renderOverview(
@@ -516,8 +1260,7 @@ function renderOverview(
   brand: string,
   profile: ReportProfile,
 ): void {
-  const { doc } = layout;
-  layout.sectionHeading('Section 1 - Overview', 'Section 1: Overview');
+  layout.section('Executive Summary');
 
   const o = model.overview;
   const article53 =
@@ -546,25 +1289,12 @@ function renderOverview(
   ];
   renderKeyValueGrid(layout, overviewRows);
 
-  // Building photo, if available, at a legible but contained size.
-  if (model.buildingPhoto?.available && model.buildingPhoto.data) {
-    layout.ensureSpace(170);
-    try {
-      doc.image(model.buildingPhoto.data, doc.page.margins.left, doc.y, {
-        fit: [220, 150],
-      });
-      doc.y += 156;
-      doc
-        .font(FONT.oblique)
-        .fontSize(SIZE.caption)
-        .fillColor(COLOURS.muted)
-        .text('General view of the premises', doc.page.margins.left, doc.y);
-      doc.moveDown(0.6);
-    } catch {
-      // Omit a corrupt photo rather than fail the document.
-    }
-  }
-
+  // The building photograph is NOT repeated here. It is a cover element (the
+  // bottom-left cell of the cover grid), which is where the reference documents
+  // this report follows put it and where a reader looks for it. Printing it
+  // again a page later cost a block of vertical space, and the fixed 156pt
+  // advance under it left a band of white whenever the photo fitted shorter than
+  // its box - the "blank box" this used to show.
   // Building details.
   if (model.overview.buildingDetailLines.length > 0) {
     layout.subHeading('Building details');
@@ -603,6 +1333,10 @@ function renderOverview(
 function renderBulletedLines(layout: Layout, lines: string[]): void {
   const { doc } = layout;
   for (const line of lines) {
+    // A bullet with no text is a stray dash on the page - never printed.
+    if (line.trim().length === 0) {
+      continue;
+    }
     layout.ensureSpace(SIZE.body + 6);
     const y = doc.y;
     doc
@@ -632,6 +1366,10 @@ function renderNarrativeBlocks(layout: Layout, model: ReportModel): void {
     if (!text) {
       continue;
     }
+    // These titles are drawn directly rather than through subHeading(), so they
+    // carry their own orphan guard: without it a title landed at the foot of a
+    // page with its paragraph starting on the next.
+    layout.ensureSpace(SIZE.small + 6 + ORPHAN_GUARD);
     layout.doc
       .font(FONT.bold)
       .fontSize(SIZE.small)
@@ -774,12 +1512,17 @@ function renderRiskAssessment(
   layout: Layout,
   model: ReportModel,
   profile: ReportProfile,
-): void {
-  layout.sectionHeading('Section 2 - Risk Assessment', 'Section 2: Risk Assessment');
+): Map<string, string> {
+  layout.section('Fire Risk Assessment');
   layout.paragraph(profile.riskAssessmentIntro);
+  // The numbered heading each subject was given, keyed by the template code the
+  // action plan references. Section 3 prints "2.4 Fire Doors" rather than the
+  // opaque code, so an action can be found in Section 2 without a decoder.
+  const subjectLabels = new Map<string, string>();
   for (const section of model.sections) {
-    renderSubjectTable(layout, section);
+    subjectLabels.set(section.code, renderSubjectTable(layout, section));
   }
+  return subjectLabels;
 }
 
 // One styled block of a table cell (a question, its guidance, an answer, an
@@ -933,58 +1676,33 @@ function paintQaHeader(
  *  sliver of a row chunk (roughly two lines of small text plus padding). */
 const MIN_ROW_CHUNK = 36;
 
-/** Vertical space a subject subheading occupies, including its trailing gap.
- *  Matches the reservation subHeading() makes for itself. */
-const SUBHEADING_HEIGHT = 28;
-
-function renderSubjectTable(layout: Layout, section: ReportSection): void {
-  const { doc } = layout;
-
-  // Keep the subject heading with its table. subHeading() alone only reserves
-  // its own height, so a subject landing near the foot of a page painted the
-  // heading and the column header there with no room for a row, then the row
-  // loop broke and repainted the header on the next page - an orphaned heading
-  // above a duplicated header band. Reserve heading + header + one row chunk so
-  // the three always travel together.
-  layout.ensureSpace(SUBHEADING_HEIGHT + QA_HEADER_HEIGHT + MIN_ROW_CHUNK);
-  layout.subHeading(`${section.code}  ${section.title}`);
-
-  const left = doc.page.margins.left;
-  const qWidth = layout.contentWidth * 0.46;
-  const aWidth = layout.contentWidth * 0.54;
-  const aX = left + qWidth;
-
-  // Header row (repeated after every page break inside the table).
-  layout.ensureSpace(QA_HEADER_HEIGHT + 4);
-  paintQaHeader(layout, left, qWidth, aX, aWidth);
-
-  for (const row of section.rows) {
-    // A yesno answer is a compliance signal, so it reads in bold; every other
-    // type renders as regular text. Unknown/custom types fall through to regular.
-    const answerBold = row.questionType === 'yesno';
-
-    // The question cell: the question and, when the template attached it, a
-    // muted guidance line beneath - the same context the assessor saw (10.1).
-    const qSegs: CellSegment[] = [
+/** The two cells of a subject row, as the styled segments the cell painter and
+ *  the cell measurer both take. Built in one place so the height reserved for a
+ *  row is measured from exactly what will be painted. */
+function rowSegments(row: ReportQuestionRow): {
+  qSegs: CellSegment[];
+  aSegs: CellSegment[];
+} {
+  // A yesno answer is a compliance signal, so it reads in bold; every other
+  // type renders as regular text. Unknown/custom types fall through to regular.
+  const answerBold = row.questionType === 'yesno';
+  return {
+    // The question cell: the question ALONE. The template's guidance is
+    // deliberately not printed - it is prompting text written for the assessor
+    // standing in the building, and repeating it under every row cost pages of
+    // an already long document while telling the reader nothing about the
+    // premises. The assembled model still carries `row.guidance` for any surface
+    // that wants it; the report simply does not spend a line on it.
+    qSegs: [
       {
         text: row.questionText,
         font: FONT.regular,
         size: SIZE.small,
         colour: COLOURS.ink,
       },
-      ...(row.guidance
-        ? [
-            {
-              text: row.guidance,
-              font: FONT.oblique,
-              size: SIZE.caption,
-              colour: COLOURS.muted,
-            },
-          ]
-        : []),
-    ];
+    ],
     // The answer cell: answer (bold for yesno), observation, severity tag.
-    const aSegs: CellSegment[] = [
+    aSegs: [
       {
         text: row.answerText,
         font: answerBold ? FONT.bold : FONT.regular,
@@ -1011,25 +1729,117 @@ function renderSubjectTable(layout: Layout, section: ReportSection): void {
             },
           ]
         : []),
-    ];
+    ],
+  };
+}
+
+/** The vertical space one subject row needs: the taller of its two cells plus
+ *  padding, then - for a matrix question - the grid drawn immediately beneath it,
+ *  then the FIRST row of each evidence strip attached to it.
+ *
+ *  A matrix row's grid is reserved WITH the row: reserving only the row let a
+ *  short row sit at the foot of a page with its grid alone at the top of the
+ *  next, reading as an unattributed table. Evidence is reserved for the same
+ *  reason and it matters more now that a flagged location can hang off any
+ *  question: a floor plan captioned "Flagged location: Ground floor" alone at the
+ *  top of a page evidences nothing the reader can see. Only the first strip row
+ *  is reserved - the strip's later rows can flow, since by then the reader has
+ *  the question in view - and the caller already caps the whole reservation at
+ *  what a fresh page can hold. */
+function measureRowBlock(
+  layout: Layout,
+  row: ReportQuestionRow,
+  qWidth: number,
+  aWidth: number,
+): number {
+  const { doc } = layout;
+  const { qSegs, aSegs } = rowSegments(row);
+  const rowHeight =
+    Math.max(
+      segmentsHeight(doc, qSegs, qWidth - 8),
+      segmentsHeight(doc, aSegs, aWidth - 8),
+    ) + 10;
+  const matrixHeight = row.matrix
+    ? measureMatrixBlock(doc, row.matrix, row.matrixAnswer, aWidth).total
+    : 0;
+  return rowHeight + matrixHeight + measureRowEvidence(layout, row);
+}
+
+/** Height the evidence beneath a question claims for the keep-together decision:
+ *  the FIRST flagged-location row in full (a picture cannot be split, and a plan
+ *  captioned "Ground floor" alone at the top of a page evidences nothing the
+ *  reader can see) plus the first row of the photo strip. Later rows are allowed
+ *  to flow - by then the reader has the question in view - and the caller already
+ *  caps the whole reservation at what a fresh page can hold. */
+function measureRowEvidence(layout: Layout, row: ReportQuestionRow): number {
+  const firstFlag = row.flagImages?.[0];
+  const flagHeight = firstFlag
+    ? measureEvidenceRow(layout, firstFlag, subjectEvidenceStyle(layout)).rowHeight
+    : 0;
+  const photoHeight =
+    row.photos && row.photos.length > 0
+      ? measureImageStrip(
+          layout.doc,
+          row.photos.slice(0, 1),
+          PHOTO_BOX[0],
+          PHOTO_BOX[1],
+          layout.contentWidth,
+        )
+      : 0;
+  return flagHeight + photoHeight;
+}
+
+/** The subject table's own columns and hairline, so an evidence row continues it
+ *  seamlessly. Derived in one place because the measurer and the painter must be
+ *  handed identical geometry. */
+function subjectEvidenceStyle(layout: Layout): EvidenceRowStyle {
+  return {
+    left: layout.doc.page.margins.left,
+    labelWidth: layout.contentWidth * 0.46,
+    valueWidth: layout.contentWidth * 0.54,
+    labelFont: FONT.regular,
+    labelSize: SIZE.small,
+    lineWidth: 0.5,
+    strokeColour: COLOURS.hairline,
+  };
+}
+
+function renderSubjectTable(layout: Layout, section: ReportSection): string {
+  const { doc } = layout;
+
+  const left = doc.page.margins.left;
+  const qWidth = layout.contentWidth * 0.46;
+  const aWidth = layout.contentWidth * 0.54;
+  const aX = left + qWidth;
+  const evidenceStyle = subjectEvidenceStyle(layout);
+
+  // Keep the subject heading with its table. Reserving heading + header + a
+  // nominal row chunk was not enough: a first row TALLER than that chunk still
+  // broke to a new page, leaving the heading and one header band stranded at the
+  // foot of the old page and a second header band at the top of the new one.
+  // Reserve the first row's real height instead, capped at what a fresh page can
+  // hold so a row taller than a page does not push the heading around for ever.
+  const first = section.rows[0];
+  const firstRowHeight = first
+    ? Math.min(
+        measureRowBlock(layout, first, qWidth, aWidth),
+        layout.fullPageContentHeight - SUBHEADING_HEIGHT - QA_HEADER_HEIGHT,
+      )
+    : MIN_ROW_CHUNK;
+  layout.ensureSpace(SUBHEADING_HEIGHT + QA_HEADER_HEIGHT + firstRowHeight);
+  const heading = layout.subHeading(section.title);
+
+  // Header row (repeated after every page break inside the table).
+  layout.ensureSpace(QA_HEADER_HEIGHT + 4);
+  paintQaHeader(layout, left, qWidth, aX, aWidth);
+
+  for (const row of section.rows) {
+    const { qSegs, aSegs } = rowSegments(row);
 
     // A row that fits on ONE page is kept whole: if it does not fit the space
     // left here but would fit a fresh page, break first. Only a row taller
     // than a full page is ever split across pages (with the header repeated).
-    const rowHeight =
-      Math.max(
-        segmentsHeight(doc, qSegs, qWidth - 8),
-        segmentsHeight(doc, aSegs, aWidth - 8),
-      ) + 10;
-    // A matrix row's grid is drawn immediately under it, so the two are reserved
-    // TOGETHER. Reserving only the row let a short row sit at the foot of a page
-    // with its grid alone at the top of the next, reading as an unattributed
-    // table. When the pair is too tall to share a page the row still wins the
-    // space and the grid breaks on its own ensureSpace, which is the safe order.
-    const matrixHeight = row.matrix
-      ? measureMatrixBlock(doc, row.matrix, row.matrixAnswer, aWidth).total
-      : 0;
-    const blockHeight = rowHeight + matrixHeight;
+    const blockHeight = measureRowBlock(layout, row, qWidth, aWidth);
     const fitsWholePage =
       blockHeight <= layout.fullPageContentHeight - QA_HEADER_HEIGHT;
     if (blockHeight > layout.remaining && fitsWholePage) {
@@ -1088,6 +1898,26 @@ function renderSubjectTable(layout: Layout, section: ReportSection): void {
       }
     } while (qRem.length > 0 || aRem.length > 0);
 
+    // Flagged locations continue the SAME table: one further row per plan, its
+    // left cell naming the plan and its right cell holding the composite, ruled
+    // and aligned like every row above it. Any question type can carry them, so
+    // they belong here and not only in the action plan, which reaches
+    // non-conformities alone.
+    //
+    // Each row is reserved whole - a picture cannot be chunked the way a cell of
+    // text can - and the Question/Answer band is repainted after a break, so a
+    // plan is never left at the top of a page under a bare rule. The FIRST of
+    // these rows was already reserved with the question itself (measureRowBlock),
+    // so the question and its first plan cannot be separated at all.
+    for (const flag of row.flagImages ?? []) {
+      const metrics = measureEvidenceRow(layout, flag, evidenceStyle);
+      if (metrics.rowHeight > layout.remaining) {
+        layout.newPage();
+        paintQaHeader(layout, left, qWidth, aX, aWidth);
+      }
+      paintEvidenceRow(layout, evidenceStyle, metrics);
+    }
+
     // A matrix answer's grid is drawn AFTER the row's cell borders, not inside
     // the answer cell: the cell painter splits its content across pages at a word
     // boundary, and a half-drawn risk-level grid would misstate the record. It is
@@ -1104,6 +1934,7 @@ function renderSubjectTable(layout: Layout, section: ReportSection): void {
     }
   }
   doc.moveDown(0.8);
+  return heading;
 }
 
 // ----------------------------------------------------------------------------
@@ -1435,8 +2266,12 @@ function renderMatrixDefinitions(
 // including the flag-location composite (stories 1057, 1074).
 // ----------------------------------------------------------------------------
 
-function renderActionPlan(layout: Layout, model: ReportModel): void {
-  layout.sectionHeading('Section 3 - Action Plan', 'Section 3: Action Plan');
+function renderActionPlan(
+  layout: Layout,
+  model: ReportModel,
+  subjectLabels: Map<string, string>,
+): void {
+  layout.section('Fire Action Plan');
 
   if (model.actions.length === 0) {
     layout.paragraph(
@@ -1452,31 +2287,64 @@ function renderActionPlan(layout: Layout, model: ReportModel): void {
   let index = 0;
   for (const action of model.actions) {
     index += 1;
-    renderActionCard(layout, action, index);
+    renderActionCard(layout, action, index, subjectLabels);
   }
 }
 
-/** Minimum space an action card needs before it may start on the current page:
- *  the severity heading, the Life Protection line, and the Subject / Finding /
- *  Recommendation / Responsible party label rows. */
-const ACTION_CARD_MIN_BLOCK = 150;
+/** The card's own head: the severity heading and the gap under it. The Life
+ *  Protection line is added when the action carries one. */
+const ACTION_CARD_HEAD = 26;
+const ACTION_CARD_LTP_LINE = 13;
 
 function renderActionCard(
   layout: Layout,
   action: ReportAction,
   index: number,
+  subjectLabels: Map<string, string>,
 ): void {
   const { doc } = layout;
   const left = doc.page.margins.left;
   const meta = severityMeta(action.severity);
 
-  // Keep the card head with the start of its body. 90 points covered the heading
-  // and roughly two label rows, which let a card break straight after "Finding"
-  // and strand a lone severity heading at the foot of a page. Reserving the head
-  // plus its four fixed label rows means a card either starts properly or moves
-  // whole to the next page; a card longer than this still splits, but never at
-  // the heading itself.
-  layout.ensureSpace(ACTION_CARD_MIN_BLOCK);
+  const detailRows: Array<[string, string]> = [
+    // The subject as Section 2 numbered it, falling back to the raw template
+    // code when the action names a subject the template no longer declares.
+    ['Subject', subjectLabels.get(action.sectionCode) ?? action.sectionCode],
+    ['Finding', action.question],
+    ['Recommendation and observation', action.observation],
+    ['Responsible party', action.responsible],
+    ['Due by', formatDate(action.dueBy)],
+  ];
+
+  // Keep the whole card together: its head, every detail row, and EVERY located
+  // plan. Reserving a nominal 150 points was enough to stop a lone severity
+  // heading being stranded, but not enough to stop the plans themselves being
+  // cut off from the action they locate - the card would end at "Due by" on one
+  // page and the picture would open the next, under no heading at all.
+  //
+  // Unlike Section 2, nothing repeats a header here, so a spilled plan has
+  // nothing on its page tying it to an action; and the action plan is the part
+  // of this document that gets extracted and handed to a contractor, where a
+  // card that reads as one unbroken unit matters most. A section opener with
+  // white space beneath it is a conventional thing to see; half an action is not.
+  //
+  // Capped at one page's content: a card longer than that cannot be kept whole
+  // by any reservation, and an uncapped one would demand space no page has and
+  // break for ever.
+  const keepTogether =
+    ACTION_CARD_HEAD +
+    (action.lifeProtection ? ACTION_CARD_LTP_LINE : 0) +
+    measureKeyValueGrid(layout, detailRows, action.flagImages) +
+    // The supporting photographs are part of the card too: spilled on their own
+    // they land above the NEXT action's heading, reading as its evidence.
+    measureImageStrip(
+      doc,
+      action.images,
+      ACTION_IMAGE_BOX[0],
+      ACTION_IMAGE_BOX[1],
+      layout.contentWidth,
+    );
+  layout.ensureSpace(Math.min(keepTogether, layout.fullPageContentHeight));
   const y = doc.y;
 
   // Severity flag strip down the left edge, plus a header line.
@@ -1506,26 +2374,24 @@ function renderActionCard(
   }
   doc.moveDown(0.4);
 
-  const detailRows: Array<[string, string]> = [
-    ['Subject', action.sectionCode],
-    ['Finding', action.question],
-    ['Recommendation and observation', action.observation],
-    ['Responsible party', action.responsible],
-    ['Due by', formatDate(action.dueBy)],
-  ];
-  renderKeyValueGrid(layout, detailRows);
+  // EVERY flag-location composite becomes a further labelled row of the card's
+  // own grid (the legacy "Location" column parity, 1057 AC2), so a finding pinned
+  // on three plans lists three of them rather than losing two.
+  //
+  // These composites also appear against the question in Section 2, and that
+  // repetition is deliberate. The two sections are read by different people for
+  // different purposes: Section 2 is the record of what was assessed, where the
+  // location evidences the ANSWER; the action plan is routinely extracted and
+  // handed to whoever carries out the remedial work, and an action that says
+  // "obstructed escape route" without showing where sends that person back
+  // through a forty-page document to find it. Both carry the whole set, labelled
+  // identically so a reader can see they are the same plans.
+  renderKeyValueGrid(layout, detailRows, action.flagImages);
 
-  // Images: the flag-location composite first (the legacy "Location" column
-  // parity, 1057 AC2), then any other titled images (1074 AC2), each at a
-  // legible size with its title beneath.
-  const images: ResolvedImage[] = [];
-  if (action.flagImage) {
-    images.push(action.flagImage);
-  }
-  images.push(...action.images);
-
-  if (images.length > 0) {
-    renderActionImages(layout, images);
+  // Other titled images (1074 AC2) stay a strip: they are supporting
+  // photographs, not the located evidence the grid is ruling.
+  if (action.images.length > 0) {
+    renderActionImages(layout, action.images);
   }
 
   // Divider between actions.
@@ -1540,20 +2406,310 @@ function renderActionCard(
   doc.moveDown(0.8);
 }
 
+// ----------------------------------------------------------------------------
+// Evidence rows - a flagged floor-plan composite drawn as a REAL row of the
+// table it belongs to: a labelled cell naming the plan and a cell holding the
+// picture, ruled and aligned exactly like the rows above it.
+//
+// A picture cannot be split down the middle, so an evidence row is the one thing
+// in either table that must be reserved WHOLE before any of it is drawn. Its
+// height is therefore measured first, from the image's own proportions, and the
+// drawn height is capped so a row can always fit a fresh page - otherwise a row
+// too tall to place anywhere would either overflow into the footer or bounce
+// between pages for ever.
+// ----------------------------------------------------------------------------
+
+/** The tallest a plan may be drawn. Comfortably inside a page's content height
+ *  even beside a three-line label, and large enough that pins on a plan read at
+ *  print size (this is evidence, not a thumbnail). */
+const MAX_EVIDENCE_IMAGE_HEIGHT = 250;
+/** Label cells are clamped to this many lines. A plan name is free text, and an
+ *  unbounded label could otherwise make a row taller than the page it has to
+ *  fit on. */
+const EVIDENCE_LABEL_MAX_LINES = 3;
+
+/** The geometry and voice of the table an evidence row is joining, so the same
+ *  primitive serves the Section 2 subject table and the action plan's detail
+ *  grid while each keeps its own columns and rule weight. */
+interface EvidenceRowStyle {
+  left: number;
+  labelWidth: number;
+  valueWidth: number;
+  labelFont: string;
+  labelSize: number;
+  lineWidth: number;
+  strokeColour: string;
+}
+
+/** An evidence row measured: everything the painter needs, so it never has to
+ *  re-derive a size the reservation was made from. */
+interface EvidenceRowMetrics {
+  rowHeight: number;
+  labelLines: string[];
+  /** Absent when there is nothing drawable; the row carries the marker instead. */
+  opened?: OpenedImage;
+  drawWidth: number;
+  drawHeight: number;
+}
+
+/** `text` as at most `maxLines` lines at `width`, the last ellipsised when there
+ *  was more. Shared by evidence labels and image-strip captions so both clamp
+ *  the same way. */
+function clampToLines(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  width: number,
+  maxLines: number,
+): string[] {
+  const wrapped = wrapToWidth(doc, text, width);
+  if (wrapped.length <= maxLines) {
+    return wrapped;
+  }
+  const kept = wrapped.slice(0, maxLines);
+  // Fold everything past the clamp back into the last kept line and ellipsise
+  // it, so the text ends honestly rather than stopping dead mid-sentence.
+  kept[kept.length - 1] = truncateToWidth(doc, wrapped.slice(maxLines - 1).join(' '), width);
+  return kept;
+}
+
+function measureEvidenceRow(
+  layout: Layout,
+  image: ResolvedImage,
+  style: EvidenceRowStyle,
+): EvidenceRowMetrics {
+  const { doc } = layout;
+  const valueInner = style.valueWidth - CELL_PAD * 2;
+  const opened = layout.openImage(image);
+  let drawWidth = valueInner;
+  // An unattachable plan reserves NO picture height. A full-size empty box in the
+  // middle of a statutory document reads as a broken report, and a duty-holder
+  // cannot tell a rendering fault from a missing survey. The row still appears -
+  // the location WAS flagged and silently dropping that would be the worse of the
+  // two failures - but it collapses to a single line of explanation in the cell
+  // where the plan would have been.
+  let drawHeight = 0;
+  if (opened) {
+    // Fitted to the cell's width and the height cap, whichever binds first, so
+    // the plan keeps its proportions and a portrait plan is not stretched.
+    const scale = Math.min(
+      valueInner / opened.width,
+      MAX_EVIDENCE_IMAGE_HEIGHT / opened.height,
+    );
+    drawWidth = opened.width * scale;
+    drawHeight = opened.height * scale;
+  }
+
+  doc.font(style.labelFont).fontSize(style.labelSize);
+  const labelLines = clampToLines(
+    doc,
+    image.title,
+    style.labelWidth - CELL_PAD * 2,
+    EVIDENCE_LABEL_MAX_LINES,
+  );
+  const labelHeight = labelLines.length * doc.currentLineHeight();
+
+  // Without a picture the value cell carries the explanation, so the row has to
+  // be tall enough for THAT rather than for a placeholder.
+  let noteHeight = 0;
+  if (!opened) {
+    doc.font(FONT.oblique).fontSize(SIZE.caption);
+    noteHeight = doc.currentLineHeight();
+  }
+
+  return {
+    rowHeight:
+      Math.max(drawHeight, labelHeight, noteHeight) + CELL_PAD * 2,
+    labelLines,
+    ...(opened ? { opened } : {}),
+    drawWidth,
+    drawHeight,
+  };
+}
+
+/** Paint one evidence row at the cursor. The caller has already guaranteed the
+ *  space: this draws, it does not paginate. */
+function paintEvidenceRow(
+  layout: Layout,
+  style: EvidenceRowStyle,
+  metrics: EvidenceRowMetrics,
+): void {
+  const { doc } = layout;
+  const { rowHeight } = metrics;
+  const valueX = style.left + style.labelWidth;
+  const y = doc.y;
+
+  doc
+    .save()
+    .lineWidth(style.lineWidth)
+    .strokeColor(style.strokeColour)
+    .rect(style.left, y, style.labelWidth, rowHeight)
+    .stroke()
+    .rect(valueX, y, style.valueWidth, rowHeight)
+    .stroke()
+    .restore();
+
+  // The label, stamped a line at a time and centred against the picture beside
+  // it. Stamped rather than given a wrap width for the reason on stampText: a
+  // width-bearing run near the foot of a page paginates on its own.
+  doc.font(style.labelFont).fontSize(style.labelSize).fillColor(COLOURS.ink);
+  const lineHeight = doc.currentLineHeight();
+  let labelY = y + (rowHeight - metrics.labelLines.length * lineHeight) / 2;
+  for (const line of metrics.labelLines) {
+    stampText(doc, line, style.left + CELL_PAD, labelY);
+    labelY += lineHeight;
+  }
+
+  if (metrics.opened) {
+    doc.image(
+      asImageSource(metrics.opened),
+      valueX + (style.valueWidth - metrics.drawWidth) / 2,
+      y + (rowHeight - metrics.drawHeight) / 2,
+      { width: metrics.drawWidth, height: metrics.drawHeight },
+    );
+  } else {
+    // Stated in words rather than drawn as an empty frame. Stamped without a
+    // wrap width for the same reason the label is (see stampText).
+    doc.font(FONT.oblique).fontSize(SIZE.caption).fillColor(COLOURS.muted);
+    const noteHeight = doc.currentLineHeight();
+    stampText(
+      doc,
+      'Plan image not attached',
+      valueX + CELL_PAD,
+      y + (rowHeight - noteHeight) / 2,
+    );
+  }
+  doc.y = y + rowHeight;
+}
+
 /** Action-plan images: a generous box so the flag location is legible (1074 AC2). */
 function renderActionImages(layout: Layout, images: ResolvedImage[]): void {
-  renderImageStrip(layout, images, 200, 150);
+  renderImageStrip(layout, images, ACTION_IMAGE_BOX[0], ACTION_IMAGE_BOX[1]);
 }
 
 /** Section 2 answer photographs: a compact thumbnail strip beneath the question
  *  row, so evidence sits with its subject without dominating the table. */
 function renderAnswerPhotos(layout: Layout, images: ResolvedImage[]): void {
   layout.doc.moveDown(0.2);
-  renderImageStrip(layout, images, 120, 90);
+  renderImageStrip(layout, images, PHOTO_BOX[0], PHOTO_BOX[1]);
 }
 
-/** Render a row of titled images at the given box size, wrapping to the next line
- *  as needed. Shared by the action plan and the Section 2 answer photos. */
+/** The two image box sizes the document uses, stated once so the measurer and the
+ *  painter can never be handed different ones. */
+const ACTION_IMAGE_BOX: readonly [number, number] = [200, 150];
+const PHOTO_BOX: readonly [number, number] = [120, 90];
+
+/** Horizontal gap between boxes, vertical gap between wrapped rows, the gap
+ *  between a box and its caption, and the space left below the whole strip. */
+const STRIP_GAP = 16;
+const STRIP_ROW_GAP = 10;
+const STRIP_CAPTION_GAP = 2;
+const STRIP_TRAILING = 6;
+/** Captions are clamped to this many lines. A caption is drawn immediately below
+ *  a box whose height is already reserved, so an unbounded one (a long floor-plan
+ *  name, a long photo title) is the one thing in a strip that could grow past the
+ *  reservation and reach the footer. */
+const CAPTION_MAX_LINES = 2;
+
+/** One image as it will be painted: its box height (a failed image collapses to
+ *  the slim marker) and its caption already wrapped and clamped. */
+interface StripItem {
+  image: ResolvedImage;
+  boxHeight: number;
+  captionLines: string[];
+}
+
+/** One row of a strip and the exact height it occupies, caption included. */
+interface StripRow {
+  items: StripItem[];
+  /** Height of the row's picture band: the tallest box in it. Shorter boxes (an
+   *  unavailable image collapses to a slim marker) are aligned to its FOOT, so
+   *  every caption in a row sits on one line rather than floating at whatever
+   *  height its own box happened to be. */
+  boxBand: number;
+  height: number;
+}
+
+/**
+ * Lay a strip out into rows WITHOUT drawing anything, so the space a strip needs
+ * is measured from precisely what will be painted. Both the measurer (which
+ * decides whether the strip fits beside its question) and the painter consume
+ * this, which is what stops the two drifting apart.
+ *
+ * An image that could not be fetched collapses to a slim marker instead of
+ * reserving the full frame: a large empty rectangle where a photograph should be
+ * reads as a broken graphic, while a compact rule reads as a deliberate note that
+ * the evidence could not be attached. The caption still carries the title, so
+ * nothing is lost from the record.
+ */
+function layOutImageStrip(
+  doc: PDFKit.PDFDocument,
+  images: ResolvedImage[],
+  imgWidth: number,
+  imgHeight: number,
+  contentWidth: number,
+): StripRow[] {
+  doc.font(FONT.oblique).fontSize(SIZE.caption);
+  const lineHeight = doc.currentLineHeight();
+  const perRow = Math.max(
+    1,
+    Math.floor((contentWidth + STRIP_GAP) / (imgWidth + STRIP_GAP)),
+  );
+
+  const rows: StripRow[] = [];
+  for (const image of images) {
+    const captionLines = clampToLines(doc, image.title, imgWidth, CAPTION_MAX_LINES);
+    const item: StripItem = {
+      image,
+      boxHeight: image.available && image.data ? imgHeight : PLACEHOLDER_HEIGHT,
+      captionLines,
+    };
+    const last = rows[rows.length - 1];
+    if (!last || last.items.length >= perRow) {
+      rows.push({ items: [item], boxBand: 0, height: 0 });
+    } else {
+      last.items.push(item);
+    }
+  }
+
+  for (const row of rows) {
+    row.boxBand = Math.max(...row.items.map((item) => item.boxHeight));
+    row.height =
+      row.boxBand +
+      STRIP_CAPTION_GAP +
+      Math.max(...row.items.map((item) => item.captionLines.length)) * lineHeight;
+  }
+  return rows;
+}
+
+/** The vertical space a strip will occupy, or 0 when there is nothing to draw. */
+function measureImageStrip(
+  doc: PDFKit.PDFDocument,
+  images: ResolvedImage[] | undefined,
+  imgWidth: number,
+  imgHeight: number,
+  contentWidth: number,
+): number {
+  if (!images || images.length === 0) {
+    return 0;
+  }
+  const rows = layOutImageStrip(doc, images, imgWidth, imgHeight, contentWidth);
+  return (
+    rows.reduce((sum, row) => sum + row.height, 0) +
+    STRIP_ROW_GAP * Math.max(0, rows.length - 1) +
+    STRIP_TRAILING
+  );
+}
+
+/**
+ * Render a strip of titled images at the given box size, wrapping to the next
+ * line as needed. Shared by the action plan, the Section 2 answer photos and the
+ * Section 2 flagged locations.
+ *
+ * Each ROW is reserved before any of it is drawn, so a break never separates a
+ * box from its caption. An image is indivisible, so a row is the smallest unit
+ * that can move; the caller reserves the first row alongside the question it
+ * belongs to (see measureRowBlock) and later rows flow.
+ */
 function renderImageStrip(
   layout: Layout,
   images: ResolvedImage[],
@@ -1562,56 +2718,52 @@ function renderImageStrip(
 ): void {
   const { doc } = layout;
   const left = doc.page.margins.left;
-  const gap = 16;
+  const rows = layOutImageStrip(doc, images, imgWidth, imgHeight, layout.contentWidth);
+  if (rows.length === 0) {
+    return;
+  }
+  doc.font(FONT.oblique).fontSize(SIZE.caption);
+  const lineHeight = doc.currentLineHeight();
 
-  layout.ensureSpace(imgHeight + 30);
-  let x = left;
-  let rowTop = doc.y;
-  let rowMaxBottom = rowTop;
-
-  for (const image of images) {
-    // Wrap to a new row when the next image would overflow the content width.
-    if (x + imgWidth > left + layout.contentWidth) {
-      x = left;
-      rowTop = rowMaxBottom + 10;
-      doc.y = rowTop;
-      layout.ensureSpace(imgHeight + 30);
-      rowTop = doc.y;
-      rowMaxBottom = rowTop;
-    }
-
-    // An absent image collapses to a slim marker instead of reserving the full
-    // photo frame: a large empty rectangle where a photograph should be reads as
-    // a broken graphic, while a compact rule reads as a deliberate note that the
-    // evidence could not be attached. The caption still carries the title, so
-    // nothing is lost from the record.
-    let boxHeight = imgHeight;
-    let drawn = false;
-    if (image.available && image.data) {
-      try {
-        doc.image(image.data, x, rowTop, { fit: [imgWidth, imgHeight] });
-        drawn = true;
-      } catch {
-        // A corrupt or undecodable image falls through to the marker below.
+  let bottom = doc.y;
+  for (const row of rows) {
+    layout.ensureSpace(row.height);
+    const rowTop = doc.y;
+    let x = left;
+    for (const item of row.items) {
+      // Sat on the row's baseline, so a slim marker beside a full-height plan
+      // shares its caption line instead of hanging in mid-air.
+      const boxTop = rowTop + row.boxBand - item.boxHeight;
+      let drawn = false;
+      if (item.image.available && item.image.data) {
+        try {
+          doc.image(item.image.data, x, boxTop, { fit: [imgWidth, imgHeight] });
+          drawn = true;
+        } catch {
+          // A corrupt or undecodable image falls through to the marker below.
+          // It was measured at full height, so the strip simply ends short.
+        }
       }
-    }
-    if (!drawn) {
-      boxHeight = PLACEHOLDER_HEIGHT;
-      renderImagePlaceholder(layout, x, rowTop, imgWidth, boxHeight);
-    }
+      if (!drawn) {
+        renderImagePlaceholder(layout, x, boxTop, imgWidth, item.boxHeight);
+      }
 
-    // Title beneath the image.
-    doc
-      .font(FONT.oblique)
-      .fontSize(SIZE.caption)
-      .fillColor(COLOURS.muted)
-      .text(image.title, x, rowTop + boxHeight + 2, { width: imgWidth });
-
-    rowMaxBottom = Math.max(rowMaxBottom, rowTop + boxHeight + 16);
-    x += imgWidth + gap;
+      // The caption, one stamped line at a time. It carries no wrap width for
+      // the reason given on stampText: a width-bearing text() near the foot of a
+      // page is routed through PDFKit's LineWrapper and paginates on its own.
+      doc.font(FONT.oblique).fontSize(SIZE.caption).fillColor(COLOURS.muted);
+      let capY = rowTop + row.boxBand + STRIP_CAPTION_GAP;
+      for (const line of item.captionLines) {
+        stampText(doc, line, x, capY);
+        capY += lineHeight;
+      }
+      x += imgWidth + STRIP_GAP;
+    }
+    bottom = rowTop + row.height;
+    doc.y = bottom + STRIP_ROW_GAP;
   }
 
-  doc.y = rowMaxBottom + 6;
+  doc.y = bottom + STRIP_TRAILING;
 }
 
 /** Height of the slim marker that stands in for an image which could not be
@@ -1639,11 +2791,12 @@ function renderImagePlaceholder(
     .stroke()
     .undash()
     .restore();
-  doc
-    .font(FONT.oblique)
-    .fontSize(SIZE.caption)
-    .fillColor(COLOURS.muted)
-    .text('Image unavailable', x, y + h / 2 - 4, { width: w, align: 'center' });
+  // Centred by measurement and stamped, not by handing PDFKit a width: see
+  // stampText. A placeholder is the one thing in a strip that can sit at the
+  // very foot of a page, and a width-bearing run there spawns a page.
+  const label = 'Image unavailable';
+  doc.font(FONT.oblique).fontSize(SIZE.caption).fillColor(COLOURS.muted);
+  stampText(doc, label, x + (w - doc.widthOfString(label)) / 2, y + h / 2 - 4);
 }
 
 // ----------------------------------------------------------------------------
@@ -1656,11 +2809,10 @@ function renderSignOff(
   model: ReportModel,
   profile: ReportProfile,
 ): void {
-  layout.sectionHeading('Sign-off and review', 'Sign-off and review');
+  layout.section('Sign-off and Review');
   const s = model.signOff;
   renderKeyValueGrid(layout, [
     ['Conducted by', s.conductedBy],
-    ['Checked by', s.checkedBy],
     ['Validated by', s.validatedBy],
     ['Released on', formatDate(s.releasedOn)],
     ['Review by', formatDate(s.reviewByDate)],
@@ -1695,7 +2847,31 @@ function titleCase(value: string): string {
  * document is fully written, so the Function can upload the bytes directly. The
  * model carries every value and image already; this function performs no I/O.
  */
-export function renderReportPdf(model: ReportModel): Promise<Buffer> {
+export interface RenderOptions {
+  /** How many pages will be spliced in after the cover once the rendered PDF is
+   *  merged (the template's certificate). The printed 'Page | N' accounts for
+   *  them, so the numbers still match the document the reader holds. */
+  insertedPagesAfterCover?: number;
+}
+
+/** The registered-company line printed, centred, in the footer of every page but
+ *  the cover. Composed from what the org actually records: its name plus its
+ *  registered address when one is set, the name alone when it is not, and
+ *  nothing at all when even the name is missing (the footer then carries only
+ *  the page number rather than a stray comma). */
+function registeredLine(model: ReportModel): string {
+  const name = model.orgProfile.name?.trim() ?? '';
+  const address = model.orgProfile.contact?.address?.trim() ?? '';
+  if (!name) {
+    return '';
+  }
+  return address ? `${name}. Registered office: ${address}.` : `${name}.`;
+}
+
+export function renderReportPdf(
+  model: ReportModel,
+  options: RenderOptions = {},
+): Promise<Buffer> {
   // Brand accent, validated so a malformed org colour cannot break the document,
   // then darkened until it clears AA on white. The report is a legal record that
   // is read on white paper and photocopied, so the accent is only ever used where
@@ -1716,7 +2892,10 @@ export function renderReportPdf(model: ReportModel): Promise<Buffer> {
         size: 'A4',
         margins: {
           top: PAGE_MARGIN,
-          bottom: PAGE_MARGIN,
+          // The footer band is part of the bottom margin, so PDFKit's own
+          // automatic page break stops where Layout.bottomLimit does and no
+          // content can ever land in the footer strip. See FOOTER_BAND.
+          bottom: PAGE_MARGIN + FOOTER_BAND,
           left: PAGE_MARGIN,
           right: PAGE_MARGIN,
         },
@@ -1735,11 +2914,28 @@ export function renderReportPdf(model: ReportModel): Promise<Buffer> {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const layout = new Layout(doc, brand, model.orgProfile.name);
-      layout.attachAutoPageFooter();
-      layout.beginFirstPage();
+      // The logo is opened ONCE and drawn on every page from that single
+      // embedded XObject. Calling doc.image() with the same Buffer per page
+      // embeds a fresh copy each time, which on a long report multiplies the
+      // logo's bytes by the page count.
+      let logo: OpenedImage | undefined;
+      if (model.logo?.available && model.logo.data) {
+        try {
+          logo = (doc as ImageOpeningDocument).openImage(model.logo.data);
+        } catch {
+          // An unreadable logo costs the mark, never the document.
+        }
+      }
 
-      renderHeader(layout, model, brand, profile);
+      const layout = new Layout(doc, {
+        brand,
+        orgName: model.orgProfile.name,
+        registeredLine: registeredLine(model),
+        ...(logo ? { logo } : {}),
+      });
+      layout.setPageNumberOffset(options.insertedPagesAfterCover ?? 0);
+
+      renderCover(layout, model, brand, profile);
 
       // Reserve a contents page right after the cover; filled in finalise() once
       // each section's start page is known. Reserving it here keeps every later
@@ -1750,10 +2946,10 @@ export function renderReportPdf(model: ReportModel): Promise<Buffer> {
       renderOverview(layout, model, brand, profile);
 
       layout.newPage();
-      renderRiskAssessment(layout, model, profile);
+      const subjectLabels = renderRiskAssessment(layout, model, profile);
 
       layout.newPage();
-      renderActionPlan(layout, model);
+      renderActionPlan(layout, model, subjectLabels);
       renderSignOff(layout, model, profile);
 
       // Stamp 'Page N of M' on every buffered page, then flush the document.

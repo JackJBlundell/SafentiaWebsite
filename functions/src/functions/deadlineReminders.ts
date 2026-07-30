@@ -15,8 +15,10 @@
 //
 //   2. ACTIONS. An open `Action` with a `dueBy`. The remedial work is the
 //      responsible party's to arrange, so the EMAIL goes to them, resolved
-//      exactly as manageAction's assignment email resolves it (the building's
-//      linked responsibleParty contact, name-matched). Responsible parties are
+//      exactly as manageAction's assignment email resolves it: through the
+//      action's own `responsibleContactId`, never by matching a name against
+//      the building's party (which chased only the building's default and left
+//      everyone else's overdue work unchased). Responsible parties are
 //      customer contacts, not org members: they have no in-app inbox and no
 //      preferences node, so the IN-APP notice goes to the org's active admins,
 //      who are the people who can actually chase it inside Safentia. Admins get
@@ -28,9 +30,16 @@
 // Reminder ladders differ because the deadlines do. An information request runs
 // for INFO_REQUEST_DUE_DAYS (7) by default, so a 60/30/7 ladder would never
 // fire: it gets 3 and 1 days out. An action's default window is 7, 30 or 90
-// days by severity (DUE_WINDOW_DAYS), so it gets 30, 7 and 1. Both end with the
-// single 'lapsed' notice the day after the due day fully passed - one honest
-// overdue message, never a daily nag.
+// days by severity (DUE_WINDOW_DAYS), so it gets 30, 7 and 1. Both ladders are
+// org-configurable (OrgSettings.infoRequestReminderDays / actionReminderDays)
+// against the shared rules in lib/reminderSchedules, with those built-in
+// defaults as the fallback whenever an org has not set one - or has stored one
+// the rules reject, which repairs rather than skips, so a single bad settings
+// node cannot abort a cross-org sweep. Each half also has its own master switch,
+// because an org that wants its assessors chased does not necessarily want its
+// responsible parties emailed. Both ladders end with the single 'lapsed' notice
+// the day after the due day fully passed - one honest overdue message, never a
+// daily nag.
 //
 // Idempotency: the day-matching is exact-day, so a scheduler redelivery the
 // same day would duplicate every notice. A transaction claims a per-item
@@ -63,6 +72,11 @@ import {
   utcDayKey,
   type DeadlineStage,
 } from '../lib/reviewWindows';
+import {
+  resolveReminderDays,
+  ACTION_REMINDER_RULES,
+  INFO_REQUEST_REMINDER_RULES,
+} from '../lib/reminderSchedules';
 import type { Logger } from '../lib/logging';
 import type {
   Action,
@@ -75,6 +89,7 @@ import type {
   Keyed,
   OrgMember,
   OrgProfile,
+  OrgSettings,
   Severity,
 } from '../shared/types';
 
@@ -87,14 +102,6 @@ const SEVERITY_LABELS: Record<Severity, string> = {
   M: 'Medium',
   H: 'High',
 };
-
-/** An information request's week-long window: a nudge with three days left,
- *  a final one the day before, then the overdue notice. */
-const INFO_REQUEST_OFFSETS = [3, 1] as const;
-
-/** An action's window runs to three months at severity L, so it earns a longer
- *  ladder: a month out, a week out, the day before, then overdue. */
-const ACTION_OFFSETS = [30, 7, 1] as const;
 
 /** The due date rendered for copy, UK-local so it names the day the recipient's
  *  own working calendar shows. */
@@ -196,6 +203,22 @@ async function sweepInfoRequests(
   for (const [orgId, assessments] of Object.entries(byOrg)) {
     let audience: OrgAudience | null = null;
 
+    // The configured ladder decides WHICH deadlines match today, so unlike the
+    // audience it cannot be read lazily on first match - it is needed before the
+    // walk begins. One settings read per org (never per assessment) keeps the
+    // sweep linear in estate size.
+    const settingsSnap = await db.ref(paths.db.orgSettings(orgId)).get();
+    const settings = settingsSnap.val() as OrgSettings | null;
+    // Absent means on, so an org that has never opened the setting keeps the
+    // chases it already had; only an explicit false stops them.
+    if (settings?.infoRequestRemindersEnabled === false) {
+      continue;
+    }
+    const offsets = resolveReminderDays(
+      settings?.infoRequestReminderDays,
+      INFO_REQUEST_REMINDER_RULES,
+    );
+
     for (const [assessmentId, assessment] of Object.entries(assessments ?? {})) {
       // A request only matters while the assessment is actually waiting on the
       // assessor; anything resubmitted or validated has moved on.
@@ -223,7 +246,7 @@ async function sweepInfoRequests(
         continue;
       }
       const dueBy = Math.min(...openDueDates);
-      const stage = deadlineReminderStage(dueBy, now, INFO_REQUEST_OFFSETS);
+      const stage = deadlineReminderStage(dueBy, now, offsets);
       if (stage === null) {
         continue;
       }
@@ -345,6 +368,19 @@ async function sweepActions(
   for (const [orgId, buildings] of Object.entries(byOrg)) {
     let audience: OrgAudience | null = null;
     let estate: Record<string, Record<string, Building>> | null = null;
+    // Read before the estate walk for the same reason as the information-request
+    // sweep: the ladder decides what matches, so it cannot wait for a match.
+    const settingsSnap = await db.ref(paths.db.orgSettings(orgId)).get();
+    const settings = settingsSnap.val() as OrgSettings | null;
+    // Absent means on; an explicit false stops both the admin digest and the
+    // responsible-party emails for this organisation.
+    if (settings?.actionRemindersEnabled === false) {
+      continue;
+    }
+    const offsets = resolveReminderDays(
+      settings?.actionReminderDays,
+      ACTION_REMINDER_RULES,
+    );
     // The org's admins hear ONCE per morning, however many actions matched.
     // Emailing them per action would put a whole estate's worth of messages in
     // one inbox on a ladder day, and - worse - each in-app notice consumes a
@@ -362,7 +398,7 @@ async function sweepActions(
         if (action?.status !== 'open' || typeof action.dueBy !== 'number') {
           continue;
         }
-        const stage = deadlineReminderStage(action.dueBy, now, ACTION_OFFSETS);
+        const stage = deadlineReminderStage(action.dueBy, now, offsets);
         if (stage === null) {
           continue;
         }
@@ -431,31 +467,54 @@ async function sweepActions(
         });
 
         // The responsible party themselves, by email, resolved the way
-        // manageAction resolves an assignment: the building's LINKED party
-        // contact, whose recorded name must match the action's free-text
-        // `responsible` (the field is not a foreign key yet, so the match is
-        // what makes the address trustworthy). Contacts have no preferences
-        // node, so there is no choice to respect here yet - the same posture
-        // reviewReminders takes with the customer's overdue notice.
-        const party = located ? located.building.responsibleParty : undefined;
-        if (
-          located &&
-          party?.contactId &&
-          action.responsible &&
-          action.responsible.trim().toLowerCase() ===
-            party.name.trim().toLowerCase()
-        ) {
+        // manageAction resolves an assignment: through the action's OWN
+        // `responsibleContactId`. Every dead end is logged with its reason,
+        // because a duty-holder who is never chased about statutory work is a
+        // failure that has to be diagnosable from the logs alone. Contacts have
+        // no preferences node, so there is no choice to respect here yet - the
+        // same posture reviewReminders takes with the customer's overdue notice.
+        if (!action.responsibleContactId) {
+          logger.info(
+            'Responsible-party chase skipped: this action carries no responsible contact (an unlinked legacy or imported party), so there is no address to send to',
+            { orgId, buildingId, actionId },
+          );
+        } else if (!located) {
+          logger.warn(
+            'Responsible-party chase skipped: the action’s building is no longer in the org’s estate, so its customer’s contacts cannot be read',
+            { orgId, buildingId, actionId },
+          );
+        } else {
           const contactSnap = await db
             .ref(
               paths.db.customerContact(
                 orgId,
                 located.building.customerId,
-                party.contactId,
+                action.responsibleContactId,
               ),
             )
             .get();
           const contact = contactSnap.val() as CustomerContact | null;
-          if (contact?.email) {
+          if (!contact) {
+            logger.warn(
+              'Responsible-party chase skipped: the responsible contact is no longer in the customer’s contact list',
+              {
+                orgId,
+                buildingId,
+                actionId,
+                contactId: action.responsibleContactId,
+              },
+            );
+          } else if (!contact.email) {
+            logger.info(
+              'Responsible-party chase skipped: the responsible contact has no email address on record',
+              {
+                orgId,
+                buildingId,
+                actionId,
+                contactId: action.responsibleContactId,
+              },
+            );
+          } else {
             await dispatchEmail(
               {
                 to: contact.email,
@@ -480,7 +539,7 @@ async function sweepActions(
                     label: 'View your building',
                     url: `${WEB_ORIGIN}/app/sites/${located.siteId}/buildings/${buildingId}`,
                   },
-                  footerNote: `You are receiving this because you are named as the responsible party for ${buildingName} on Safentia.`,
+                  footerNote: `You are receiving this because you are recorded as responsible for this action at ${buildingName} on Safentia.`,
                 }),
               },
               logger,

@@ -10,7 +10,7 @@ import { useTheme } from '../../design/ThemeProvider';
 import { riskPresentation } from '../../design/rag';
 import { EmptyState } from '../ui/Page';
 import type { EnvPaths } from '../../paths';
-import type { GeoPoint, MemberStatus, RiskLevel } from '../../types';
+import type { MemberStatus, RiskLevel } from '../../types';
 import styles from './shared.module.css';
 
 // ----------------------------------------------------------------------------
@@ -97,27 +97,6 @@ export function formatDate(millis: number): string {
  *  addresses. The server revalidates. */
 export function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-/** The point a typed latitude/longitude pair describes, or null when the pair
- *  is incomplete or out of range. Location forms keep the pair as text so it
- *  can be half-typed, and use this to decide what the map may pin; the submit
- *  handler is what explains a bad pair to the user. */
-export function toGeoPoint(lat: string, lng: string): GeoPoint | null {
-  const latText = lat.trim();
-  const lngText = lng.trim();
-  if (latText === '' || lngText === '') {
-    return null;
-  }
-  const latValue = Number(latText);
-  const lngValue = Number(lngText);
-  if (!Number.isFinite(latValue) || latValue < -90 || latValue > 90) {
-    return null;
-  }
-  if (!Number.isFinite(lngValue) || lngValue < -180 || lngValue > 180) {
-    return null;
-  }
-  return { lat: latValue, lng: lngValue };
 }
 
 // ----------------------------------------------------------------------------

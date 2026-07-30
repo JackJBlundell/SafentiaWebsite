@@ -475,6 +475,31 @@ describe('ConsoleHome recent releases', () => {
     expect(within(card).queryByRole('link', { name: /Download PDF/ })).toBeNull();
   });
 
+  it('offers an unattributed legacy report, captioned as not linked to this assessment', async () => {
+    seedRowContext();
+    mocks.fixtures.releases = [release({ id: 'as-9' })];
+    // A report predating Report.assessmentId. The building's own page lists and
+    // downloads it, so claiming "not ready" here would contradict that screen -
+    // but it cannot be passed off as this assessment's either.
+    mocks.fixtures.reports = {
+      b1: {
+        'rep-legacy': {
+          pdfPath: 'orgs/org-1/reports/rep-legacy.pdf',
+          generatedAt: NOW - 30 * DAY,
+        },
+      },
+    };
+    renderHome();
+
+    const link = await screen.findByRole('link', {
+      name: /Download PDF for North Tower/,
+    });
+    expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
+    expect(
+      within(releasesCard()).getByText(/Not linked to this assessment/),
+    ).toBeInTheDocument();
+  });
+
   it('degrades a dangling building and customer to their ids', () => {
     mocks.fixtures.members = { u1: { name: 'Jane Doe' } as unknown as OrgMember };
     mocks.fixtures.releases = [release({ id: 'as-9' })];

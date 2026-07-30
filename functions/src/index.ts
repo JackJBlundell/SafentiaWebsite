@@ -34,6 +34,7 @@ export { submitAssessment } from './functions/submitAssessment';
 // issues-to-address list grounded in UK fire-safety regulation. Needs the
 // OPENAI_API_KEY secret (see the function header).
 export { generateAssessmentDraft } from './functions/generateAssessmentDraft';
+export { changeAssessmentTemplate } from './functions/changeAssessmentTemplate';
 export { onAssessmentCreate } from './functions/onAssessmentCreate';
 export { onAssessmentStageChange } from './functions/onAssessmentStageChange';
 // Mirrors an assessor's confirmed service next-due dates (a `serviceConfirmed`
@@ -44,8 +45,9 @@ export { onLogBookEntryCreated } from './functions/onLogBookEntryCreated';
 // --- Reports -----------------------------------------------------------------
 // generateReport renders the three-section industry-standard PDF server-side,
 // writes it to tenant-scoped Storage with a /reports record and logs to /activity
-// (brief 4.5 #8 / section 11, stories 1071-1076). The Storage rules already scope
-// report PDFs to the owning org and customer (story 1076).
+// (brief 4.5 #8 / section 11, stories 1071-1076). The Storage rules scope report
+// PDFs to the owning ORG (story 1076); a customer reads theirs only through
+// getReportDownloadUrl, which authorises live per request.
 export { generateReport } from './functions/generateReport';
 
 // --- Organisation administration (Phase 2) -----------------------------------
@@ -105,10 +107,25 @@ export { releaseAssessment } from './functions/releaseAssessment';
 // The contact's manual sign-off of a released report: records the typed name
 // against the report, with the uid and timestamp taken from the session.
 export { acceptReport } from './functions/acceptReport';
+// THE way a report PDF is opened. Authorisation is re-derived from live database
+// state on every request (owning customer, portal seat, acceptance) and answered
+// with a short-lived signed URL, because Storage rules cannot read RTDB and the
+// object metadata they can read goes stale the moment ownership or access moves.
+export { getReportDownloadUrl } from './functions/getReportDownloadUrl';
 // A customer admin invites a colleague into the portal with a role: the first
 // portal-side write beyond acceptReport, and the first customer-role gate. Org
 // and customer are taken from the verified portal token, never the payload.
 export { portalInviteTeammate } from './functions/portalInviteTeammate';
+// Changes the roles (and optionally the standing) of a portal account that
+// already exists, so a wrong role is corrected rather than revoked and re-issued.
+// TWO callers: an org STAFF admin from the contacts panel, and a PORTAL admin
+// managing their own team. Keeps the contact's portalRoles in step in the same
+// atomic write, and protects the customer's last active portal administrator.
+export { updateCustomerMember } from './functions/updateCustomerMember';
+// The duty-holder reports progress on remedial work they are responsible for
+// arranging: a claim plus an optional dated note, never a sign-off. Closing an
+// action stays with the organisation (manageAction's signOff verb).
+export { respondToAction } from './functions/respondToAction';
 
 // --- Platform oversight (super admin) ----------------------------------------
 // Records a super admin's read-only drill-down into a tenant as a
@@ -133,6 +150,7 @@ export { dailyJobReminders } from './functions/dailyJobReminders';
 // A daily 07:30 UK FRA-review reminder (60/30/7 days ahead, plus a one-off
 // lapsed notice) to each org's admins: in-app, best-effort push and email.
 export { reviewReminders } from './functions/reviewReminders';
+export { customerContracts } from './functions/customerContracts';
 // A daily 07:45 UK sweep of the two dated commitments nothing else chases: an
 // assessor's outstanding information request and an open action's due date.
 // In-app plus best-effort push, and email to the people who own each.

@@ -1,10 +1,15 @@
 // ============================================================================
 // CustomerForm - EDIT the organisation's own details (name, address,
-// switchboard email, phone). Creation is the CustomerWizard's job; people are
-// managed on the profile's contacts panel, never on this form.
+// switchboard email, phone) and the contract end date. Creation is the
+// CustomerWizard's job; people are managed on the profile's contacts panel, and
+// the review-reminder switch sits on the customer PAGE - it is a switch someone
+// flicks while looking at the customer, not a field they open a form to edit.
 //
-// Archiving is deliberately NOT here - it lives on the detail page with its
-// own confirm step, so an edit can never archive by accident.
+// Archiving is deliberately NOT here - it lives on the detail page with its own
+// confirm step, so an edit can never archive by accident. The contract end date
+// is the SCHEDULED form of that same action: on the morning after the date, the
+// platform archives the customer exactly as the button would, so the field is
+// bounded to future dates and the copy says plainly what it will do.
 // ============================================================================
 
 import { useEffect, useState, type FormEvent } from 'react';
@@ -18,7 +23,13 @@ import type {
   ManageCustomerInput,
   ManageCustomerResult,
 } from '../../types';
-import { AddressSearch } from '../ui/AddressSearch';
+import { AddressField } from '../ui/AddressField';
+import {
+  DAY_MS,
+  fromDateInputValue,
+  toDateInputValue,
+  todayUtc,
+} from '../lib/dateInput';
 import { ErrorNotice, PageHeader, type Crumb } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
 import { CustomerImageField, useCustomerImage } from './CustomerImageField';
@@ -46,6 +57,10 @@ export function CustomerForm() {
   const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  // Held as the yyyy-mm-dd the date input speaks; converted to midnight UTC on
+  // save so the stored value follows the platform's date-only convention and
+  // cannot drift a day with the browser's timezone.
+  const [contractEnd, setContractEnd] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [prefilled, setPrefilled] = useState(false);
 
@@ -56,6 +71,7 @@ export function CustomerForm() {
       setAddress(existing.data.address ?? '');
       setEmail(existing.data.email ?? '');
       setPhone(existing.data.phone ?? '');
+      setContractEnd(toDateInputValue(existing.data.contractEndDate));
       setPrefilled(true);
     }
   }, [prefilled, existing.data]);
@@ -87,6 +103,25 @@ export function CustomerForm() {
     const trimmedPhone = phone.trim();
     if (trimmedPhone) customer.phone = trimmedPhone;
     else if (record?.phone) customer.phone = null;
+
+    // The contract end date. Cleared to null when emptied; validated here as
+    // well as server-side so the person is told before the round trip.
+    if (contractEnd) {
+      const parsed = fromDateInputValue(contractEnd);
+      if (parsed === undefined) {
+        setFieldError('Enter the contract end date as a real date.');
+        return;
+      }
+      if (parsed <= todayUtc()) {
+        setFieldError(
+          'The contract end date must be in the future. To end access now, archive the customer instead.',
+        );
+        return;
+      }
+      customer.contractEndDate = parsed;
+    } else if (record?.contractEndDate) {
+      customer.contractEndDate = null;
+    }
 
     // Upload any freshly cropped image and fold its URL (or a clearing null)
     // into the same payload; a failed upload aborts before any write.
@@ -146,12 +181,13 @@ export function CustomerForm() {
             />
           </div>
           <div className={shared.field}>
-            <AddressSearch
+            {/* No `geo`: a customer record keeps no point, so map mode here is
+                only the quicker way to a correctly spelt address. */}
+            <AddressField
               id="customer-address"
               label="Head office address (optional)"
               value={address}
               onChange={setAddress}
-              onSelect={(selection) => setAddress(selection.address)}
             />
           </div>
           <div className={shared.field}>
@@ -187,6 +223,32 @@ export function CustomerForm() {
               disabled={manageCustomer.pending || image.uploading}
             />
           )}
+        </fieldset>
+
+        <fieldset className={shared.fieldset}>
+          <legend className={shared.legend}>Contract</legend>
+          <div className={shared.field}>
+            <label className={shared.label} htmlFor="customer-contract-end">
+              Contract end date (optional)
+            </label>
+            <input
+              id="customer-contract-end"
+              className={shared.input}
+              type="date"
+              value={contractEnd}
+              min={toDateInputValue(todayUtc() + DAY_MS)}
+              onChange={(event) => setContractEnd(event.target.value)}
+              aria-describedby="customer-contract-end-hint"
+            />
+            <p id="customer-contract-end-hint" className={styles.note}>
+              The last day of the contract. On the morning after this date we
+              archive the customer automatically: their portal sign-ins stop
+              working and their reminders stop. Nothing is deleted - their sites,
+              buildings and assessment history stay in your records, and
+              restoring them brings their access back. Leave empty for an
+              open-ended contract.
+            </p>
+          </div>
         </fieldset>
 
         {fieldError && <ErrorNotice message={fieldError} />}

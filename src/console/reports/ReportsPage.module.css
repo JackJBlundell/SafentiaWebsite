@@ -13,6 +13,83 @@
   margin: 0 0 var(--space-md);
 }
 
+/* --- Stat tiles ------------------------------------------------------------
+   The drill-through treatment deliberately matches the dashboard's compliance
+   band (ComplianceGlance.module.css): a reader who learns the affordance on one
+   surface must not have to learn it again on the other. Each tile wrapper is a
+   single-cell grid so the StatCard within stretches to the full height its row
+   sets, whether or not the tile links anywhere. */
+.tile {
+  display: grid;
+}
+
+/* The whole tile is the link: the usual focus ring, no underline noise across
+   the number, and a hover/focus lift plus a chevron cue that fades in without
+   shifting layout. Motion is dropped under prefers-reduced-motion. */
+.statLink {
+  position: relative;
+  display: grid;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-lg);
+  transition:
+    transform var(--motion-fast) var(--easing),
+    box-shadow var(--motion-fast) var(--easing);
+}
+
+.statLink:hover,
+.statLink:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px var(--shadow-color);
+}
+
+.statLink:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+}
+
+/* Reserved space via absolute positioning, so the chevron's appearance never
+   reflows the tile. */
+.statChevron {
+  position: absolute;
+  top: var(--space-md);
+  inset-inline-end: var(--space-md);
+  display: inline-flex;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transform: translateX(-2px);
+  transition:
+    opacity var(--motion-fast) var(--easing),
+    transform var(--motion-fast) var(--easing);
+}
+
+.statChevron svg {
+  width: 16px;
+  height: 16px;
+}
+
+.statLink:hover .statChevron,
+.statLink:focus-visible .statChevron {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statLink,
+  .statChevron {
+    transition: none;
+  }
+
+  .statLink:hover,
+  .statLink:focus-visible {
+    transform: none;
+  }
+
+  .statChevron {
+    transform: none;
+  }
+}
+
 /* The card is flush so the table can run edge to edge; the header and notes
    restore the card's own inset for themselves. */
 .tableHeader {

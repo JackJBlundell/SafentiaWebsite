@@ -259,6 +259,28 @@ async function ensureUser(
   }
 }
 
+/**
+ * One responsible-party contact for a test building.
+ *
+ * A responsible party has to BE a CustomerContact: that record is what the
+ * release digest and the deadline chase resolve their recipient through, so a
+ * building carrying only a typed party name is one nothing is ever sent about -
+ * which the test portfolio must not model. Every one of them routes to the
+ * Firerite operations inbox, which is the honest arrangement for test data:
+ * these are role-holders at a fictional customer, and the only real mailbox
+ * behind them is the team running the trial. No portal roles - a test contact
+ * is a recipient, not an account (that would post an invitation to each one).
+ */
+function partyContact(name: string): CustomerContact {
+  return {
+    name,
+    jobTitle: name,
+    email: 'assessments@firerite.co.uk',
+    phone: '+44 1656 000000',
+    createdAt: Date.now(),
+  };
+}
+
 async function run(): Promise<void> {
   initAdmin();
   const p = forEnv(ENV);
@@ -342,7 +364,10 @@ async function run(): Promise<void> {
         alarmType: t.building.alarmType,
         alarmCategory: t.building.alarmCategory,
       },
-      responsibleParty: { name: t.building.responsiblePartyName },
+      responsibleParty: {
+        name: t.building.responsiblePartyName,
+        contactId: `contact-fr-${t.slug}`,
+      },
       article53Persons: ['Firerite Test Portfolio'],
       photoUrl: '',
       // Never assessed yet - the pending state, ready for a fresh assessment.
@@ -355,6 +380,10 @@ async function run(): Promise<void> {
       },
     };
     await setDb(p.db.building(ORG_ID, SITE_ID, buildingId), building);
+    await setDb(
+      p.db.customerContact(ORG_ID, CUSTOMER_ID, `contact-fr-${t.slug}`),
+      partyContact(t.building.responsiblePartyName),
+    );
 
     const jobId = `job-fr-${t.slug}`;
     const job: Job = {
@@ -385,7 +414,10 @@ async function run(): Promise<void> {
         alarmType: 'Addressable analogue',
         alarmCategory: h.alarmCategory,
       },
-      responsibleParty: { name: h.responsiblePartyName },
+      responsibleParty: {
+        name: h.responsiblePartyName,
+        contactId: `contact-frh-${t.slug}`,
+      },
       article53Persons: ['Firerite Test Portfolio'],
       photoUrl: '',
       riskLevel: 'pending',
@@ -397,6 +429,10 @@ async function run(): Promise<void> {
       },
     };
     await setDb(p.db.building(ORG_ID, SITE_ID, housingId), housing);
+    await setDb(
+      p.db.customerContact(ORG_ID, CUSTOMER_ID, `contact-frh-${t.slug}`),
+      partyContact(h.responsiblePartyName),
+    );
 
     const housingJobId = `job-frh-${t.slug}`;
     const housingJob: Job = {

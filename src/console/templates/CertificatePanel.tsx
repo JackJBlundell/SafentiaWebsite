@@ -2,7 +2,10 @@
 // CertificatePanel - attach an organisation PDF to a template.
 //
 // The certificate (an accreditation certificate, a signed cover sheet) is merged
-// into EVERY report rendered from this template, before the report or after it.
+// into EVERY report rendered from this template, as page 2 - immediately behind
+// the cover and ahead of the contents, which is where the industry documents
+// this report follows carry it. There is nothing to choose, so this panel does
+// not offer a position: it uploads, shows and removes.
 // The panel edits the DRAFT template in place, exactly as the name and standard
 // controls above it do; publishTemplate re-validates the result (the position
 // against CERTIFICATE_POSITIONS, the url against the caller's own Storage root)
@@ -18,16 +21,10 @@
 import { useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
-import { CERTIFICATE_POSITIONS } from '../../types';
-import type { CertificatePosition, Template, TemplateCertificate } from '../../types';
+import type { Template, TemplateCertificate } from '../../types';
 import { ErrorNotice } from '../ui/Page';
 import { MAX_DOCUMENT_BYTES, newObjectId, uploadFile } from '../lib/upload';
 import styles from './TemplateBuilder.module.css';
-
-const POSITION_LABELS: Record<CertificatePosition, string> = {
-  top: 'Before the report',
-  bottom: 'After the report',
-};
 
 export interface CertificatePanelProps {
   template: Template;
@@ -83,10 +80,10 @@ export function CertificatePanel({
       const next: TemplateCertificate = {
         url,
         name: file.name,
-        // Replacing a certificate keeps wherever the admin had positioned it;
-        // a first upload defaults to the front, which is where an accreditation
-        // certificate is normally read.
-        position: certificate?.position ?? 'top',
+        // The only supported position. Written unconditionally so replacing a
+        // certificate on a template authored before the move also clears the
+        // legacy value it was carrying.
+        position: 'afterCover',
         uploadedAt: Date.now(),
       };
       onChange({ ...template, certificate: next });
@@ -106,13 +103,6 @@ export function CertificatePanel({
     onChange(next);
   };
 
-  const setPosition = (position: CertificatePosition) => {
-    if (!certificate) {
-      return;
-    }
-    onChange({ ...template, certificate: { ...certificate, position } });
-  };
-
   const busy = progress !== null;
 
   return (
@@ -121,7 +111,8 @@ export function CertificatePanel({
       <p className={styles.hint}>
         A PDF merged into every report generated from this template, such as an
         accreditation certificate or a signed cover sheet. Its pages are included
-        exactly as uploaded.
+        exactly as uploaded, on page 2 of the report - immediately after the
+        cover and before the contents.
       </p>
       {/* Password-protected files cannot be merged reliably: the pages can copy
           across as unreadable content without raising an error, so the report
@@ -134,29 +125,7 @@ export function CertificatePanel({
       </p>
 
       {certificate ? (
-        <>
-          <p className={styles.hint}>Attached: {certificate.name}</p>
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="builder-certificate-position">
-              Where it appears
-            </label>
-            <select
-              id="builder-certificate-position"
-              className={styles.select}
-              value={certificate.position}
-              disabled={disabled || busy}
-              onChange={(event) =>
-                setPosition(event.target.value as CertificatePosition)
-              }
-            >
-              {CERTIFICATE_POSITIONS.map((position) => (
-                <option key={position} value={position}>
-                  {POSITION_LABELS[position]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </>
+        <p className={styles.hint}>Attached: {certificate.name}</p>
       ) : (
         <p className={styles.hint}>No certificate is attached.</p>
       )}

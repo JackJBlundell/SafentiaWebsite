@@ -60,7 +60,10 @@ interface ReportRow {
 export function AssessmentHistoryPanel({ buildingId }: { buildingId: string }) {
   const { claims, paths } = useAuth();
   const orgId = claims?.orgId ?? '';
-  const canRegenerate =
+  // Admin or auditor: the roles that may open an assessment in validation AND
+  // regenerate its report. One flag because it is genuinely one permission -
+  // "may work with this building's assessments" - not two that happen to match.
+  const canOpenAssessments =
     claims?.roles.admin === true || claims?.roles.auditor === true;
   const enabled = Boolean(orgId && paths && buildingId);
 
@@ -145,6 +148,17 @@ export function AssessmentHistoryPanel({ buildingId }: { buildingId: string }) {
             rows={assessmentRows}
             rowKey={(row) => row.id}
             label="Assessment history"
+            // Through to the assessment itself - every question with its answer,
+            // its photographs and its flagged floor plans. That view already
+            // existed but was only reachable from the validation queue, so from a
+            // BUILDING (where someone asking "what did we find here?" actually
+            // starts) there was no way in and the evidence looked absent.
+            //
+            // Gated on the same roles the review screen gates itself on, so a row
+            // never offers a link that lands on "auditor access required".
+            rowHref={
+              canOpenAssessments ? (row) => `/app/validation/${row.id}` : undefined
+            }
           />
         ))}
 
@@ -165,7 +179,7 @@ export function AssessmentHistoryPanel({ buildingId }: { buildingId: string }) {
               <ReportItem
                 key={row.id}
                 report={row.report}
-                canRegenerate={canRegenerate}
+                canRegenerate={canOpenAssessments}
               />
             ))}
           </ul>
@@ -253,6 +267,22 @@ function ReportItem({
           )}
         </span>
       </div>
+      {/* The customer's sign-off. Shown on the staff side because "has the
+          responsible person accepted this assessment?" is a question the office
+          gets asked and previously had no way to answer without reading the
+          database. The NAME is the one the contact typed at the prompt - their
+          attestation - not a copy of their profile name. */}
+      <p
+        className={
+          report.acceptance ? styles.acceptance : styles.acceptancePending
+        }
+      >
+        {report.acceptance
+          ? `Accepted by ${report.acceptance.name} on ${formatDate(
+              report.acceptance.at,
+            )}`
+          : 'Not yet accepted by the customer'}
+      </p>
       {confirming && (
         <div className={styles.confirm}>
           <p className={styles.confirmCopy}>

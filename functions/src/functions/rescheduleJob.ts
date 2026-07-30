@@ -11,7 +11,9 @@
 // A cancelled or released job cannot be rescheduled - the first is dead, the
 // second is history. The (new) assessor is notified with what changed, and a
 // replaced assessor is told the visit has left their diary (mirroring the
-// createJob assignment notification path).
+// createJob assignment notification path) - each in-app AND by branded email
+// (lib/jobEmails), since a diary change nobody opens the app to see is a wasted
+// visit; the member's own `jobScheduled` preference silences the email only.
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -31,6 +33,12 @@ import { assertRateLimit } from '../lib/rateLimit';
 import { assertValidSlot, assertNoSlotClash } from '../lib/jobSlots';
 import { activityUpdate } from '../lib/events';
 import { sendNotification } from '../lib/notifications';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import {
+  sendJobChangeEmail,
+  sendVisitCustomerEmails,
+  formatVisitDate,
+} from '../lib/jobEmails';
 import { isUkToday, ukWhenPhrase } from '../lib/ukCalendar';
 import type {
   RescheduleJobInput,
@@ -40,7 +48,11 @@ import type {
   OrgMember,
 } from '../shared/types';
 
-export const rescheduleJob = onCall<RescheduleJobInput>(callableOptions, (request) =>
+export const rescheduleJob = onCall<RescheduleJobInput>(
+  // The diary emails need the provider secret mounted; without it the send
+  // degrades to a logged intent (lib/email), never an error.
+  { ...callableOptions, secrets: EMAIL_PROVIDER_SECRETS },
+  (request) =>
   runCallable<RescheduleJobResult>(
     createLogger({ fn: 'rescheduleJob' }),
     async () => {
@@ -201,6 +213,36 @@ export const rescheduleJob = onCall<RescheduleJobInput>(callableOptions, (reques
         },
         logger,
       );
+      // The same news by email, for the assessor who has not opened the app
+      // today. Best-effort and silent on their own opt-out; the notification
+      // above sends either way.
+      await sendJobChangeEmail(
+        paths,
+        orgId,
+        assessorUid,
+        {
+          jobId,
+          buildingName: where,
+          customerId: job.customerId,
+          scheduledFor,
+          scheduledUntil,
+          subject: assessorChanged
+            ? `Job assigned to you: ${where}`
+            : today
+              ? `Job moved to today: ${where}`
+              : `Job rescheduled: ${where}`,
+          heading: assessorChanged
+            ? 'A job has moved to your diary'
+            : 'Your job has been rescheduled',
+          // The email names the DATE where the notification says 'today': it is
+          // read hours or days after it lands, by which time a relative phrase
+          // would be a lie.
+          body: assessorChanged
+            ? `The assessment at ${where} has been reassigned to you, scheduled for ${formatVisitDate(scheduledFor, scheduledUntil)}.`
+            : `Your assessment at ${where} has been rescheduled to ${formatVisitDate(scheduledFor, scheduledUntil)}.`,
+        },
+        logger,
+      );
       if (assessorChanged) {
         // The replaced assessor's diary changed too; a silent removal would
         // leave them travelling to a visit that is no longer theirs.
@@ -213,6 +255,54 @@ export const rescheduleJob = onCall<RescheduleJobInput>(callableOptions, (reques
             title: 'Job reassigned',
             body: `The assessment at ${where} has been reassigned to another assessor.`,
             link: `safentia://job/${jobId}`,
+          },
+          logger,
+        );
+        // Emailed too, and against the visit's OLD date: what the replaced
+        // assessor needs to recognise is the slot that has just freed up in
+        // their week, not the one it moved to in somebody else's.
+        await sendJobChangeEmail(
+          paths,
+          orgId,
+          job.assessorUid,
+          {
+            jobId,
+            buildingName: where,
+            customerId: job.customerId,
+            scheduledFor: job.scheduledFor,
+            scheduledUntil: job.scheduledUntil,
+            subject: `Job reassigned: ${where}`,
+            heading: 'A job has left your diary',
+            body: `The assessment at ${where} has been reassigned to another assessor, so it is no longer yours to attend.`,
+            dateLabel: 'Was scheduled for',
+          },
+          logger,
+        );
+      }
+
+      // The customer hears about their own visit moving. The two changes look
+      // completely different from the building's side, so they are told apart:
+      // a new date is a rescheduling, while a same-slot handover only changes
+      // who arrives at reception. A save that changed NOTHING sends nothing -
+      // an admin re-saving the same values must not put a second "your visit
+      // has moved" in a duty-holder's inbox.
+      if (changed.length > 0) {
+        const timeChanged =
+          changed.includes('scheduledFor') || changed.includes('scheduledUntil');
+        await sendVisitCustomerEmails(
+          paths,
+          orgId,
+          {
+            jobId,
+            customerId: job.customerId,
+            siteId: job.siteId,
+            buildingId: job.buildingId,
+            buildingName: where,
+            // The assessor who will now attend, not the one replaced.
+            assessorUid,
+            scheduledFor,
+            scheduledUntil,
+            kind: timeChanged ? 'rescheduled' : 'reassigned',
           },
           logger,
         );

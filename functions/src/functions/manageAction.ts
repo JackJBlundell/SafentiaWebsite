@@ -15,10 +15,17 @@
 //
 // Manual provenance: see lib/actionPlan.ts for why a manual action carries the
 // 'manual' sentinel as its assessmentId/sectionCode and an empty question.
+//
+// WHO OWES THE WORK IS A CONTACT. An action is assigned by naming a
+// CustomerContact of the building's customer (`responsibleContactId`); the
+// callable reads that contact and writes its name onto `responsible` itself.
+// Free text is not accepted, because a typed name is a person the platform can
+// never tell - which is precisely how assignment emails came to be logged and
+// dropped.
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
-import { db } from '../admin';
+import { db, storage } from '../admin';
 import { callableOptions } from '../lib/callable';
 import { createLogger } from '../lib/logging';
 import { fail, runCallable } from '../lib/errors';
@@ -35,6 +42,7 @@ import {
   optionalString,
   clearableString,
   requireEnum,
+  requireTenantStorageRef,
   requireTimestamp,
   TEXT_LIMITS,
 } from '../lib/validate';
@@ -43,7 +51,7 @@ import { activityUpdate } from '../lib/events';
 import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import { orgEmailBrand, renderBrandedEmail } from '../lib/emailTemplates';
-import { resolveResponsibleName } from '../lib/responsibleParty';
+import { resolveResponsibleAssignment } from '../lib/responsibleParty';
 import {
   createActionRecord,
   reopenFragment,
@@ -59,9 +67,11 @@ import type {
   ActionStatusChange,
   Building,
   CustomerContact,
+  Environment,
   ManageActionInput,
   ManageActionResult,
   OrgProfile,
+  SafentiaDocument,
   Severity,
 } from '../shared/types';
 
@@ -83,6 +93,93 @@ function formatDueDate(millis: number): string {
     year: 'numeric',
     timeZone: 'UTC',
   });
+}
+
+/** The evidence fields a caller may supply. uploadedBy/uploadedAt are stamped
+ *  from the verified token and the server clock, so their presence in the
+ *  payload is rejected rather than trusted - proof of completion cannot carry
+ *  forged attribution. */
+const EVIDENCE_FIELDS = ['fileName', 'storagePath'] as const;
+
+/**
+ * The optional supporting document attached to a sign-off, validated into the
+ * record shape it will be stored as.
+ *
+ * TENANCY IS THE POINT: `storagePath` is a pointer this product will later
+ * render and serve to a customer as proof that statutory work was done, so it
+ * is checked against the CALLER'S OWN tenant Storage prefix
+ * (requireTenantStorageRef) rather than accepted as free text. A download URL
+ * form passes that check too, but is refused here: the record must hold a
+ * stable object path, because the callable stamps ownership metadata onto that
+ * exact object below and every reader mints its own short-lived URL from it.
+ */
+function readEvidence(
+  input: Record<string, unknown>,
+  env: Environment,
+  orgId: string,
+  uid: string,
+  now: number,
+): SafentiaDocument | undefined {
+  const supplied = input.completionEvidence;
+  if (supplied === undefined || supplied === null) {
+    return undefined;
+  }
+  const payload = assertObject(supplied);
+  for (const key of Object.keys(payload)) {
+    if (!(EVIDENCE_FIELDS as readonly string[]).includes(key)) {
+      throw fail.invalidArgument(`Unknown evidence field: ${key}.`, {
+        field: key,
+      });
+    }
+  }
+  const fileName = requireString(payload, 'fileName', TEXT_LIMITS.shortText);
+  const storagePath = requireTenantStorageRef(
+    requireString(payload, 'storagePath', 2048),
+    'storagePath',
+    env,
+    orgId,
+  );
+  if (storagePath.includes('://')) {
+    throw fail.invalidArgument(
+      'Supporting evidence must be given as a stored file path, not a link.',
+      { field: 'storagePath' },
+    );
+  }
+  return { fileName, storagePath, uploadedBy: uid, uploadedAt: now };
+}
+
+/**
+ * Stamp the owning customer onto the evidence object so the customer's portal
+ * users can read exactly their own proof (the Storage rule scopes on this
+ * metadata - the object path carries no customer segment). Mirrors how a
+ * generated report is stamped, with one deliberate difference: this throws.
+ *
+ * The stamp is written BEFORE the sign-off lands, so a failure here leaves the
+ * action untouched and the admin simply tries again - far better than recording
+ * a closure whose proof the customer can never open. It doubles as the only
+ * check that the claimed object actually exists: a client that names a path it
+ * never uploaded fails here rather than leaving a dangling pointer in the legal
+ * record.
+ */
+async function stampEvidenceOwner(
+  storagePath: string,
+  customerId: string,
+  logger: Logger,
+): Promise<void> {
+  try {
+    await storage
+      .bucket()
+      .file(storagePath)
+      .setMetadata({ metadata: { customerId } });
+  } catch (error) {
+    logger.error('Evidence file could not be stamped for its owning customer', {
+      storagePath,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw fail.failedPrecondition(
+      'That supporting document could not be read back. Please attach it again.',
+    );
+  }
 }
 
 /** A building found in the org's estate, with the site it stands under. */
@@ -123,9 +220,50 @@ async function locateBuilding(
   return undefined;
 }
 
-/** The action facts the assignment email carries. */
+/**
+ * The CustomerContact an action is being assigned to, read from the building's
+ * OWN customer so an id can never be aimed at another customer's directory.
+ *
+ * EXPLICIT versus INHERITED is the whole distinction. A contact the caller NAMED
+ * must exist: recording an assignment against an id that resolves to nobody
+ * would put a person on a compliance record who cannot be told about it, so it
+ * is refused with copy the console can show. A contact INHERITED from the
+ * building's stored default is best-effort: the admin did not choose it and the
+ * action is still worth recording, so a stale default is logged and the action
+ * lands with the link it inherited but no live name behind it.
+ */
+async function readAssignedContact(
+  paths: EnvPaths,
+  orgId: string,
+  customerId: string,
+  contactId: string,
+  explicit: boolean,
+  logger: Logger,
+): Promise<CustomerContact | undefined> {
+  const snap = await db
+    .ref(paths.db.customerContact(orgId, customerId, contactId))
+    .get();
+  const contact = snap.val() as CustomerContact | null;
+  if (contact) {
+    return contact;
+  }
+  if (explicit) {
+    throw fail.notFound(
+      "That contact could not be found in this customer's contacts.",
+      { field: 'responsibleContactId' },
+    );
+  }
+  logger.warn(
+    'The building’s default responsible party names a contact that is no longer in the customer’s contact list, so this action inherits a link nobody can be emailed through',
+    { customerId, contactId },
+  );
+  return undefined;
+}
+
+/** The action facts the assignment email carries, addressed to the contact the
+ *  action is assigned to. */
 interface AssignedActionView {
-  responsible: string;
+  responsibleContactId: string;
   observation: string;
   severity: Severity;
   dueBy?: number;
@@ -133,18 +271,21 @@ interface AssignedActionView {
 }
 
 /**
- * Story 2047: ONE branded email to the person an action was just assigned to.
- * `Action.responsible` is free text today (the proper Action.contactId linkage
- * is FUTURE_WORK.md section 9), so the ONLY route to an address is the
- * building's structured responsibleParty: it must carry a contactId, AND the
- * action's `responsible` must match that party's name EXACTLY after trim +
- * case-fold. Anything looser (substring, fuzzy, first-name) could route a
- * statutory compliance email to the wrong person - free text routinely names
- * contractors, teams or similarly-named colleagues, and "close enough" here
- * means telling the wrong human they hold a fire-safety duty. No linked or
- * matching contact: log the intent and skip. Best-effort throughout - the
- * action record has already landed and nothing here may throw (the
- * dispatchEmail contract, extended to the reads around it).
+ * Story 2047: ONE branded email to the person an action was just assigned to,
+ * addressed through `Action.responsibleContactId` - the contact record itself,
+ * never a name. The name-matching this replaced ("does the free-text
+ * `responsible` equal the building party's name?") meant an action assigned to
+ * anyone other than the building's own default was silently never sent, and it
+ * could only ever have reached one person per building however many people the
+ * plan actually named.
+ *
+ * The dead ends are a contact that has been removed from the customer's list and
+ * a contact with no email address. Each is logged with its reason, because
+ * "nobody was emailed" must be diagnosable - and neither is guessed around:
+ * inventing an address for a statutory compliance message is worse than silence.
+ *
+ * Best-effort throughout - the action record has already landed and nothing here
+ * may throw (the dispatchEmail contract, extended to the reads around it).
  *
  * Story 2066 note: NO emailPreferences.actionAssigned check here, deliberately.
  * The recipient is a CUSTOMER CONTACT (customerContacts record), and email
@@ -168,38 +309,35 @@ async function emailAssignedAction(
     // needs the site the walk passes through as well as the record.
     const resolved = located ?? (await locateBuilding(paths, orgId, buildingId));
     if (!resolved) {
-      logger.info('Assignment email skipped: building record not found');
+      logger.info('Assignment email skipped: building record not found', {
+        buildingId,
+      });
       return;
     }
     const { building, siteId } = resolved;
 
-    const party = building.responsibleParty;
-    if (!party?.contactId) {
-      logger.info(
-        'Assignment email skipped: building has no linked responsible party',
-        { hasParty: Boolean(party) },
-      );
-      return;
-    }
-    const matches =
-      view.responsible.trim().toLowerCase() ===
-      party.name.trim().toLowerCase();
-    if (!matches) {
-      logger.info(
-        'Assignment email skipped: responsible does not match the linked party',
-      );
-      return;
-    }
     const contactSnap = await db
       .ref(
-        paths.db.customerContact(orgId, building.customerId, party.contactId),
+        paths.db.customerContact(
+          orgId,
+          building.customerId,
+          view.responsibleContactId,
+        ),
       )
       .get();
     const contact = contactSnap.val() as CustomerContact | null;
-    if (!contact?.email) {
-      logger.info('Assignment email skipped: linked contact has no email', {
-        contactId: party.contactId,
-      });
+    if (!contact) {
+      logger.warn(
+        'Assignment email skipped: the assigned contact is no longer in the customer’s contact list',
+        { buildingId, contactId: view.responsibleContactId },
+      );
+      return;
+    }
+    if (!contact.email) {
+      logger.info(
+        'Assignment email skipped: the assigned contact has no email address on record',
+        { buildingId, contactId: view.responsibleContactId },
+      );
       return;
     }
 
@@ -244,7 +382,7 @@ async function emailAssignedAction(
         label: 'View the action plan',
         url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
       },
-      footerNote: `You are receiving this because you are named as the responsible party for ${building.name} on Safentia.`,
+      footerNote: `You are receiving this because you are recorded as responsible for this action at ${building.name} on Safentia.`,
     });
     await dispatchEmail({ to: contact.email, subject, body, html }, logger, {
       orgId,
@@ -273,7 +411,7 @@ export const manageAction = onCall<ManageActionInput>(
         await assertRateLimit(uid, 'manageAction');
         const claims = getClaims(request);
         assertOrgRole(claims, 'admin');
-        const { paths } = envFor(claims);
+        const { env, paths } = envFor(claims);
         const orgId = claims.orgId;
 
         const input = assertObject(request.data);
@@ -288,6 +426,10 @@ export const manageAction = onCall<ManageActionInput>(
         const indexSnap = await db
           .ref(paths.db.buildingCustomer(orgId, buildingId))
           .get();
+        // The same read answers "does this building exist" and "whose is it".
+        // The second answer is what scopes sign-off evidence to the customer's
+        // portal, so it is kept rather than re-read on that path.
+        const indexedCustomerId = indexSnap.val() as string | null;
         if (!indexSnap.exists()) {
           const estateSnap = await db.ref(paths.db.buildingsRoot(orgId)).get();
           const estate =
@@ -329,12 +471,11 @@ export const manageAction = onCall<ManageActionInput>(
               },
             );
           }
-          // The responsible party is INHERITED when the admin did not name one:
-          // the building's default (structured party first, legacy free-text
-          // string last), exactly as the release pipeline inherits it for an
-          // assessment-born action. Without this the same person had to be
-          // re-typed on every manual action, and any left blank vanished from
-          // the action plan's "who owes this" column.
+          // The responsible party is INHERITED when the admin did not name a
+          // contact: the building's default party, exactly as the release
+          // pipeline inherits it for an assessment-born action. Without this the
+          // same person had to be re-picked on every manual action, and any left
+          // blank vanished from the action plan's "who owes this" column.
           //
           // There is no assessment party to consider on this path: manageAction
           // only ever creates MANUAL actions, which carry the MANUAL_ASSESSMENT_ID
@@ -342,22 +483,51 @@ export const manageAction = onCall<ManageActionInput>(
           // (lib/actionPlan). Should a future verb create an assessment-born
           // action here, its assessment must be passed as the first source.
           //
-          // Located only when needed, and the record is handed to the assignment
-          // email below so a create costs at most ONE estate read.
+          // The estate is walked at most ONCE: for the default party when none
+          // was named, or for the owning customer when the buildingCustomer
+          // index has no entry for this building. The record is then handed to
+          // the assignment email below rather than re-read.
           let located: LocatedBuilding | undefined;
-          if (payload.responsible == null) {
+          if (payload.responsibleContactId == null || !indexedCustomerId) {
             located = await locateBuilding(paths, orgId, buildingId);
           }
-          const responsible = resolveResponsibleName(
-            payload.responsible ?? undefined,
+          const customerId = indexedCustomerId ?? located?.building.customerId;
+          if (!customerId) {
+            // The existence gate passed, so this means the building went away
+            // between that read and this one.
+            throw fail.notFound('That building could not be found.', {
+              field: 'buildingId',
+            });
+          }
+          const assignment = resolveResponsibleAssignment(
+            payload.responsibleContactId
+              ? { responsibleContactId: payload.responsibleContactId }
+              : undefined,
             undefined,
             located?.building,
           );
+          // The recorded name is the CONTACT'S OWN, read from the directory:
+          // `responsible` is the name as it stood when the action was raised,
+          // and the contact record is what that name means at this instant.
+          const contact = assignment.contactId
+            ? await readAssignedContact(
+                paths,
+                orgId,
+                customerId,
+                assignment.contactId,
+                payload.responsibleContactId != null,
+                logger,
+              )
+            : undefined;
+          const responsible = contact?.name ?? assignment.name;
           const record = createActionRecord(
             {
               observation: payload.observation,
               severity: payload.severity,
               ...(responsible != null ? { responsible } : {}),
+              ...(assignment.contactId !== undefined
+                ? { responsibleContactId: assignment.contactId }
+                : {}),
               ...(payload.dueBy != null ? { dueBy: payload.dueBy } : {}),
               ...(payload.lifeProtection !== undefined
                 ? { lifeProtection: payload.lifeProtection }
@@ -376,21 +546,26 @@ export const manageAction = onCall<ManageActionInput>(
               target: actionId,
             }),
           });
-          logger.info('Action created', { buildingId, actionId });
-          // Story 2047: created WITH a responsible - tell them, once. An
-          // INHERITED responsible sends too, deliberately: the notification
-          // answers "an action is now yours", which is equally true whether the
-          // admin typed the party's name or the building's default supplied it,
-          // and the send is still gated on the party being a linked contact
-          // whose name matches exactly. `located` is passed through so the
-          // email path does not re-read the estate this branch already walked.
-          if (record.responsible !== undefined) {
+          logger.info('Action created', {
+            buildingId,
+            actionId,
+            // An unassigned action is a legitimate state; an action assigned to
+            // nobody the platform can reach is not, so the link is logged.
+            linkedContact: record.responsibleContactId !== undefined,
+          });
+          // Story 2047: created WITH a responsible contact - tell them, once. An
+          // INHERITED contact sends too, deliberately: the notification answers
+          // "an action is now yours", which is equally true whether the admin
+          // picked the person or the building's default supplied them.
+          // `located` is passed through so the email path does not re-read the
+          // estate this branch already walked.
+          if (record.responsibleContactId !== undefined) {
             await emailAssignedAction(
               paths,
               orgId,
               buildingId,
               {
-                responsible: record.responsible,
+                responsibleContactId: record.responsibleContactId,
                 observation: record.observation,
                 severity: record.severity,
                 ...(record.dueBy !== undefined ? { dueBy: record.dueBy } : {}),
@@ -459,8 +634,38 @@ export const manageAction = onCall<ManageActionInput>(
             // that. The admin edits dueBy explicitly if it should follow.
             update[`${actionPath}/severity`] = fields.severity;
           }
-          if (fields.responsible !== undefined) {
-            update[`${actionPath}/responsible`] = fields.responsible;
+          if (fields.responsibleContactId !== undefined) {
+            // Re-assignment names a CONTACT; the name follows from it, so the
+            // pair on the record always describes one real person. Null clears
+            // both - an action can be unassigned, but it can never be assigned
+            // to a name with nobody behind it.
+            if (fields.responsibleContactId === null) {
+              update[`${actionPath}/responsible`] = null;
+              update[`${actionPath}/responsibleContactId`] = null;
+            } else {
+              const customerId =
+                indexedCustomerId ??
+                (await locateBuilding(paths, orgId, buildingId))?.building
+                  .customerId;
+              if (!customerId) {
+                throw fail.notFound('That building could not be found.', {
+                  field: 'buildingId',
+                });
+              }
+              const contact = await readAssignedContact(
+                paths,
+                orgId,
+                customerId,
+                fields.responsibleContactId,
+                true,
+                logger,
+              );
+              // An explicit id that resolves to nobody was refused above, so
+              // the contact is present; the fallback only satisfies the type.
+              update[`${actionPath}/responsible`] = contact?.name ?? null;
+              update[`${actionPath}/responsibleContactId`] =
+                fields.responsibleContactId;
+            }
           }
           if (fields.dueBy !== undefined) {
             update[`${actionPath}/dueBy`] = fields.dueBy;
@@ -471,20 +676,20 @@ export const manageAction = onCall<ManageActionInput>(
           if (Object.keys(update).length === 0) {
             throw fail.invalidArgument('No action fields were provided.');
           }
-          // Re-assignment detection: a non-null responsible that differs from
-          // the stored one under the same trim + case-fold normalisation the
-          // send-side match uses (so "John Smith" -> " john smith " is a
-          // cosmetic re-save, not a re-assignment). The email itself carries
-          // the action's post-update facts.
+          // Re-assignment detection is now an IDENTITY comparison: the action
+          // moved to a different contact. Re-picking the same person - which is
+          // what re-saving the form does - changes nothing and must not
+          // re-email them, and a renamed contact is not a re-assignment at all
+          // (the old name-comparison would have read it as one). The email
+          // itself carries the action's post-update facts.
           if (
-            fields.responsible != null &&
-            fields.responsible.trim().toLowerCase() !==
-              (existing.responsible ?? '').trim().toLowerCase()
+            fields.responsibleContactId != null &&
+            fields.responsibleContactId !== existing.responsibleContactId
           ) {
             const effectiveDueBy =
               fields.dueBy === null ? undefined : (fields.dueBy ?? existing.dueBy);
             assignment = {
-              responsible: fields.responsible,
+              responsibleContactId: fields.responsibleContactId,
               observation: fields.observation ?? existing.observation,
               severity: fields.severity ?? existing.severity,
               ...(effectiveDueBy !== undefined ? { dueBy: effectiveDueBy } : {}),
@@ -515,17 +720,50 @@ export const manageAction = onCall<ManageActionInput>(
             'completionNote',
             TEXT_LIMITS.freeText,
           );
+          // Optional supporting evidence: a file already in this org's own
+          // tenant Storage. Stamped with its owning customer before anything is
+          // written, so the record can never name proof the customer's portal
+          // would be refused (see stampEvidenceOwner).
+          const completionEvidence = readEvidence(input, env, orgId, uid, now);
+          if (completionEvidence) {
+            // A building with no index entry reached here through the estate
+            // scan above; without a customerId the stamp cannot scope the file,
+            // so it is recorded for staff and reported for repair rather than
+            // silently released to nobody.
+            if (!indexedCustomerId) {
+              logger.error(
+                'Sign-off evidence stored with no owning customer: portal read will be denied',
+                { buildingId, actionId },
+              );
+            } else {
+              await stampEvidenceOwner(
+                completionEvidence.storagePath,
+                indexedCustomerId,
+                logger,
+              );
+            }
+          }
           Object.assign(
             update,
-            signOffFragment(actionPath, uid, now, completionNote),
+            signOffFragment(
+              actionPath,
+              uid,
+              now,
+              completionNote,
+              completionEvidence,
+            ),
           );
           historyEntry = {
             status: 'signedOff',
             byUid: uid,
             at: now,
-            // The note lives on both the record and this history entry, so the
-            // trail keeps it even after a later reopen clears the record field.
+            // The note and its evidence live on both the record and this history
+            // entry, so the trail keeps them even after a later reopen clears
+            // the record fields.
             ...(completionNote !== undefined ? { note: completionNote } : {}),
+            ...(completionEvidence !== undefined
+              ? { evidence: completionEvidence }
+              : {}),
           };
           activityAction = 'action.signedOff';
         } else {
@@ -581,7 +819,7 @@ export const manageAction = onCall<ManageActionInput>(
 function readFields(payload: Record<string, unknown>): {
   observation?: string | null;
   severity?: Severity | null;
-  responsible?: string | null;
+  responsibleContactId?: string | null;
   dueBy?: number | null;
   lifeProtection?: boolean;
 } {
@@ -598,7 +836,11 @@ function readFields(payload: Record<string, unknown>): {
         : payload.severity !== undefined
           ? requireEnum(payload, 'severity', SEVERITIES)
           : undefined,
-    responsible: clearableString(payload, 'responsible', TEXT_LIMITS.shortText),
+    responsibleContactId: clearableString(
+      payload,
+      'responsibleContactId',
+      TEXT_LIMITS.shortText,
+    ),
     dueBy:
       payload.dueBy === null
         ? null

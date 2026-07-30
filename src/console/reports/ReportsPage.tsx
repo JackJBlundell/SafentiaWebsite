@@ -16,9 +16,16 @@
 //     surface), not the platform owner's console. Organisation-facing billing
 //     is Phase 3 and is not mentioned here: a page should describe what it is,
 //     not apologise for what does not exist yet (product-owner feedback).
+//
+// Every stat tile is a way IN, not a full stop: each drills through to the
+// customer directory filtered to exactly the figure it states, using the
+// directory's own ?risk= / ?overdue= / ?open= vocabulary (the same one the
+// dashboard's tiles speak). The directory rolls up the same two org-root reads
+// this page does, so the tile and the list it opens agree by construction.
 // ============================================================================
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   orderByChild,
   query,
@@ -34,7 +41,7 @@ import { CardGrid } from '../ui/Grid';
 import { DataTable, type Column } from '../ui/DataTable';
 import { EmptyState, PageHeader } from '../ui/Page';
 import { Skeleton, SkeletonStatus } from '../ui/Skeleton';
-import { LoadingNote } from '../customers/shared';
+import { LoadingNote, urls } from '../customers/shared';
 import { downloadCsv } from '../lib/csv';
 import { isReleaseAction } from '../lib/humaniseActivity';
 import { ReleasesChart } from './ReleasesChart';
@@ -67,6 +74,62 @@ const RISK_TILES: Array<{
   { level: 'low', label: 'Low risk', tone: 'default' },
   { level: 'pending', label: 'Not yet assessed', tone: 'default' },
 ];
+
+/** The drill-through cue on a whole-tile link: a chevron that fades in on
+ *  hover/focus without shifting layout (absolutely positioned, opacity only).
+ *  Decorative - the tile's label and number are the link's accessible name,
+ *  exactly as on the dashboard band. */
+function StatChevron() {
+  return (
+    <span aria-hidden="true" className={styles.statChevron}>
+      <svg
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="m6 3.5 4.5 4.5L6 12.5" />
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * One stat tile, with its drill-through.
+ *
+ * A counted, non-zero figure becomes a REAL link over the whole tile, so
+ * open-in-new-tab, keyboard focus and screen-reader navigation all work as
+ * they would on any other link. A zero - and a figure whose read has not
+ * attached yet - stays plain text: an affordance that lands on an empty list
+ * is a dead end dressed as a way in, and a number nobody has counted yet
+ * cannot promise rows at the other end.
+ */
+function ReportStat({
+  href,
+  label,
+  value,
+  hint,
+  tone = 'default',
+}: {
+  href: string;
+  label: string;
+  value: number | undefined;
+  hint: string;
+  tone?: 'default' | 'warning' | 'danger';
+}) {
+  const tile = <StatCard label={label} value={value} hint={hint} tone={tone} />;
+  if (value === undefined || value === 0) {
+    return <div className={styles.tile}>{tile}</div>;
+  }
+  return (
+    <Link to={href} className={styles.statLink}>
+      {tile}
+      <StatChevron />
+    </Link>
+  );
+}
 
 /** Release events only, shaped for the month counter. The trail's other event
  *  kinds are irrelevant here, so they are dropped at selection time.
@@ -209,8 +272,9 @@ export function ReportsPage() {
           <h2 className={styles.sectionTitle}>Buildings by current risk</h2>
           <CardGrid min={170}>
             {RISK_TILES.map((tile) => (
-              <StatCard
+              <ReportStat
                 key={tile.level}
+                href={`${urls.customers}?risk=${tile.level}`}
                 label={tile.label}
                 value={riskCounts?.[tile.level]}
                 hint="buildings"
@@ -223,18 +287,23 @@ export function ReportsPage() {
         <section aria-label="Action plan position">
           <h2 className={styles.sectionTitle}>Action plan position</h2>
           <CardGrid min={170}>
-            <StatCard
+            <ReportStat
+              href={`${urls.customers}?open=1`}
               label="Open actions"
               value={openActions?.length}
               hint="across all buildings"
             />
-            <StatCard
+            <ReportStat
+              href={`${urls.customers}?overdue=1`}
               label="Overdue actions"
               value={overdue?.overdue}
               hint="open, past their due date"
               tone={overdue && overdue.overdue > 0 ? 'warning' : 'default'}
             />
-            <StatCard
+            <ReportStat
+              // The escalated subset gets its OWN destination, not the general
+              // overdue list: a tile that states 3 must not open a list of 40.
+              href={`${urls.customers}?overdue=life`}
               label="Life Protection overdue"
               value={overdue?.lifeProtectionOverdue}
               hint="overdue actions that protect life"

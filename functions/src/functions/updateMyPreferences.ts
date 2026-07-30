@@ -47,6 +47,12 @@ const PREFERENCE_KEYS = [
   'infoRequested',
   // The deadlineReminders sweep's information-request and action nudges.
   'deadlineReminder',
+  // Diary email: createJob / rescheduleJob / cancelJob and the morning
+  // dailyJobReminders digest.
+  'jobScheduled',
+  // The assessor's own verdict emails from the stage bus: accepted, and
+  // released. Separate from 'released', which is the administrators' notice.
+  'assessmentOutcome',
 ] as const;
 
 export const updateMyPreferences = onCall<UpdateMyPreferencesInput>(
@@ -66,7 +72,7 @@ export const updateMyPreferences = onCall<UpdateMyPreferencesInput>(
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
 
-        // 2. Validate: exactly the four known categories, each a strict
+        // 2. Validate: exactly the known categories above, each a strict
         // boolean when present. Unknown keys are rejected rather than silently
         // dropped so a drifted client fails loudly (CONVENTIONS: no silent
         // acceptance of malformed input).

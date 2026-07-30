@@ -37,17 +37,22 @@ export interface PortalScope {
    *  callable re-checks the customer role server-side, so a UI slip can never
    *  grant access. */
   isAdmin: boolean;
+  /** This session's own account id, so a screen can tell WHICH row in a list is
+   *  the person reading it - the team page needs it to stop an admin removing
+   *  their own administrator role. Empty until the session resolves. */
+  uid: string;
   db: EnvPaths['db'] | null;
 }
 
 export function usePortalScope(): PortalScope {
-  const { claims, paths } = useAuth();
+  const { claims, paths, user } = useAuth();
   const isPortal = claims?.kind === 'portal';
   return {
     ready: Boolean(isPortal && paths),
     orgId: isPortal ? claims.orgId : '',
     customerId: isPortal ? claims.customerId : '',
     isAdmin: isPortal ? claims.customerRoles.admin === true : false,
+    uid: isPortal ? (user?.uid ?? '') : '',
     db: paths?.db ?? null,
   };
 }

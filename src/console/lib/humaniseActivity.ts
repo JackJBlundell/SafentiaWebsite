@@ -33,6 +33,12 @@ const PHRASES: Record<string, string> = {
   'customer.updated': 'updated a customer',
   'customer.archived': 'archived a customer',
   'customer.restored': 'restored a customer',
+  // Written by the customerContracts sweep, not by a person: the contract end
+  // date an admin set has passed, so the platform archived the customer and
+  // withdrew their portal access. Phrased so the feed reads "Safentia
+  // (automatic) archived a customer - their contract had ended".
+  'customer.contractEnded':
+    'archived a customer - their contract had ended',
   'customerContact.created': 'added a customer contact',
   'customerContact.updated': 'updated a customer contact',
   'customerContact.removed': 'removed a customer contact',
@@ -41,6 +47,11 @@ const PHRASES: Record<string, string> = {
   // uid renders as the plain actor. Distinct from customerContact.created so the
   // org can tell a self-service portal invite from a staff-added contact.
   'customerContact.invited': 'invited a colleague to the portal',
+  // Written by updateCustomerMember, whose actor is EITHER a staff admin or the
+  // customer's own portal admin - the feed handles both, rendering an uid it
+  // does not know as the plain actor. The parenthesised detail names which
+  // fields moved ("roles", "roles, status"), surfaced separately.
+  'customerMember.updated': 'changed a portal account’s access',
   'site.created': 'created a site',
   'site.updated': 'updated a site',
   'building.created': 'created a building',
@@ -55,12 +66,22 @@ const PHRASES: Record<string, string> = {
   'action.updated': 'updated an action item',
   'action.signedOff': 'signed off an action item',
   'action.reopened': 'reopened an action item',
+  // Written by the respondToAction callable, so the actor is the CUSTOMER's own
+  // portal user rather than a staff member (an unknown uid renders as the plain
+  // actor, as it does for customerContact.invited). The phrase says "for
+  // verification" because that is precisely what a customer response is not: it
+  // never signs the action off, and the feed must not read as though it did.
+  'action.customerResponded':
+    'reported progress on an action item for verification',
   'actions.created': 'raised action items',
   'assessment.started': 'started an assessment',
   'assessment.submitted': 'submitted an assessment',
   'assessment.accepted': 'accepted an assessment',
   'assessment.released': 'released an assessment',
   'assessment.infoRequested': 'requested more information on an assessment',
+  // Written by changeAssessmentTemplate; the parenthesised detail carries the
+  // template it became, and the feed surfaces that separately.
+  'assessment.templateChanged': 'changed an assessment\u2019s template',
   'job.cancelled': 'cancelled a job',
   'job.rescheduled': 'rescheduled a job',
   'invitation.resent': 'resent an invitation',
@@ -68,6 +89,20 @@ const PHRASES: Record<string, string> = {
   'member.updated': 'updated a staff member',
   'orgProfile.updated': 'updated the organisation profile',
   'orgSettings.ragConfig.updated': 'updated the risk-banding settings',
+  'orgSettings.reviewReminderDays.updated':
+    'updated the review reminder schedule',
+  'orgSettings.reviewReminders.enabled': 'turned review reminders on',
+  'orgSettings.reviewReminders.disabled': 'turned review reminders off',
+  'orgSettings.infoRequestReminderDays.updated':
+    'updated the information request reminder schedule',
+  'orgSettings.infoRequestReminders.enabled':
+    'turned information request reminders on',
+  'orgSettings.infoRequestReminders.disabled':
+    'turned information request reminders off',
+  'orgSettings.actionReminderDays.updated':
+    'updated the action reminder schedule',
+  'orgSettings.actionReminders.enabled': 'turned action reminders on',
+  'orgSettings.actionReminders.disabled': 'turned action reminders off',
   'template.published': 'published a template',
   'report.generated': 'generated an assessment report',
   // Written by the acceptReport callable. The actor is a customer-portal

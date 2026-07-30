@@ -31,6 +31,7 @@ import {
   type AssessmentStatus,
   type Assessment,
   type Building,
+  type Customer,
   type CustomerContact,
   type Job,
   type OrgMember,
@@ -107,17 +108,26 @@ async function findBuilding(
   return undefined;
 }
 
-/** Every customer contact that has an email, de-duplicated by address. Story
- *  2060 tells the whole customer, not just the primary, so a released report
- *  reaches everyone the customer has listed. Duplicates (the same person
+/** Every customer contact who should be sent the released report, de-duplicated
+ *  by address. Story 2060 tells the whole customer, not just the primary, so a
+ *  released report reaches everyone the customer has nominated - but a customer
+ *  with a dozen contacts was sending a dozen copies of a fire risk assessment,
+ *  including to people who only ever needed a door-check reminder, so
+ *  `receivesReports` is the per-contact opt-out.
+ *
+ *  ABSENT MEANS YES: the test is `!== false`, never truthiness, because every
+ *  record that predates the field is a recipient today and must stay one (see
+ *  the field's own declaration in shared/types). Duplicates (the same person
  *  entered twice, or a shared inbox) are collapsed on a case- and space-
  *  normalised key so no one is emailed twice; the first spelling seen is the
- *  one used to send. */
+ *  one used to send. A duplicate address is a recipient if ANY contact holding
+ *  it still receives reports - one person's opt-out cannot silence a shared
+ *  inbox somebody else is still listening on. */
 async function customerContactEmails(
   envPaths: EnvPaths,
   orgId: string,
   customerId: string,
-): Promise<string[]> {
+): Promise<{ emails: string[]; optedOut: number }> {
   const contactsSnap = await db
     .ref(envPaths.db.customerContacts(orgId, customerId))
     .get();
@@ -125,9 +135,17 @@ async function customerContactEmails(
     (contactsSnap.val() as Keyed<CustomerContact> | null) ?? {};
   const seen = new Set<string>();
   const emails: string[] = [];
+  // Counted, not just skipped: "the report reached nobody" has two very
+  // different causes - nobody has an address, or everybody was opted out - and
+  // the log has to say which, or a silent non-delivery is undiagnosable.
+  let optedOut = 0;
   for (const contact of Object.values(contacts)) {
     const email = contact?.email?.trim();
     if (!email) {
+      continue;
+    }
+    if (contact?.receivesReports === false) {
+      optedOut += 1;
       continue;
     }
     const key = email.toLowerCase();
@@ -137,7 +155,7 @@ async function customerContactEmails(
     seen.add(key);
     emails.push(email);
   }
-  return emails;
+  return { emails, optedOut };
 }
 
 export const onAssessmentStageChange = onValueWritten(
@@ -245,6 +263,10 @@ export const onAssessmentStageChange = onValueWritten(
       // Undefined when generation failed or was skipped, in which case the email
       // falls back to the portal home rather than linking at nothing.
       let releasedReportId: string | undefined;
+      // Who actually released it, as CONFIRMED below (the outer actorUid is read
+      // from a snapshot that usually predates the release payload). Carried into
+      // the assessor's released email in section 4 so it can name them.
+      let releasedByUid: string | undefined;
 
       if (after === 'released') {
         // (a) Confirm the release payload actually landed. Re-read the
@@ -293,6 +315,7 @@ export const onAssessmentStageChange = onValueWritten(
         }
 
         const emittedBy = releasedBy ?? actorUid;
+        releasedByUid = emittedBy;
 
         // (c) ONE atomic update: the statutory log-book entry (deterministic
         // id), the stage activity row (its push key is minted locally, and the
@@ -360,6 +383,10 @@ export const onAssessmentStageChange = onValueWritten(
         const membersSnap = await db.ref(envPaths.db.orgMembers(orgId)).get();
         members = (membersSnap.val() as Keyed<OrgMember> | null) ?? {};
       }
+      // The one assessor this stage concerns, resolved once from the job below
+      // and reused by their stage email in section 4 - the two must address the
+      // same person, and one job read is enough to be sure of it.
+      let assignedAssessorUid: string | undefined;
       if (audience.length > 0) {
 
         // For assessor-targeted stages, prefer the specific assigned assessor so we
@@ -371,6 +398,7 @@ export const onAssessmentStageChange = onValueWritten(
             .get();
           const job = jobSnap.val() as Job | null;
           if (job?.assessorUid) {
+            assignedAssessorUid = job.assessorUid;
             recipients.push(job.assessorUid);
           }
         }
@@ -405,180 +433,331 @@ export const onAssessmentStageChange = onValueWritten(
       // means ON (the contract's default), so only an explicit false skips.
       // Idempotency posture: the released emails sit behind the /ops marker's
       // early return (a retry never reaches here for released), and a retried
-      // readyForValidation email is an acceptable courtesy duplicate - the
-      // same stance the in-app notifications above already take.
-      if (after === 'readyForValidation' || after === 'released') {
-        const located = await findBuilding(
-          envPaths,
-          orgId,
-          assessment.buildingId,
-        );
-        const building = located?.building;
-        const siteId = located?.siteId;
-        const buildingName = building?.name ?? 'a building';
+      // readyForValidation/readyForRelease email is an acceptable courtesy
+      // duplicate - the same stance the in-app notifications above already take.
+      if (
+        after === 'readyForValidation' ||
+        after === 'readyForRelease' ||
+        after === 'released'
+      ) {
+        // Best-effort IN FULL, not just at the dispatch: the statutory records
+        // above have already landed, and the section-1 activity row is
+        // append-only, so a failed READ here (estate, profile, customer) must
+        // cost at most a courtesy email - never a thrown trigger, whose retry
+        // would write that row a second time.
+        try {
+          const located = await findBuilding(
+            envPaths,
+            orgId,
+            assessment.buildingId,
+          );
+          const building = located?.building;
+          const siteId = located?.siteId;
+          const buildingName = building?.name ?? 'a building';
 
-        // Every stage email below carries the sending organisation's own brand
-        // (name + accent), falling back to the Safentia brand when the org has
-        // not set a valid one. Read once here and shared by all recipients.
-        const profileSnap = await db.ref(envPaths.db.orgProfile(orgId)).get();
-        const brand = orgEmailBrand(profileSnap.val() as OrgProfile | null);
+          // Every stage email below carries the sending organisation's own brand
+          // (name + accent), falling back to the Safentia brand when the org has
+          // not set a valid one. Read once here and shared by all recipients.
+          const profileSnap = await db.ref(envPaths.db.orgProfile(orgId)).get();
+          const brand = orgEmailBrand(profileSnap.val() as OrgProfile | null);
 
-        if (after === 'readyForValidation') {
-          // (a) Story 2065: every active auditor who has not quietened the
-          // awaiting-validation category learns a submission needs review.
-          const assessorName =
-            members[assessment.conductedBy]?.name ?? 'An assessor';
-          const submittedAt = assessment.workflow?.submittedAt;
-          const subject = 'An assessment is awaiting validation';
-          const body = `${assessorName} has submitted a fire risk assessment of ${buildingName} for validation.`;
-          const html = renderBrandedEmail({
-            brand,
-            preheader: body,
-            heading: subject,
-            paragraphs: [
-              body,
-              'Please review it in the validation queue and accept it or request further information.',
-            ],
-            detailRows: [
-              { label: 'Building', value: buildingName },
-              { label: 'Assessor', value: assessorName },
-              ...(submittedAt !== undefined
-                ? [{ label: 'Submitted', value: formatWhen(submittedAt) }]
-                : []),
-            ],
-            // Straight into THIS assessment's review screen, the exact place
-            // the auditor accepts it or requests more information.
-            cta: {
-              label: 'Review the assessment',
-              url: `${WEB_ORIGIN}/app/validation/${assessmentId}`,
-            },
-            footerNote:
-              'You are receiving this because you are an auditor on Safentia.',
-          });
-          for (const member of Object.values(members)) {
-            if (
-              member?.status === 'active' &&
-              member.roles?.auditor === true &&
-              member.email &&
-              member.emailPreferences?.awaitingValidation !== false
-            ) {
-              await dispatchEmail({ to: member.email, subject, body, html }, logger, {
-                orgId,
-                env: envPaths.env,
-                category: 'awaiting-validation',
-              });
-            }
-          }
-        }
+          // Addresses the released ADMIN notice below has already gone to,
+          // normalised for comparison. An admin who is also the assigned assessor
+          // would otherwise be told twice about one release; whichever email
+          // reaches them first is the one they get, and each side keeps its own
+          // preference (silencing one never silences the other).
+          const emailedAdmins = new Set<string>();
 
-        if (after === 'released') {
-          // (b) Story 2065: active admins who have not quietened the released
-          // category hear the report is out...
-          const subject = `A new fire risk assessment report is available for ${buildingName}`;
-          const body = `The fire risk assessment of ${buildingName} has been validated and released, and its report is now available.`;
-          const adminHtml = renderBrandedEmail({
-            brand,
-            preheader: body,
-            heading: 'Assessment released',
-            paragraphs: [body],
-            detailRows: [
-              { label: 'Building', value: buildingName },
-              { label: 'Released', value: formatWhen(Date.now()) },
-            ],
-            // The released assessment's own screen, which carries the report
-            // download - closer to the point than the reports index.
-            cta: {
-              label: 'View the assessment',
-              url: `${WEB_ORIGIN}/app/validation/${assessmentId}`,
-            },
-            footerNote:
-              'You are receiving this because you are an administrator on Safentia.',
-          });
-          for (const member of Object.values(members)) {
-            if (
-              member?.status === 'active' &&
-              member.roles?.admin === true &&
-              member.email &&
-              member.emailPreferences?.released !== false
-            ) {
-              await dispatchEmail(
-                { to: member.email, subject, body, html: adminHtml },
-                logger,
-                { orgId, env: envPaths.env, category: 'released' },
-              );
+          if (after === 'readyForValidation') {
+            // (a) Story 2065: every active auditor who has not quietened the
+            // awaiting-validation category learns a submission needs review.
+            const assessorName =
+              members[assessment.conductedBy]?.name ?? 'An assessor';
+            const submittedAt = assessment.workflow?.submittedAt;
+            const subject = 'An assessment is awaiting validation';
+            const body = `${assessorName} has submitted a fire risk assessment of ${buildingName} for validation.`;
+            const html = renderBrandedEmail({
+              brand,
+              preheader: body,
+              heading: subject,
+              paragraphs: [
+                body,
+                'Please review it in the validation queue and accept it or request further information.',
+              ],
+              detailRows: [
+                { label: 'Building', value: buildingName },
+                { label: 'Assessor', value: assessorName },
+                ...(submittedAt !== undefined
+                  ? [{ label: 'Submitted', value: formatWhen(submittedAt) }]
+                  : []),
+              ],
+              // Straight into THIS assessment's review screen, the exact place
+              // the auditor accepts it or requests more information.
+              cta: {
+                label: 'Review the assessment',
+                url: `${WEB_ORIGIN}/app/validation/${assessmentId}`,
+              },
+              footerNote:
+                'You are receiving this because you are an auditor on Safentia.',
+            });
+            for (const member of Object.values(members)) {
+              if (
+                member?.status === 'active' &&
+                member.roles?.auditor === true &&
+                member.email &&
+                member.emailPreferences?.awaitingValidation !== false
+              ) {
+                await dispatchEmail({ to: member.email, subject, body, html }, logger, {
+                  orgId,
+                  env: envPaths.env,
+                  category: 'awaiting-validation',
+                });
+              }
             }
           }
 
-          // ...and (story 2060) the building's customer hears too. EVERY
-          // customer contact with an email is told, not just the primary, so a
-          // released report reaches everyone the customer has nominated to
-          // receive it. ALWAYS sent: customer contacts have no preferences node
-          // (emailPreferences lives on OrgMember only), so there is no choice to
-          // respect yet - revisit when portal notification settings exist. The
-          // message is identical for every contact, so it is rendered once and
-          // sent to each de-duplicated address.
-          if (building) {
-            const contactEmails = await customerContactEmails(
-              envPaths,
-              orgId,
-              building.customerId,
-            );
-            if (contactEmails.length > 0) {
-              const customerHtml = renderBrandedEmail({
-                brand,
-                preheader: body,
-                heading: subject,
-                paragraphs: [
-                  body,
-                  releasedReportId && siteId
-                    ? 'Sign in to your Safentia portal to read and accept the report. You will be asked to type your name to sign it off, and the report is available to download straight afterwards.'
-                    : 'You can view the assessment and download the report from your Safentia portal. The report is a secure, authenticated download - sign in to open it.',
-                ],
-                detailRows: [{ label: 'Building', value: buildingName }],
-                // A secure CTA into the portal, never the PDF as an attachment:
-                // the report is sensitive and email attachments leak. The link
-                // deep-links at THIS report's acceptance screen behind the
-                // contact's own authenticated session - there is no bearer token
-                // in the URL, so a forwarded email grants nobody access. It
-                // carries the RTDB push key the /reports record is stored under,
-                // NOT the Storage object uuid (generateAndStore mints the two
-                // separately); the push key is what the portal route and the
-                // acceptReport callable address.
-                cta:
-                  releasedReportId && siteId
-                    ? {
-                        label: 'Accept & Sign Off',
-                        url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}/reports/${releasedReportId}`,
-                      }
-                  : {
-                      // No report id yet: the building's own portal page still
-                      // beats the portal home, which the recipient would only
-                      // have to navigate away from. It is known here whenever
-                      // the building was located, which this branch requires.
-                      label: 'View your report in the portal',
-                      url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}`,
-                    },
-                footerNote: `You are receiving this because you are a contact for ${buildingName} on Safentia.`,
-              });
-              // Best-effort per recipient: dispatchEmail never throws, so one
-              // contact's provider failure cannot stop the rest being told.
-              for (const contactEmail of contactEmails) {
+          if (after === 'released') {
+            // (b) Story 2065: active admins who have not quietened the released
+            // category hear the report is out...
+            const subject = `A new fire risk assessment report is available for ${buildingName}`;
+            const body = `The fire risk assessment of ${buildingName} has been validated and released, and its report is now available.`;
+            const adminHtml = renderBrandedEmail({
+              brand,
+              preheader: body,
+              heading: 'Assessment released',
+              paragraphs: [body],
+              detailRows: [
+                { label: 'Building', value: buildingName },
+                { label: 'Released', value: formatWhen(Date.now()) },
+              ],
+              // The released assessment's own screen, which carries the report
+              // download - closer to the point than the reports index.
+              cta: {
+                label: 'View the assessment',
+                url: `${WEB_ORIGIN}/app/validation/${assessmentId}`,
+              },
+              footerNote:
+                'You are receiving this because you are an administrator on Safentia.',
+            });
+            for (const member of Object.values(members)) {
+              if (
+                member?.status === 'active' &&
+                member.roles?.admin === true &&
+                member.email &&
+                member.emailPreferences?.released !== false
+              ) {
+                emailedAdmins.add(member.email.trim().toLowerCase());
                 await dispatchEmail(
-                  { to: contactEmail, subject, body, html: customerHtml },
+                  { to: member.email, subject, body, html: adminHtml },
                   logger,
                   { orgId, env: envPaths.env, category: 'released' },
                 );
               }
+            }
+
+            // ...and (story 2060) the building's customer hears too. Every
+            // customer contact with an email is told, not just the primary, so a
+            // released report reaches everyone the customer has nominated to
+            // receive it - EXCEPT the contacts an admin has taken off the
+            // distribution with `receivesReports: false`, which is the only
+            // choice a customer contact can express (emailPreferences lives on
+            // OrgMember only). The message is identical for every recipient, so
+            // it is rendered once and sent to each de-duplicated address.
+            if (building) {
+              const { emails: contactEmails, optedOut } =
+                await customerContactEmails(
+                  envPaths,
+                  orgId,
+                  building.customerId,
+                );
+              if (contactEmails.length > 0) {
+                const customerHtml = renderBrandedEmail({
+                  brand,
+                  preheader: body,
+                  heading: subject,
+                  paragraphs: [
+                    body,
+                    releasedReportId && siteId
+                      ? 'Sign in to your Safentia portal to read and accept the report. You will be asked to type your name to sign it off, and the report is available to download straight afterwards.'
+                      : 'You can view the assessment and download the report from your Safentia portal. The report is a secure, authenticated download - sign in to open it.',
+                  ],
+                  detailRows: [{ label: 'Building', value: buildingName }],
+                  // A secure CTA into the portal, never the PDF as an attachment:
+                  // the report is sensitive and email attachments leak. The link
+                  // deep-links at THIS report's acceptance screen behind the
+                  // contact's own authenticated session - there is no bearer token
+                  // in the URL, so a forwarded email grants nobody access. It
+                  // carries the RTDB push key the /reports record is stored under,
+                  // NOT the Storage object uuid (generateAndStore mints the two
+                  // separately); the push key is what the portal route and the
+                  // acceptReport callable address.
+                  cta:
+                    releasedReportId && siteId
+                      ? {
+                          label: 'Accept & Sign Off',
+                          url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}/reports/${releasedReportId}`,
+                        }
+                    : {
+                        // No report id yet: the building's own portal page still
+                        // beats the portal home, which the recipient would only
+                        // have to navigate away from. It is known here whenever
+                        // the building was located, which this branch requires.
+                        label: 'View your report in the portal',
+                        url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}`,
+                      },
+                  footerNote: `You are receiving this because you are a contact for ${buildingName} on Safentia.`,
+                });
+                // Best-effort per recipient: dispatchEmail never throws, so one
+                // contact's provider failure cannot stop the rest being told.
+                for (const contactEmail of contactEmails) {
+                  await dispatchEmail(
+                    { to: contactEmail, subject, body, html: customerHtml },
+                    logger,
+                    { orgId, env: envPaths.env, category: 'released' },
+                  );
+                }
+              } else if (optedOut > 0) {
+                // A released report that reached nobody is a silent failure, and
+                // this is the version of it an operator can actually act on:
+                // there were addresses, every one of them was opted out. WARN,
+                // not info - the console warns an admin about the same state on
+                // the customer's contacts panel, and this is its server trail.
+                logger.warn(
+                  'Released customer email reached nobody: every contact with an email address is opted out of report copies',
+                  { customerId: building.customerId, optedOut },
+                );
+              } else {
+                logger.info(
+                  'Released customer email skipped: no contact email recorded',
+                );
+              }
             } else {
-              logger.info(
-                'Released customer email skipped: no contact email recorded',
+              logger.warn(
+                'Released customer email skipped: building record not found',
               );
             }
-          } else {
-            logger.warn(
-              'Released customer email skipped: building record not found',
-            );
           }
+
+          // (c) The ASSIGNED ASSESSOR hears the verdict on their own work, for
+          // every stage where STAGE_AUDIENCE names them. Assessors work in the
+          // field, not in the console, so the in-app notification above is the
+          // record and this is the message that actually reaches them.
+          //
+          // The `infoRequired` stage is deliberately NOT emailed from here:
+          // requestInfo sends that one itself, where the flagged count and the
+          // response deadline are known (see its header), and a second send would
+          // double up. That leaves the two OUTCOME stages, which the stage bus
+          // knows everything about.
+          if (
+            (after === 'readyForRelease' || after === 'released') &&
+            assignedAssessorUid !== undefined
+          ) {
+            const assessor = members[assignedAssessorUid];
+            const assessorEmail = assessor?.email?.trim();
+            if (
+              assessor?.status !== 'active' ||
+              !assessorEmail ||
+              // ABSENT means on: only an explicit false quietens the category, and
+              // it quietens the EMAIL alone - the in-app notification always sent.
+              assessor.emailPreferences?.assessmentOutcome === false ||
+              emailedAdmins.has(assessorEmail.toLowerCase())
+            ) {
+              logger.info('Assessor stage email skipped', { stage: after });
+            } else {
+              // Who acted. acceptAssessment CLAIMS the status first and stamps
+              // workflow.validatedBy in a following update, so the snapshot this
+              // trigger fired on can predate it - one fresh read is the honest way
+              // to name the auditor. The released stage already confirmed its own
+              // payload above, so its actor is in hand. Either may still be
+              // unknown, and the copy simply omits the name when it is.
+              let actedByUid = releasedByUid;
+              if (after === 'readyForRelease') {
+                const workflowSnap = await db
+                  .ref(`${envPaths.db.assessment(orgId, assessmentId)}/workflow`)
+                  .get();
+                actedByUid = (
+                  workflowSnap.val() as Assessment['workflow'] | null
+                )?.validatedBy;
+              }
+              const actedByName =
+                actedByUid !== undefined ? members[actedByUid]?.name : undefined;
+
+              // The customer names WHOSE building this was, which is how an
+              // assessor with a full week tells one assessment from another.
+              const customerSnap = await db
+                .ref(envPaths.db.customer(orgId, assessment.customerId))
+                .get();
+              const customerName = (customerSnap.val() as Customer | null)?.name;
+
+              const accepted = after === 'readyForRelease';
+              const subject = accepted
+                ? `Your assessment of ${buildingName} has been accepted`
+                : `Your assessment of ${buildingName} has been released`;
+              const by = actedByName ? ` by ${actedByName}` : '';
+              const body = accepted
+                ? `Your fire risk assessment of ${buildingName} has been reviewed and accepted${by}. It is cleared for release.`
+                : `Your fire risk assessment of ${buildingName} has been released${by}, and its report has gone to the customer.`;
+              await dispatchEmail(
+                {
+                  to: assessorEmail,
+                  subject,
+                  body,
+                  html: renderBrandedEmail({
+                    brand,
+                    preheader: body,
+                    heading: accepted
+                      ? 'Assessment accepted'
+                      : 'Assessment released',
+                    paragraphs: [
+                      body,
+                      accepted
+                        ? 'Nothing further is needed from you. You will hear again when it is released.'
+                        : 'This assessment is now complete. Its report stays on the job record if you need to refer back to it.',
+                    ],
+                    detailRows: [
+                      { label: 'Building', value: buildingName },
+                      ...(customerName
+                        ? [{ label: 'Customer', value: customerName }]
+                        : []),
+                      { label: 'Stage', value: stageLabel },
+                      ...(actedByName
+                        ? [
+                            {
+                              label: accepted ? 'Accepted by' : 'Released by',
+                              value: actedByName,
+                            },
+                          ]
+                        : []),
+                      { label: 'When', value: formatWhen(Date.now()) },
+                    ],
+                    // The job is the assessor's own view of this work (/app/validation
+                    // is the auditors' queue, which an assessor has no business landing
+                    // in) - the requestInfo precedent.
+                    cta: {
+                      label: 'Open the job',
+                      url: `${WEB_ORIGIN}/app/jobs/${assessment.jobId}`,
+                    },
+                    footerNote:
+                      'You are receiving this because you are the assessor on this job. You can turn these emails off in your Safentia account settings.',
+                  }),
+                },
+                logger,
+                {
+                  orgId,
+                  env: envPaths.env,
+                  category: accepted ? 'assessment-accepted' : 'assessment-released',
+                },
+              );
+            }
+          }
+        } catch (emailError) {
+          logger.error('Stage emails failed', {
+            stage: after,
+            reason:
+              emailError instanceof Error
+                ? emailError.message
+                : String(emailError),
+          });
         }
       }
 

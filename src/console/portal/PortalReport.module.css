@@ -47,3 +47,10 @@
   gap: var(--space-sm);
   margin-top: var(--space-md);
 }
+
+/* The manual escape hatch when a pop-up blocker swallowed the new tab. */
+.fallbackLink {
+  display: inline-block;
+  margin-top: var(--space-sm);
+  color: var(--color-accent);
+}

@@ -8,6 +8,15 @@
 // earns ONE notice: an in-app notification (plus best-effort push) to each of
 // the org's active admins, and one branded email to each admin's address.
 //
+// WHO IS IN SCOPE: the organisation's master switch (OrgSettings
+// .reviewRemindersEnabled) can stop the sweep for a whole org; an ARCHIVED
+// customer's buildings are skipped entirely, because their portal access has
+// already been withdrawn and reminding them about a review would undo the point
+// of archiving them. There is deliberately no per-customer mute: an ACTIVE
+// customer is one you are accountable to, and a switch that silently stops
+// telling a duty-holder their assessment is due is the last thing anyone wants
+// to explain afterwards. Archiving is how a relationship ends.
+//
 // Idempotency: the day-matching is exact-day, so a scheduler redelivery the
 // same day would duplicate every notice. A transaction claims the per-building
 // per-day marker under /{env}/ops/reviewReminders/{orgId}/{buildingId}/{day}
@@ -42,6 +51,7 @@ import {
 } from '../lib/reviewWindows';
 import type {
   Building,
+  Customer,
   CustomerContact,
   Environment,
   OrgMember,
@@ -103,9 +113,27 @@ export const reviewReminders = onSchedule(
         // default rather than skipping or crashing the org.
         const settingsSnap = await db.ref(paths.db.orgSettings(orgId)).get();
         const settings = settingsSnap.val() as OrgSettings | null;
+        // The org's master switch. Absent means on, so an org that has never
+        // opened the setting keeps the reminders it already had; an explicit
+        // false stops the whole sweep for this organisation, overdue notices
+        // included - it is the "stop emailing about reviews" switch, and a
+        // half-off version of it would be a lie.
+        if (settings?.reviewRemindersEnabled === false) {
+          continue;
+        }
         const reminderDays = resolveReviewReminderDays(
           settings?.reviewReminderDays,
         );
+        // One read of the org's customer directory, so each building can be
+        // checked against the customer that owns it. An ARCHIVED customer is no
+        // longer a customer: their people's portal access has been withdrawn
+        // (manageCustomer's cascade), and emailing them about an FRA review
+        // afterwards is the exact confusion archiving is supposed to end. The
+        // org's own admins are not notified about them either - the estate is
+        // still in the records to read, it just no longer earns a daily nudge.
+        const customersSnap = await db.ref(paths.db.customers(orgId)).get();
+        const customers =
+          (customersSnap.val() as Record<string, Customer> | null) ?? {};
         // The largest (earliest) mark is the "planning noise" one withheld from
         // customers; with the default schedule this is the 60-day mark, as
         // before. Element zero because the schedule is validated descending.
@@ -134,6 +162,15 @@ export const reviewReminders = onSchedule(
             }
             const stage = reviewReminderStage(nextDue, now, reminderDays);
             if (stage === null) {
+              continue;
+            }
+            // Checked BEFORE the idempotency marker is claimed: a skipped
+            // building must not burn its marker for the day, or restoring the
+            // customer mid-morning would silently cost them that day's notice.
+            const customer = building.customerId
+              ? customers[building.customerId]
+              : undefined;
+            if (customer && customer.status !== 'active') {
               continue;
             }
 

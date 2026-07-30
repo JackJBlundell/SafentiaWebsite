@@ -66,6 +66,7 @@ vi.mock('../ui/useCallable', () => ({
   }),
 }));
 
+import { AddressField } from '../ui/AddressField';
 import { AddressSearch } from '../ui/AddressSearch';
 import { SiteWizard } from './SiteWizard';
 import { BuildingWizard } from './BuildingWizard';
@@ -223,9 +224,11 @@ describe('SiteWizard', () => {
         name: '10 Downing Street, London, SW1A 2AA',
       }),
     );
-    // A pick fills the coordinate fields, which are what the map picker reads.
-    expect(screen.getByLabelText('Latitude')).toHaveValue(51.5034);
-    expect(screen.getByLabelText('Longitude')).toHaveValue(-0.1276);
+    // The point is derived from the pick and reported back, with no coordinate
+    // field anywhere for it to disagree with.
+    expect(
+      screen.getByText(/Location pinned at 51\.50340, -0\.12760/),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Create site' }));
 
@@ -245,7 +248,7 @@ describe('SiteWizard', () => {
     );
   });
 
-  it('omits geo when the coordinate fields are cleared', async () => {
+  it('omits geo once the location is removed, keeping the address', async () => {
     const user = userEvent.setup();
     stubFetchWith(geocodePayload);
     renderSiteWizard();
@@ -257,14 +260,86 @@ describe('SiteWizard', () => {
         name: '10 Downing Street, London, SW1A 2AA',
       }),
     );
-    await user.clear(screen.getByLabelText('Latitude'));
-    await user.clear(screen.getByLabelText('Longitude'));
+    // Removing the location is the one way a point leaves a record now that
+    // there are no coordinate fields to empty.
+    await user.click(screen.getByRole('button', { name: 'Remove location' }));
 
     await user.click(screen.getByRole('button', { name: 'Create site' }));
     const [input] = mocks.callableCall.mock.calls[0] as unknown as [
       { site: Record<string, unknown> },
     ];
     expect('geo' in input.site).toBe(false);
+    expect(input.site.address).toBe('10 Downing Street, London, SW1A 2AA');
+  });
+
+  it('keeps a confirmed point when the address is refined by hand', async () => {
+    const user = userEvent.setup();
+    stubFetchWith(geocodePayload);
+    renderSiteWizard();
+
+    await user.type(screen.getByLabelText('Name'), 'Head Office');
+    await user.type(screen.getByLabelText('Address (optional)'), '10 Downing');
+    await user.click(
+      await screen.findByRole('option', {
+        name: '10 Downing Street, London, SW1A 2AA',
+      }),
+    );
+    // A sub-unit typed in front of a geocoded street is the same place; the
+    // point survives, and the field says which address it was confirmed against.
+    await user.type(screen.getByLabelText('Address (optional)'), ' (rear gate)');
+    expect(
+      screen.getByText(/from “10 Downing Street, London, SW1A 2AA”/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Create site' }));
+    expect(mocks.callableCall).toHaveBeenCalledWith({
+      action: 'create',
+      customerId: 'c1',
+      site: {
+        name: 'Head Office',
+        address: '10 Downing Street, London, SW1A 2AA (rear gate)',
+        geo: { lat: 51.5034, lng: -0.1276 },
+      },
+    });
+  });
+});
+
+// --- AddressField -----------------------------------------------------------
+// The map half is not exercised here: mapbox-gl needs WebGL, which jsdom has
+// not got, so it reports itself unavailable exactly as a failed chunk would -
+// which is precisely the degradation these tests care about.
+
+function AddressFieldHarness() {
+  const [address, setAddress] = useState('Somewhere in Leeds');
+  const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(null);
+  return (
+    <AddressField
+      id="test-address-field"
+      label="Address"
+      value={address}
+      onChange={setAddress}
+      geo={geo}
+      onGeoChange={setGeo}
+    />
+  );
+}
+
+describe('AddressField', () => {
+  it('leaves the typed address untouched when map mode is cancelled', async () => {
+    const user = userEvent.setup();
+    stubFetchWith(geocodePayload);
+    render(<AddressFieldHarness />);
+
+    await user.click(screen.getByRole('button', { name: 'Pick on map' }));
+    // The map edits a draft, so typing in it commits nothing.
+    await user.type(screen.getByLabelText('Address'), ' - unit 9');
+    await user.click(screen.getByRole('button', { name: 'Cancel map' }));
+
+    expect(screen.getByLabelText('Address')).toHaveValue('Somewhere in Leeds');
+    expect(screen.getByRole('button', { name: 'Pick on map' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });
 

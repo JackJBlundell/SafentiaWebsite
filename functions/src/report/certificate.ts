@@ -3,7 +3,17 @@
 //
 // A template may carry a Certificate (an accreditation certificate, a signed
 // cover sheet). Every report rendered from that template gets its pages merged
-// in, before the report (`top`) or after it (`bottom`).
+// in as PAGE 2 - immediately behind the cover and ahead of the contents, which
+// is where the industry documents this report follows carry it. That is the only
+// supported position; a template authored before the move may still store `top`
+// or `bottom`, and both are read as `afterCover` here rather than honoured.
+//
+// TWO STEPS, ON PURPOSE: loadCertificate() runs BEFORE the report is rendered,
+// because the renderer has to know how many pages will be spliced in to print
+// page numbers that match the finished document. mergeCertificate() then splices
+// the already-downloaded bytes into the rendered buffer. A certificate that
+// cannot be loaded simply yields undefined, and the report renders (and merges)
+// as though the template had none.
 //
 // WHY A POST-PROCESS: pdfkit, which renders the report itself, can only compose
 // NEW content - it cannot import the pages of an existing PDF. So the report is
@@ -58,22 +68,30 @@ function toObjectPath(urlOrPath: string): string | undefined {
   return value.includes('://') ? undefined : value;
 }
 
+/** A certificate that has been downloaded, opened and counted, ready to splice
+ *  into a rendered report. */
+export interface LoadedCertificate {
+  /** The certificate PDF's bytes, already inside the size ceiling. */
+  bytes: Buffer;
+  /** How many pages it will contribute, so the renderer can number the report
+   *  as the reader will see it. */
+  pageCount: number;
+}
+
 /**
- * Merge a template's certificate into a rendered report.
- *
- * Returns the merged PDF, or the ORIGINAL `report` buffer whenever the
- * certificate cannot be used (see the failure policy in the file header). The
- * caller does not branch on the outcome: it always emits what comes back.
+ * Download and validate a template's certificate, returning its bytes and page
+ * count, or undefined when it cannot be used (see the failure policy in the file
+ * header). Never throws: the caller treats undefined as "this report has no
+ * certificate" and carries on.
  */
-export async function mergeCertificate(
-  report: Buffer,
+export async function loadCertificate(
   certificate: TemplateCertificate,
   logger: Logger,
-): Promise<Buffer> {
+): Promise<LoadedCertificate | undefined> {
   const objectPath = toObjectPath(certificate.url);
   if (!objectPath) {
     logger.warn('Report certificate skipped: reference is not a storage object');
-    return report;
+    return undefined;
   }
 
   try {
@@ -87,7 +105,7 @@ export async function mergeCertificate(
       logger.warn('Report certificate skipped: object size is not within the ceiling', {
         size: metadata.size ?? null,
       });
-      return report;
+      return undefined;
     }
     const [bytes] = await file.download();
     // The metadata is a separate read from the download, so re-check what
@@ -97,7 +115,7 @@ export async function mergeCertificate(
       logger.warn('Report certificate skipped: downloaded object exceeds the ceiling', {
         size: bytes.length,
       });
-      return report;
+      return undefined;
     }
 
     // Lazy-loaded at first use, exactly as onAssessmentStageChange lazy-loads
@@ -105,9 +123,6 @@ export async function mergeCertificate(
     // whole import graph, so pdf-lib is pulled in only when a certificate
     // actually has to be merged, never merely because a report is rendered.
     const { PDFDocument } = await import('pdf-lib');
-
-    const merged = await PDFDocument.create();
-    const reportDoc = await PDFDocument.load(report);
     // ignoreEncryption lets pdf-lib open a certificate carrying an owner
     // password (the common "printing permitted, editing not" case that
     // accreditation bodies issue). A certificate needing a USER password to
@@ -115,34 +130,72 @@ export async function mergeCertificate(
     const certificateDoc = await PDFDocument.load(bytes, {
       ignoreEncryption: true,
     });
-
-    if (certificateDoc.getPageCount() === 0) {
+    const pageCount = certificateDoc.getPageCount();
+    if (pageCount === 0) {
       logger.warn('Report certificate skipped: the PDF contains no pages');
-      return report;
+      return undefined;
     }
+    return { bytes, pageCount };
+  } catch (caught) {
+    // The report is the statutory artefact; the certificate is a presentation
+    // extra. Degrade to the report alone rather than failing the release.
+    logger.warn('Report certificate skipped: the PDF could not be read', {
+      reason: caught instanceof Error ? caught.message : String(caught),
+    });
+    return undefined;
+  }
+}
 
-    // Copy in the order the position demands. Pages are copied, not redrawn, so
-    // the certificate's own content stream is preserved intact.
-    const order =
-      certificate.position === 'top'
-        ? ([certificateDoc, reportDoc] as const)
-        : ([reportDoc, certificateDoc] as const);
-    for (const source of order) {
-      const pages = await merged.copyPages(source, source.getPageIndices());
-      for (const page of pages) {
-        merged.addPage(page);
-      }
+/**
+ * Splice a loaded certificate into a rendered report as page 2, immediately
+ * after the cover.
+ *
+ * Returns the merged PDF, or the ORIGINAL `report` buffer whenever the merge
+ * cannot be completed. The caller does not branch on the outcome: it always
+ * emits what comes back.
+ */
+export async function mergeCertificate(
+  report: Buffer,
+  certificate: LoadedCertificate,
+  logger: Logger,
+): Promise<Buffer> {
+  try {
+    const { PDFDocument } = await import('pdf-lib');
+
+    const merged = await PDFDocument.create();
+    const reportDoc = await PDFDocument.load(report);
+    const certificateDoc = await PDFDocument.load(certificate.bytes, {
+      ignoreEncryption: true,
+    });
+
+    const reportPages = await merged.copyPages(
+      reportDoc,
+      reportDoc.getPageIndices(),
+    );
+    const certificatePages = await merged.copyPages(
+      certificateDoc,
+      certificateDoc.getPageIndices(),
+    );
+    // Cover, then the certificate, then the rest of the report. A report with no
+    // pages at all (impossible in practice, cheap to be right about) simply gets
+    // the certificate.
+    const [cover, ...rest] = reportPages;
+    if (cover) {
+      merged.addPage(cover);
+    }
+    for (const page of certificatePages) {
+      merged.addPage(page);
+    }
+    for (const page of rest) {
+      merged.addPage(page);
     }
 
     const output = await merged.save();
     logger.info('Report certificate merged', {
-      position: certificate.position,
-      certificatePages: certificateDoc.getPageCount(),
+      certificatePages: certificatePages.length,
     });
     return Buffer.from(output);
   } catch (caught) {
-    // The report is the statutory artefact; the certificate is a presentation
-    // extra. Degrade to the report alone rather than failing the release.
     logger.warn('Report certificate skipped: the PDF could not be merged', {
       reason: caught instanceof Error ? caught.message : String(caught),
     });

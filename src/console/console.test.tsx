@@ -524,7 +524,7 @@ describe('AccountPage email preferences', () => {
     ).toBeInTheDocument();
   });
 
-  it('saves all four categories through updateMyPreferences', async () => {
+  it('saves every category through updateMyPreferences', async () => {
     const user = userEvent.setup();
     setAuth({ status: 'authenticated', user: testUser, claims: testClaims, paths: forEnv('test') });
     mocks.rtdbData = {
@@ -547,6 +547,8 @@ describe('AccountPage email preferences', () => {
         released: true,
         infoRequested: true,
         deadlineReminder: true,
+        jobScheduled: true,
+        assessmentOutcome: true,
       },
     });
     expect(
