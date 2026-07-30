@@ -4,7 +4,10 @@
 // in-console OrgSwitcher, so a space looks the same wherever it is chosen.
 //
 // Three tiers, in order of what the data allows:
-//   1. the organisation's logo, where its profile is readable and one is set;
+//   1. the organisation's logo, where its profile is readable, one is set, AND
+//      it actually loads - a logo whose object has been deleted or whose url
+//      never resolved falls through to tier 2 rather than rendering the
+//      browser's broken-image glyph inside the mark (see useImageFailed);
 //   2. a monogram of the space's initials on the org's BRAND colour as a FILL,
 //      with a readable ink computed for that colour (an arbitrary brand colour
 //      has any contrast, so it is never trusted as text);
@@ -15,6 +18,7 @@
 
 import type { UserSpace } from '../types';
 import { readableTextOn } from '../design/tokens/contrast';
+import { useImageFailed } from './useImageFailed';
 import styles from './SpaceMark.module.css';
 
 export type SpaceMarkSize = 'sm' | 'md' | 'lg';
@@ -62,15 +66,22 @@ export function SpaceMark({
   size?: SpaceMarkSize;
 }) {
   const unresolved = looksLikeIdentifier(space.name);
+  // A logo that does not load is the same as no logo at all: tier 1 is simply
+  // unavailable, and the monogram below it takes over. Every decision that keyed
+  // off "has a logo" reads this instead, so the fallback is a complete tier and
+  // not a broken image sitting in a mark that still thinks it has one.
+  const logo = useImageFailed(space.logoUrl);
+  const hasLogo = Boolean(space.logoUrl) && !logo.failed;
+
   const className = `${styles.mark} ${styles[size]} ${
-    space.logoUrl ? styles.markLogo : ''
+    hasLogo ? styles.markLogo : ''
   }`;
 
   // Brand-tinted monogram only when there is no logo and a brand colour exists;
   // otherwise the token default fill carries it. Never a raw brand colour as
   // text - the ink is computed to be readable ON the fill.
   const tint =
-    !space.logoUrl && space.brandColor
+    !hasLogo && space.brandColor
       ? {
           background: space.brandColor,
           color: readableTextOn(space.brandColor, '#ffffff', '#10141a'),
@@ -79,8 +90,13 @@ export function SpaceMark({
 
   return (
     <span className={className} style={tint} aria-hidden="true">
-      {space.logoUrl ? (
-        <img className={styles.logo} src={space.logoUrl} alt="" />
+      {hasLogo ? (
+        <img
+          className={styles.logo}
+          src={space.logoUrl}
+          alt=""
+          onError={logo.onError}
+        />
       ) : unresolved ? (
         BuildingGlyph
       ) : (

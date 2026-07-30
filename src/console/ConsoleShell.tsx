@@ -30,6 +30,7 @@ import { Wordmark } from '../components/Wordmark';
 import { AccountPage } from './AccountPage';
 import { ConsoleHome } from './ConsoleHome';
 import { OrgSwitcher } from './OrgSwitcher';
+import { useImageFailed } from './useImageFailed';
 import { CustomersRoutes } from './customers/CustomersRoutes';
 import { StaffRoutes } from './staff/StaffRoutes';
 import { SettingsRoutes } from './settings/SettingsRoutes';
@@ -444,6 +445,7 @@ function OrgBrandMark() {
 
   const name = profile.data?.name;
   const logoUrl = profile.data?.logoUrl;
+  const logo = useImageFailed(logoUrl);
 
   if (!name) {
     return <Wordmark to="/app" />;
@@ -452,7 +454,19 @@ function OrgBrandMark() {
   return (
     <Link to="/app" className={styles.brandLink} aria-label={`${name} home`}>
       <span className={styles.brandIdentity}>
-        {logoUrl && <img src={logoUrl} alt="" className={styles.brandLogo} />}
+        {/* A logo that fails to load is dropped entirely rather than left as a
+            broken-image glyph. The organisation's NAME sits beside it and is the
+            thing that actually identifies the space, so losing the image costs
+            nothing - which is why there is no monogram fallback here, unlike the
+            switcher marks where the image IS the identity. */}
+        {logoUrl && !logo.failed && (
+          <img
+            src={logoUrl}
+            alt=""
+            className={styles.brandLogo}
+            onError={logo.onError}
+          />
+        )}
         <span className={styles.brandName}>{name}</span>
       </span>
       <span className={styles.poweredBy}>Powered by Safentia</span>

@@ -30,6 +30,7 @@ import { Wordmark } from '../components/Wordmark';
 import { readableTextOn } from '../design/tokens/contrast';
 import type { UserSpace } from '../types';
 import { useSuperAdminClaim } from './admin/useSuperAdminClaim';
+import { useImageFailed } from './useImageFailed';
 import styles from './SpacePicker.module.css';
 
 interface SpacePickerProps {
@@ -94,6 +95,62 @@ const ChevronIcon = (
     <path d="M9 5.5 15.5 12 9 18.5" />
   </svg>
 );
+
+/**
+ * One row's identity mark. A component rather than inline JSX because it needs
+ * per-row state - whether that row's logo loaded - and a hook cannot be called
+ * inside the map that renders the rows.
+ *
+ * A logo whose object has been deleted, or whose url never resolved, is treated
+ * as no logo at all: it falls through to the monogram (or the building glyph for
+ * an unresolved name) rather than leaving the browser's broken-image icon sitting
+ * where the organisation's identity should be.
+ */
+function PickerMark({
+  space,
+  unresolved,
+}: {
+  space: UserSpace;
+  unresolved: boolean;
+}) {
+  const logo = useImageFailed(space.logoUrl);
+  const hasLogo = Boolean(space.logoUrl) && !logo.failed;
+
+  return (
+    <span
+      className={`${styles.mark} ${
+        space.kind === 'portal' ? styles.markPortal : styles.markStaff
+      }`}
+      aria-hidden="true"
+      /* The org's brand colour is used ONLY as the mark's fill, with a readable
+         ink computed for it (readableTextOn) - an arbitrary org colour has any
+         contrast, so it can never be trusted as text. No brand colour keeps the
+         token default. The tint comes back when a logo fails, since the mark is
+         once again carrying a monogram. */
+      style={
+        hasLogo || !space.brandColor
+          ? undefined
+          : {
+              background: space.brandColor,
+              color: readableTextOn(space.brandColor, '#ffffff', '#10141a'),
+            }
+      }
+    >
+      {hasLogo ? (
+        <img
+          className={styles.markLogo}
+          src={space.logoUrl}
+          alt=""
+          onError={logo.onError}
+        />
+      ) : unresolved ? (
+        BuildingIcon
+      ) : (
+        initials(space.name)
+      )}
+    </span>
+  );
+}
 
 export function SpacePicker({ spaces, onChosen }: SpacePickerProps) {
   const { user, refreshSession, signOut } = useAuth();
@@ -200,36 +257,7 @@ export function SpacePicker({ spaces, onChosen }: SpacePickerProps) {
                   disabled={entering !== null}
                   onClick={() => void choose(space)}
                 >
-                  <span
-                    className={`${styles.mark} ${
-                      space.kind === 'portal' ? styles.markPortal : styles.markStaff
-                    }`}
-                    aria-hidden="true"
-                    /* The org's brand colour is used ONLY as the mark's fill,
-                       with a readable ink computed for it (readableTextOn) - an
-                       arbitrary org colour has any contrast, so it can never be
-                       trusted as text. No brand colour keeps the token default. */
-                    style={
-                      space.logoUrl || !space.brandColor
-                        ? undefined
-                        : {
-                            background: space.brandColor,
-                            color: readableTextOn(space.brandColor, '#ffffff', '#10141a'),
-                          }
-                    }
-                  >
-                    {space.logoUrl ? (
-                      <img
-                        className={styles.markLogo}
-                        src={space.logoUrl}
-                        alt=""
-                      />
-                    ) : unresolved ? (
-                      BuildingIcon
-                    ) : (
-                      initials(space.name)
-                    )}
-                  </span>
+                  <PickerMark space={space} unresolved={unresolved} />
                   <span className={styles.optionText}>
                     <span className={styles.optionName}>{title}</span>
                     <span className={styles.optionMeta}>

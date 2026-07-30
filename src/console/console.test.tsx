@@ -8,7 +8,7 @@
 // ============================================================================
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { User } from 'firebase/auth';
@@ -387,6 +387,47 @@ describe('OrgSwitcher', () => {
     expect(
       screen.queryByRole('button', { name: 'Add organisation' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('falls back to the monogram when an organisation logo will not load', async () => {
+    const user = userEvent.setup();
+    mocks.userSpaces.spaces = [
+      {
+        kind: 'staff' as const,
+        orgId: 'org-1',
+        name: 'Acme Fire Safety',
+        isCurrent: true,
+        // A logo whose object has been deleted, or was saved as a url that never
+        // resolved. The profile still carries it, so the mark tries it first.
+        logoUrl: 'https://example.test/gone.png',
+        brandColor: '#0B5FA5',
+      },
+      { kind: 'staff' as const, orgId: 'org-2', name: 'Borough Compliance', isCurrent: false },
+    ];
+    mocks.userSpaces.hasMultiple = true;
+    const { container } = renderConsoleAt('/app');
+
+    await user.click(screen.getByRole('button', { name: /Acme Fire Safety/ }));
+    const logo = container.querySelector(
+      'img[src="https://example.test/gone.png"]',
+    ) as HTMLImageElement;
+    expect(logo).toBeInTheDocument();
+
+    // The browser gives up on the object: without a fallback this is where the
+    // broken-image glyph would sit, inside the mark, reading as a broken product
+    // rather than broken data.
+    act(() => {
+      fireEvent.error(logo);
+    });
+
+    expect(
+      container.querySelector('img[src="https://example.test/gone.png"]'),
+    ).not.toBeInTheDocument();
+    // Tier 2 takes over in full: the initials AND the brand tint the logo had
+    // been suppressing, so the mark is a designed state rather than an empty box.
+    const mark = screen.getByText('AF');
+    expect(mark).toBeInTheDocument();
+    expect(mark).toHaveStyle({ background: '#0B5FA5' });
   });
 });
 

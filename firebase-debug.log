@@ -1,0 +1,258 @@
+[debug] [2026-07-30T16:58:28.286Z] ----------------------------------------------------------------------
+[debug] [2026-07-30T16:58:28.300Z] Command:       /Users/jackblundell/.nvm/versions/node/v20.19.4/bin/node /Users/jackblundell/.nvm/versions/node/v20.19.4/bin/firebase database:get /test --shallow --project safentia-tech
+[debug] [2026-07-30T16:58:28.301Z] CLI Version:   14.26.0
+[debug] [2026-07-30T16:58:28.302Z] Platform:      darwin
+[debug] [2026-07-30T16:58:28.302Z] Node Version:  v20.19.4
+[debug] [2026-07-30T16:58:28.303Z] Time:          Thu Jul 30 2026 17:58:28 GMT+0100 (British Summer Time)
+[debug] [2026-07-30T16:58:28.303Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-07-30T16:58:28.615Z] Object "/hosting/headers/0" in "firebase.json" is missing required property: {"missingProperty":"glob"}
+[debug] [2026-07-30T16:58:28.616Z] Object "/hosting/headers/0" in "firebase.json" has unknown property: {"additionalProperty":"comment"}
+[debug] [2026-07-30T16:58:28.616Z] Object "/hosting/headers/0" in "firebase.json" is missing required property: {"missingProperty":"regex"}
+[debug] [2026-07-30T16:58:28.617Z] Field "/hosting/headers/0" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[debug] [2026-07-30T16:58:28.618Z] Field "/hosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-07-30T16:58:28.619Z] Field "/hosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[debug] [2026-07-30T16:58:28.628Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-07-30T16:58:28.630Z] > authorizing via signed-in user (routebuddiesapp@gmail.com)
+[debug] [2026-07-30T16:58:28.631Z] [iam] checking project safentia-tech for permissions ["firebase.projects.get","firebasedatabase.instances.get"]
+[debug] [2026-07-30T16:58:28.633Z] Checked if tokens are valid: true, expires at: 1785434301486
+[debug] [2026-07-30T16:58:28.635Z] Checked if tokens are valid: true, expires at: 1785434301486
+[debug] [2026-07-30T16:58:28.636Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/safentia-tech:testIamPermissions [none]
+[debug] [2026-07-30T16:58:28.636Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/safentia-tech:testIamPermissions x-goog-quota-user=projects/safentia-tech
+[debug] [2026-07-30T16:58:28.636Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/safentia-tech:testIamPermissions {"permissions":["firebase.projects.get","firebasedatabase.instances.get"]}
+[debug] [2026-07-30T16:58:29.528Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/safentia-tech:testIamPermissions 200
+[debug] [2026-07-30T16:58:29.529Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/safentia-tech:testIamPermissions {"permissions":["firebase.projects.get","firebasedatabase.instances.get"]}
+[debug] [2026-07-30T16:58:29.529Z] Checked if tokens are valid: true, expires at: 1785434301486
+[debug] [2026-07-30T16:58:29.529Z] Checked if tokens are valid: true, expires at: 1785434301486
+[debug] [2026-07-30T16:58:29.530Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/safentia-tech [none]
+[debug] [2026-07-30T16:58:29.912Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/safentia-tech 200
+[debug] [2026-07-30T16:58:29.912Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/safentia-tech {"projectId":"safentia-tech","projectNumber":"603824171088","displayName":"safentia","name":"projects/safentia-tech","resources":{"hostingSite":"safentia-tech","realtimeDatabaseInstance":"safentia-tech-default-rtdb"},"state":"ACTIVE","labels":{"firebase":"enabled","firebase/storage-default-bucket":"created"},"etag":"1_bd8bfb69-b670-4b9f-9f96-363d7ea78cc5"}
+[debug] [2026-07-30T16:58:29.913Z] Checked if tokens are valid: true, expires at: 1785434301486
+[debug] [2026-07-30T16:58:29.913Z] Checked if tokens are valid: true, expires at: 1785434301486
+[debug] [2026-07-30T16:58:29.913Z] >>> [apiv2][query] GET https://firebasedatabase.googleapis.com/v1beta/projects/safentia-tech/locations/-/instances/safentia-tech-default-rtdb [none]
+[debug] [2026-07-30T16:58:30.667Z] <<< [apiv2][status] GET https://firebasedatabase.googleapis.com/v1beta/projects/safentia-tech/locations/-/instances/safentia-tech-default-rtdb 200
+[debug] [2026-07-30T16:58:30.667Z] <<< [apiv2][body] GET https://firebasedatabase.googleapis.com/v1beta/projects/safentia-tech/locations/-/instances/safentia-tech-default-rtdb {"name":"projects/603824171088/locations/europe-west1/instances/safentia-tech-default-rtdb","project":"projects/603824171088","databaseUrl":"https://safentia-tech-default-rtdb.europe-west1.firebasedatabase.app","type":"DEFAULT_DATABASE","state":"ACTIVE"}
+[debug] [2026-07-30T16:58:30.672Z] Checked if tokens are valid: true, expires at: 1785434301486
+[debug] [2026-07-30T16:58:30.672Z] Checked if tokens are valid: true, expires at: 1785434301486
+[debug] [2026-07-30T16:58:30.673Z] >>> [apiv2][query] GET https://safentia-tech-default-rtdb.europe-west1.firebasedatabase.app/test.json shallow=true
+[debug] [2026-07-30T16:58:30.829Z] <<< [apiv2][status] GET https://safentia-tech-default-rtdb.europe-west1.firebasedatabase.app/test.json 200
+[debug] [2026-07-30T16:58:30.830Z] <<< [apiv2][body] GET https://safentia-tech-default-rtdb.europe-west1.firebasedatabase.app/test.json [stream]
+[debug] [2026-07-30T16:58:30.840Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at PassThrough.<anonymous> (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/lib/commands/database-get.js:108:27)
+    at Object.onceWrapper (node:events:638:28)
+    at PassThrough.emit (node:events:536:35)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.843Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.844Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.845Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.846Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.847Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.848Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.849Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.850Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.852Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.853Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.854Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.856Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.856Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.858Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.858Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-07-30T16:58:30.859Z] Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:161:15)
+    at writeGeneric (node:internal/stream_base_commons:152:3)
+    at Socket._writeGeneric (node:net:958:11)
+    at Socket._write (node:net:970:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at Console.log (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston/lib/winston/transports/console.js:87:23)
+    at Console._write (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/modern.js:103:17)
+    at doWrite (/Users/jackblundell/.nvm/versions/node/v20.19.4/lib/node_modules/firebase-tools/node_modules/winston-transport/node_modules/readable-stream/lib/_stream_writable.js:390:139)
