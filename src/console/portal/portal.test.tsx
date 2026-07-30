@@ -341,17 +341,26 @@ describe('PortalHome', () => {
   it('renders the customer buildings with RAG chip, last-assessed and next review dates', async () => {
     renderPortalAt('/app');
     expect((await screen.findAllByText('Dockside Estate')).length).toBeGreaterThan(0);
-    // Each building appears twice: once in the triage list, once on its site
-    // card. Both carry the same RAG language.
+    // Anchor House is flagged (its review fell due), so it is named twice: once
+    // in the triage list, once on its site card. Beacon Court is only AWAITING
+    // its first assessment - the assessor's task, not the customer's - so
+    // PortalHome's ATTENTION_REASONS deliberately leaves it out of triage and it
+    // is named exactly once.
     expect(screen.getAllByText('Anchor House')).toHaveLength(2);
-    expect(screen.getAllByText('Beacon Court')).toHaveLength(2);
-    expect(screen.getAllByText('Medium risk')).toHaveLength(2);
-    // Story 2057 AC1: the site card carries when the building was last assessed.
+    expect(screen.getAllByText('Beacon Court')).toHaveLength(1);
+    // Three medium chips for the one medium building, and no more: its triage
+    // row, the site header's worst-risk chip, and its row on the site card.
+    expect(screen.getAllByText('Medium risk')).toHaveLength(3);
+    // Story 2057 AC1: the site card row says when the building was last assessed
+    // and what its next review is doing. This review has passed, so ReviewCell
+    // raises it to a labelled chip beside the date it was DUE, rather than
+    // printing a quiet "next review" a reader would skim straight over.
     expect(screen.getByText('Assessed 1 June 2026')).toBeInTheDocument();
-    expect(screen.getByText('Next review 9 July 2026')).toBeInTheDocument();
-    // The un-assessed building states the fact plainly: its pending RAG chip
-    // (twice) and its last-assessed line all read "Not yet assessed".
-    expect(screen.getAllByText('Not yet assessed')).toHaveLength(3);
+    expect(screen.getByText('Was due 9 July 2026')).toBeInTheDocument();
+    // The un-assessed building states the fact plainly, twice: its pending RAG
+    // chip and its last-assessed line both read "Not yet assessed", and it has no
+    // review booked to be overdue for.
+    expect(screen.getAllByText('Not yet assessed')).toHaveLength(2);
     expect(screen.getByText('No review scheduled')).toBeInTheDocument();
   });
 
@@ -360,13 +369,16 @@ describe('PortalHome', () => {
     const summary = await screen.findByRole('region', {
       name: 'Fire safety summary',
     });
-    // Two buildings, neither at high risk, one never assessed. The counts are
-    // derived from the buildings already subscribed, never invented.
+    // Two buildings, neither at high risk, one awaiting its first assessment.
+    // The counts are derived from the buildings already subscribed, never invented.
     expect(within(summary).getByText('Buildings')).toBeInTheDocument();
     expect(within(summary).getByText('2')).toBeInTheDocument();
     expect(within(summary).getByText('High risk')).toBeInTheDocument();
     expect(within(summary).getByText('Reviews overdue')).toBeInTheDocument();
-    expect(within(summary).getByText('Never assessed')).toBeInTheDocument();
+    // "Awaiting assessment", not "Never assessed": the tile is a neutral status
+    // whose action sits with the assessing organisation, so it is worded as a
+    // fact about the building rather than a charge against the customer.
+    expect(within(summary).getByText('Awaiting assessment')).toBeInTheDocument();
   });
 
   it('triages the buildings that need attention, saying why in words', async () => {
@@ -375,10 +387,24 @@ describe('PortalHome', () => {
       await screen.findByRole('heading', { name: 'Needs your attention' }),
     ).toBeInTheDocument();
     // The reason is written out beside the RAG chip - colour never carries it.
-    // Scoped to the triage row: "Never assessed" is also a summary tile label.
-    expect(screen.getByText('Review overdue')).toBeInTheDocument();
-    const triageRow = screen.getAllByRole('link', { name: /Beacon Court/ })[0];
-    expect(within(triageRow).getByText('Never assessed')).toBeInTheDocument();
+    // Scoped to the triage row, because ReviewCell repeats the same words on the
+    // site card below: one threshold, one vocabulary, deliberately.
+    //
+    // The triage row is identified by naming the SITE under the building (the
+    // site card's own row names the building's address instead), so this does not
+    // depend on the order the two sections happen to render in.
+    const triageRows = screen
+      .getAllByRole('link', { name: /Anchor House/ })
+      .filter((row) => row.textContent?.includes('Dockside Estate'));
+    expect(triageRows).toHaveLength(1);
+    expect(within(triageRows[0]).getByText('Review overdue')).toBeInTheDocument();
+    // Beacon Court is awaiting its FIRST assessment, which is the assessor's job,
+    // so it is never listed as something the customer has to act on.
+    expect(
+      screen
+        .getAllByRole('link', { name: /Beacon Court/ })
+        .filter((row) => row.textContent?.includes('Dockside Estate')),
+    ).toHaveLength(0);
   });
 
   it('says so plainly when nothing needs attention', async () => {
@@ -441,10 +467,13 @@ describe('Portal empty states', () => {
     const summary = await screen.findByRole('region', {
       name: 'Fire safety summary',
     });
-    // The counts are REAL numbers, not skeletons: one building, never assessed.
+    // The counts are REAL numbers, not skeletons: one building, awaiting its
+    // first assessment. StatCard's skeleton is labelled `Loading ${label}`, so
+    // these must track the tile labels exactly - "Loading Never assessed" named a
+    // tile that no longer exists and so could never have failed.
     expect(within(summary).queryByText('Loading Buildings')).toBeNull();
     expect(within(summary).queryByText('Loading High risk')).toBeNull();
-    expect(within(summary).queryByText('Loading Never assessed')).toBeNull();
+    expect(within(summary).queryByText('Loading Awaiting assessment')).toBeNull();
     expect(within(summary).getAllByText('1')).toHaveLength(2);
     expect(within(summary).getAllByText('0')).toHaveLength(2);
   });

@@ -29,6 +29,11 @@ const mocks = vi.hoisted(() => ({
     user: { uid: 'u1', email: 'jane@example.com', displayName: 'Jane' } as unknown,
     claims: null as unknown,
     paths: null as unknown,
+    // ConsoleRoute gates the whole console on the context's top-level
+    // emailVerified, so without this the placement cases render the
+    // verification screen and find no search box to place.
+    emailVerified: true,
+    refreshEmailVerification: vi.fn(() => Promise.resolve(true)),
     signOut: vi.fn(),
   },
   userSpaces: {

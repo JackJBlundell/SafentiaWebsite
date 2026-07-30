@@ -81,6 +81,33 @@ export interface Theme {
 }
 
 /**
+ * A stored brand colour that `hexToRgb` can actually parse, or the fallback.
+ *
+ * The brand is REMOTE DATA, so it is validated here rather than trusted.
+ * hexToRgb throws on anything that is not #RGB/#RRGGBB - deliberately, so a data
+ * problem is visible rather than silently rendering the wrong colour - but
+ * buildTheme runs inside ThemeProvider, which ConsoleRoute mounts ABOVE the
+ * console shell that owns the ErrorBoundary. A throw there escapes the boundary
+ * and takes the whole console blank instead of one page, and the ORG SWITCHER is
+ * where it lands: activating another space refreshes the session, which re-points
+ * the brand subscription, so switching is the only moment a different
+ * organisation's brand enters buildTheme mid-session. The Functions twin of
+ * adjustToMeetAA already fails soft for this reason and says explicitly that the
+ * caller owns the fallback decision (functions/src/lib/contrast.ts) - this is it.
+ *
+ * `??` alone is not enough: it only catches null/undefined, and an EMPTY STRING -
+ * the shape a cleared colour field leaves behind - sails straight through it into
+ * the throw. Anything unparseable falls back to the platform default, which is
+ * the same honest un-branded state an org with no brand at all already gets.
+ */
+function usableBrandHex(value: string | undefined, fallback: string): string {
+  return typeof value === 'string' &&
+    /^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value.trim())
+    ? value
+    : fallback;
+}
+
+/**
  * Build a complete theme. `brand` and `fontFamily`/`logoUrl` come from the
  * signed-in org's profile; all are optional so the app renders a correct,
  * accessible default theme before any profile has loaded (no flash of unstyled
@@ -98,8 +125,8 @@ export function buildTheme(args: {
   const onFillLight = ON_FILL.light;
   const onFillDark = ON_FILL.dark;
 
-  const rawPrimary = brand?.primary ?? DEFAULT_BRAND.primary;
-  const rawSecondary = brand?.secondary ?? DEFAULT_BRAND.secondary;
+  const rawPrimary = usableBrandHex(brand?.primary, DEFAULT_BRAND.primary);
+  const rawSecondary = usableBrandHex(brand?.secondary, DEFAULT_BRAND.secondary);
 
   // Correct against surfaceAlt, not background: brand ink also lands on cards and
   // panels, and surfaceAlt is the tightest of the light surfaces (and, in dark

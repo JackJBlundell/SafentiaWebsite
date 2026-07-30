@@ -28,12 +28,20 @@ const mocks = vi.hoisted(() => {
       user: null as unknown,
       claims: null as unknown,
       paths: null as unknown,
+      // ConsoleRoute gates the WHOLE console on this flag (not user.emailVerified
+      // - the context republishes it as a top-level field, see AuthProvider), so
+      // an unverified mock renders EmailVerificationScreen instead of whatever
+      // the test came to assert. These tests are about the authenticated
+      // console, so the account is verified; the gate itself is covered where it
+      // belongs, alongside the other auth screens.
+      emailVerified: true,
       signInWithEmail: vi.fn(),
       signInWithGoogle: vi.fn(),
       sendReset: vi.fn(),
       changePassword: vi.fn(),
       updateDisplayName: vi.fn(),
       refreshSession: vi.fn(),
+      refreshEmailVerification: vi.fn(() => Promise.resolve(true)),
       signOut: vi.fn(),
     },
     userSpaces: {
@@ -189,7 +197,7 @@ describe('ConsoleGate', () => {
     // Invitation-only: organisations are founded by the platform operator
     // until Phase 3 self-serve, so there is no create entry here.
     expect(
-      screen.getByText(/An administrator at your organisation needs to invite you/),
+      screen.getByText(/an administrator needs to invite you/),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Create an organisation' }),
@@ -359,14 +367,21 @@ describe('OrgSwitcher', () => {
 
     const list = screen.getByRole('list', { name: 'Your spaces' });
     expect(list).toBeInTheDocument();
-    // The active organisation is marked as current.
+    // The active organisation is marked as current. Currency rides on
+    // aria-current, NOT on a word in the label: every row states its half in
+    // the accessible name ("Staff console"), and the tick beside the current one
+    // is aria-hidden, so the attribute is the only signal a screen reader gets -
+    // which makes it the only thing worth asserting. The other row is checked
+    // for its ABSENCE, so a regression that marks everything current fails here.
     const currentOption = screen.getByRole('button', {
-      name: /Acme Fire Safety Current/,
+      name: /Acme Fire Safety Staff console/,
     });
     expect(currentOption).toHaveAttribute('aria-current', 'true');
-    expect(
-      screen.getByRole('button', { name: 'Borough Compliance' }),
-    ).toBeInTheDocument();
+    const otherOption = screen.getByRole('button', {
+      name: /Borough Compliance Staff console/,
+    });
+    expect(otherOption).toBeInTheDocument();
+    expect(otherOption).not.toHaveAttribute('aria-current');
     // The disclosure only switches: no create entry (operator-only until
     // Phase 3 self-serve).
     expect(
@@ -407,7 +422,9 @@ describe('Platform mode', () => {
     // A super admin gets the disclosure even with a single org.
     const trigger = screen.getByRole('button', { name: /Acme Fire Safety/ });
     await user.click(trigger);
-    const entry = screen.getByRole('button', { name: 'Super Admin Dashboard' });
+    // Substring, not exact: the entry carries a "Platform oversight" subtitle in
+    // the same button, so it forms part of the accessible name.
+    const entry = screen.getByRole('button', { name: /Super Admin Dashboard/ });
 
     // Selecting it navigates to /app/admin: the platform rail replaces the org
     // rail, which proves the client-side navigation landed.
@@ -454,8 +471,11 @@ describe('Platform mode', () => {
     // Even at a hand-typed /app/admin the org rail stays; platform is presentation
     // over the rules' real superAdmin boundary.
     renderConsoleAt('/app/admin');
+    // Substring, matching the allow case above: an exact name could never match
+    // the entry (it carries a subtitle), so this deny would have passed even if
+    // the entry HAD rendered - a guard that cannot fail is not a guard.
     expect(
-      screen.queryByRole('button', { name: 'Super Admin Dashboard' }),
+      screen.queryByRole('button', { name: /Super Admin Dashboard/ }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Organisations' }),

@@ -254,9 +254,12 @@ describe('OrgsOverview', () => {
     };
     renderAdmin('/activity');
 
-    // Generous timeout: under full-suite load the activity page can settle
-    // slowly; the positive anchor must be present before asserting absence.
-    await screen.findByLabelText('Event type', {}, { timeout: 10_000 });
+    // The positive anchor must be present before asserting absence. The default
+    // wait is deliberate: this once asked for 10s, which the suite's own 5s
+    // testTimeout can never reach, so a page that never settled reported as an
+    // opaque "test timed out" instead of "this element never appeared" - which is
+    // exactly what hid the PlatformActivity loading deadlock.
+    await screen.findByLabelText('Event type');
     expect(
       screen.queryByRole('button', { name: 'Create organisation' }),
     ).not.toBeInTheDocument();

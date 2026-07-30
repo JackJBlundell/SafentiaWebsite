@@ -37,12 +37,6 @@ import {
  *  High = 7 days, Medium = 30 days, Low = 3 months. */
 const DUE_DAYS: Record<Severity, number> = { H: 7, M: 30, L: 90 };
 
-const SEVERITY_WORD: Record<Severity, string> = {
-  H: 'high',
-  M: 'medium',
-  L: 'low',
-};
-
 /** A non-conformity is a real finding only when it carries both a severity and an
  *  observation - an untouched one is "no finding", not an issue. */
 function isFinding(answer: AssessmentAnswer | undefined): answer is AssessmentAnswer & {
@@ -201,8 +195,16 @@ function riskOpinionText(building: Building | null): string {
 
 /**
  * A deterministic summary of the issues to address - the safety net used when the
- * AI summary cannot run (offline or key not configured). Plain, factual, grouped
- * by severity, citing the (real) mapped regulations.
+ * AI summary cannot run (offline or key not configured).
+ *
+ * Shape matches the AI summary deliberately (see fireSafetyContext.ts): an
+ * EXECUTIVE summary, not a schedule. It states the overall position, names the
+ * high-severity matters that drive the remedial priority, and accounts for the
+ * rest by count. It does NOT enumerate every finding - Section 3 of the report is
+ * the itemised action plan, with each finding's severity, regulation and due
+ * date, so listing them here only buries the position the reader needs. The two
+ * paths must produce the same KIND of prose, or which one ran would show in the
+ * finished report.
  */
 export function fallbackSummary(
   issues: DraftIssue[],
@@ -217,29 +219,66 @@ export function fallbackSummary(
   }
   const total = issues.length;
   const counts = `${dist.high} high, ${dist.medium} medium and ${dist.low} low severity`;
-  const lines: string[] = [];
-  lines.push(
-    `This assessment identified ${total} ${total === 1 ? 'issue' : 'issues'} ` +
-      `to be addressed (${counts}). The significant findings, in priority order:`,
+  const sentences: string[] = [];
+  sentences.push(
+    `This assessment identified ${total} ${total === 1 ? 'matter' : 'matters'} ` +
+      `requiring attention (${counts}).`,
   );
-  const ordered = [...issues].sort(
-    (a, b) => severityRank(b.severity) - severityRank(a.severity),
-  );
-  for (const issue of ordered) {
-    lines.push(
-      `• [${SEVERITY_WORD[issue.severity].toUpperCase()}] ${issue.finding} ` +
-        `(${issue.regulation}).`,
+
+  // The high-severity findings are the only ones named individually: they set the
+  // immediate remedial priority. Capped at three so a building with many serious
+  // findings still yields a summary rather than the list this replaced.
+  const NAMED_LIMIT = 3;
+  const high = issues.filter((issue) => issue.severity === 'H');
+  if (high.length > 0) {
+    const named = high.slice(0, NAMED_LIMIT);
+    sentences.push(
+      `The most serious ${named.length === 1 ? 'matter concerns' : 'matters concern'} ` +
+        `${joinList(named.map((issue) => lowerFirst(stripFullStop(issue.finding))))}.`,
+    );
+    if (high.length > named.length) {
+      const rest = high.length - named.length;
+      sentences.push(
+        `A further ${rest} high-severity ${rest === 1 ? 'matter is' : 'matters are'} ` +
+          'recorded in the action plan.',
+      );
+    }
+  } else {
+    sentences.push(
+      'No high-severity matters were identified; the findings concern ' +
+        'improvements to existing precautions rather than immediate risks to life.',
     );
   }
-  lines.push(
-    'Each item should be actioned by the responsible person within the stated ' +
-      'timescale and re-inspected.',
+
+  const lesser = dist.medium + dist.low;
+  if (lesser > 0) {
+    sentences.push(
+      `The remaining ${lesser} ${lesser === 1 ? 'matter is' : 'matters are'} of ` +
+        'medium or low severity and are scheduled accordingly.',
+    );
+  }
+
+  sentences.push(
+    'Each item should be actioned by the responsible person within the timescale ' +
+      'stated in the action plan and re-inspected on completion.',
   );
-  return lines.join('\n');
+  return sentences.join(' ');
 }
 
-function severityRank(s: Severity): number {
-  return s === 'H' ? 3 : s === 'M' ? 2 : 1;
+/** Drop a single trailing full stop so a finding can be spliced mid-sentence. */
+function stripFullStop(s: string): string {
+  return s.endsWith('.') ? s.slice(0, -1) : s;
+}
+
+/** Lower the first character of a finding for the same reason - it was authored
+ *  as a standalone sentence, and here it becomes a clause. Left alone when the
+ *  word looks like an acronym or proper noun (BS 9999, AOV, Flat 3), which must
+ *  not be decapitalised. */
+function lowerFirst(s: string): string {
+  if (s.length === 0) return s;
+  const firstWord = s.split(' ', 1)[0];
+  const looksProper = /[A-Z]{2,}|\d/.test(firstWord);
+  return looksProper ? s : s[0].toLowerCase() + s.slice(1);
 }
 
 function capitalise(s: string): string {

@@ -137,14 +137,22 @@ describe('Report PDFs (story 1076)', () => {
 });
 
 // ============================================================================
-// Portal report reads (finding 2061, storage side). The object path carries no
-// customer segment, so the ONLY per-object scope the rule can check is the
-// customerId the report generator stamps into custom metadata:
-//   allow read: portalOrgId == orgId && resource.metadata.customerId ==
-//               request.auth.token.customerId
-// These cases prove both arms and every deny direction.
+// Portal reads of the reports prefix: STAFF ONLY, no exceptions.
+//
+// The rule once granted a portal token on the customerId the generator stamps
+// into the object's custom metadata. That branch is GONE (see storage.rules,
+// the reports match): a write-time stamp is authorisation frozen at write time
+// - it does not follow a building that changes hands, a locked portal seat or
+// an archived customer, and a report generated while the building->customer
+// index was missing was stamped empty and became permanently unopenable. A
+// customer now opens their report through getReportDownloadUrl, which
+// re-authorises against live database state on every request.
+//
+// So these cases pin the posture the rule actually holds: EVERY portal token is
+// denied, stamped or not, and the stamp grants nothing. If a portal download
+// breaks, fix the callable - do not restore a rules branch to paper over it.
 // ============================================================================
-describe('Report PDFs - customer portal (metadata-scoped read)', () => {
+describe('Report PDFs - customer portal is denied at the rules layer', () => {
   const portalC1: Actor = { uid: 'portalC1', portalOrgId: 'orgA', customerId: 'c1' };
   const portalC2: Actor = { uid: 'portalC2', portalOrgId: 'orgA', customerId: 'c2' };
   // Forged-claim attacker: matching customerId but a grant on the wrong org.
@@ -153,7 +161,8 @@ describe('Report PDFs - customer portal (metadata-scoped read)', () => {
   const STAMPED_PATH = 'live/orgs/orgA/reports/stamped-c1.pdf';
 
   /** Seed one report stamped for customer c1 (what generateReport does via the
-   *  admin SDK, bypassing rules). */
+   *  admin SDK, bypassing rules). The stamp is still written as defence in
+   *  depth; nothing grants on it. */
   async function seedStampedReport(): Promise<void> {
     const env = await getTestEnv();
     await env.withSecurityRulesDisabled(async (ctx) => {
@@ -165,10 +174,10 @@ describe('Report PDFs - customer portal (metadata-scoped read)', () => {
     });
   }
 
-  test('the stamped customer portal user reads the report (allow)', async () => {
+  test('the stamped customer cannot read their own report directly (deny - callable only)', async () => {
     await seedStampedReport();
     const s = await storageFor(portalC1);
-    await assertSucceeds(s.ref(STAMPED_PATH).getDownloadURL());
+    await assertFails(s.ref(STAMPED_PATH).getDownloadURL());
   });
 
   test('another customer of the SAME org cannot read it (deny)', async () => {
@@ -208,5 +217,68 @@ describe('Report PDFs - customer portal (metadata-scoped read)', () => {
     });
     const s = await storageFor(portalC1);
     await assertFails(s.ref('live/orgs/orgA/buildings/b1/photos/px.jpg').getDownloadURL());
+  });
+
+  test('org A staff still read the reports prefix directly (the branch that STAYED)', async () => {
+    await seedStampedReport();
+    const s = await storageFor(orgAUser);
+    await assertSucceeds(s.ref(STAMPED_PATH).getDownloadURL());
+  });
+});
+
+// ============================================================================
+// Action sign-off evidence: the one prefix a portal token IS granted on, scoped
+// by the customerId manageAction stamps from the buildingCustomerIndex (never
+// from the uploading client). This block exists to prove the portal arm of that
+// OR is REACHABLE, which is not obvious: the read is
+//   ownOrg(orgId) || (portalOrgId == orgId && metadata.customerId == customerId)
+// and a portal token carries NO orgId claim, so the left arm raises an absent-
+// property error rather than returning false (the same Storage-rules behaviour
+// that caused the testMode outage in HISTORY above). Emulator-proven here: the
+// error is CONTAINED within the `||`, the right arm is still evaluated, and the
+// owning customer gets their evidence. The `'orgId' in ...` guard in ownOrg
+// makes that explicit rather than incidental - these cases are what would catch
+// it if either the guard or the containment ever went away.
+// ============================================================================
+describe('Action evidence - portal read scoped by stamped customerId', () => {
+  const portalC1: Actor = { uid: 'evC1', portalOrgId: 'orgA', customerId: 'c1' };
+  const portalC2: Actor = { uid: 'evC2', portalOrgId: 'orgA', customerId: 'c2' };
+
+  const EVIDENCE_PATH = 'live/orgs/orgA/buildings/b1/actionEvidence/ev1';
+
+  async function seedEvidence(): Promise<void> {
+    const env = await getTestEnv();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const s: any = ctx.storage();
+      await s.ref(EVIDENCE_PATH).put(bytes(256), {
+        contentType: 'image/jpeg',
+        customMetadata: { customerId: 'c1' },
+      });
+    });
+  }
+
+  test('the owning customer reads the evidence for their own building (allow)', async () => {
+    await seedEvidence();
+    const s = await storageFor(portalC1);
+    await assertSucceeds(s.ref(EVIDENCE_PATH).getDownloadURL());
+  });
+
+  test('another customer of the same org cannot read it (deny)', async () => {
+    await seedEvidence();
+    const s = await storageFor(portalC2);
+    await assertFails(s.ref(EVIDENCE_PATH).getDownloadURL());
+  });
+
+  test('the owning org staff read it too (allow)', async () => {
+    await seedEvidence();
+    const s = await storageFor(orgAUser);
+    await assertSucceeds(s.ref(EVIDENCE_PATH).getDownloadURL());
+  });
+
+  test('a portal user cannot upload evidence (admin staff only, deny)', async () => {
+    const s = await storageFor(portalC1);
+    await assertFails(
+      s.ref('live/orgs/orgA/buildings/b1/actionEvidence/forged').put(bytes(64), { contentType: 'image/jpeg' }),
+    );
   });
 });

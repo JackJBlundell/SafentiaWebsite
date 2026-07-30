@@ -35,5 +35,15 @@ export default defineConfig({
     // functions/ has its own jest suite; sweeping it up here runs jest-API
     // tests under vitest and fails them all.
     include: ['src/**/*.test.{ts,tsx}'],
+    // Vitest's 5s default is calibrated for a unit test, not for an interaction
+    // test that drives real keystrokes through jsdom and re-renders a console
+    // screen on each one. Vitest runs a worker per core, so what a test costs in
+    // the full suite is mostly contention rather than its own work: the invite
+    // form's three-field cases and the validation flag basket run in about a
+    // second alone and over five in a 33-file run, which is exactly why they
+    // failed in CI and passed when run on their own. A genuine hang still fails
+    // - it just takes twenty seconds to say so, which is the right trade when
+    // the alternative is a suite that is red on a busy runner and green locally.
+    testTimeout: 20_000,
   },
 });

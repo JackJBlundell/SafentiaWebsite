@@ -273,12 +273,23 @@ describe('Releases per month chart', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders honest zeros for a quiet year, not an empty panel', () => {
+  it('states a quiet year plainly rather than drawing twelve empty bars', () => {
     mocks.fixtures.releaseTimes = [];
     renderReports();
+    // Loaded-and-genuinely-empty is its own state (see ReportsPage): a wall of
+    // zero-height columns reads as a rendering fault, and it buries the real,
+    // reassuring message. Nothing is lost - the monthly summary beneath still
+    // carries every month, zeros included.
+    expect(screen.getByText('No reports released yet')).toBeInTheDocument();
     expect(
-      screen.getByRole('img', { name: /0 in total/ }),
+      screen.getByText(
+        /No assessments have been released in the last 12 months/,
+      ),
     ).toBeInTheDocument();
+    // And no chart is drawn, so nothing narrates a series that does not exist.
+    expect(
+      screen.queryByRole('img', { name: /Assessments released per month/ }),
+    ).not.toBeInTheDocument();
   });
 });
 

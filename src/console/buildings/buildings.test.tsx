@@ -148,7 +148,7 @@ describe('FloorPlansPanel', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Add floor plan' }),
+      screen.getByRole('button', { name: 'Add floor plans' }),
     ).toBeInTheDocument();
   });
 
@@ -156,8 +156,11 @@ describe('FloorPlansPanel', () => {
     mocks.auth.claims = assessorClaims;
     mocks.rtdb.data = null;
     render(<FloorPlansPanel buildingId="building-1" />);
+    // Plural, matching the multi-file trigger above. Querying the old singular
+    // name made this pass whether or not the admin gate held, which is worse
+    // than having no test for it.
     expect(
-      screen.queryByRole('button', { name: 'Add floor plan' }),
+      screen.queryByRole('button', { name: 'Add floor plans' }),
     ).not.toBeInTheDocument();
   });
 });

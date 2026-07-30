@@ -40,8 +40,17 @@ service firebase.storage {
     }
 
     // Helper: the {orgId} segment is the caller's own org (tenant isolation).
+    // Same 'in' guard as envMatches, for the same reason: a PORTAL token carries
+    // no orgId claim at all, and an unguarded read of an absent property ERRORS.
+    // The error happens to be contained inside an `||` (emulator-proven, so the
+    // portal arm of the actionEvidence read still evaluates), but relying on
+    // that is relying on an undocumented evaluator detail - returning a plain
+    // false is the same answer by construction. Behaviour is unchanged either
+    // way: every use of ownOrg is either standalone (error and false both deny)
+    // or the left arm of an OR (both fall through to the right arm).
     function ownOrg(orgId) {
-      return request.auth.token.orgId == orgId;
+      return 'orgId' in request.auth.token
+        && request.auth.token.orgId == orgId;
     }
 
     // Helper: an image upload within the 10MB ceiling.

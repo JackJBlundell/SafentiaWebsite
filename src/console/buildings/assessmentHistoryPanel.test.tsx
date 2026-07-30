@@ -10,7 +10,8 @@
 // ============================================================================
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { forEnv } from '../../paths';
 import type { SessionClaims } from '../../auth/claims';
 import type { Assessment, OrgMember, Report } from '../../types';
@@ -76,6 +77,20 @@ vi.mock('../../query/useRtdbQuery', () => ({
 
 import { AssessmentHistoryPanel } from './AssessmentHistoryPanel';
 
+/** The history table links each row through to the assessment in validation, so
+ *  it renders react-router <Link>s and needs a router in the tree. Every case
+ *  goes through here, not just the ones that currently supply rows: a bare
+ *  render only survives while a test happens to render an empty table, which is
+ *  a trap for whoever adds the next case. MemoryRouter rather than a route table
+ *  - the destination is asserted from the href, and nothing here navigates. */
+function renderPanel() {
+  return render(
+    <MemoryRouter>
+      <AssessmentHistoryPanel buildingId="bld-1" />
+    </MemoryRouter>,
+  );
+}
+
 // --- Fixtures -------------------------------------------------------------------
 
 const adminClaims: SessionClaims = {
@@ -127,7 +142,7 @@ describe('AssessmentHistoryPanel', () => {
         conductedBy: 'uid-gone',
       }),
     };
-    render(<AssessmentHistoryPanel buildingId="bld-1" />);
+    renderPanel();
 
     const rows = screen.getAllByRole('row').slice(1); // drop the header row
     // Newest (July) first, with the EXACT client-facing stage words.
@@ -137,10 +152,16 @@ describe('AssessmentHistoryPanel', () => {
     expect(rows[0]).toHaveTextContent('Former staff member');
     expect(rows[1]).toHaveTextContent('Amy Archer');
     expect(rows[1]).toHaveTextContent('1 June 2026');
+    // The first cell is the way THROUGH to the assessment. From a building -
+    // where "what did we find here?" actually starts - this is the only route
+    // in, so the href is part of the contract, not decoration.
+    expect(
+      within(rows[1]).getByRole('link', { name: '1 June 2026' }),
+    ).toHaveAttribute('href', '/app/validation/job-old');
   });
 
   it('shows honest empty states for a building with no history', () => {
-    render(<AssessmentHistoryPanel buildingId="bld-1" />);
+    renderPanel();
     expect(
       screen.getByText('No assessments have been conducted for this building yet.'),
     ).toBeInTheDocument();
@@ -157,7 +178,7 @@ describe('AssessmentHistoryPanel', () => {
         assessmentId: 'job-1',
       },
     };
-    render(<AssessmentHistoryPanel buildingId="bld-1" />);
+    renderPanel();
     expect(screen.getByText('Generated 1 July 2026')).toBeInTheDocument();
     const link = await screen.findByRole('link', { name: 'Download' });
     expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
@@ -169,7 +190,7 @@ describe('AssessmentHistoryPanel', () => {
     mocks.fixtures.reports = {
       'rep-1': { pdfPath: 'orgs/org-1/reports/rep-1.pdf', generatedAt: JULY_1 },
     };
-    render(<AssessmentHistoryPanel buildingId="bld-1" />);
+    renderPanel();
     expect(
       await screen.findByText('The report file could not be reached. Please try again.'),
     ).toBeInTheDocument();
@@ -184,7 +205,7 @@ describe('AssessmentHistoryPanel', () => {
         assessmentId: 'job-1',
       },
     };
-    render(<AssessmentHistoryPanel buildingId="bld-1" />);
+    renderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
     // First press arms the confirmation; nothing has been sent yet.
@@ -209,7 +230,7 @@ describe('AssessmentHistoryPanel', () => {
         assessmentId: 'job-1',
       },
     };
-    render(<AssessmentHistoryPanel buildingId="bld-1" />);
+    renderPanel();
     expect(
       screen.queryByRole('button', { name: 'Regenerate' }),
     ).not.toBeInTheDocument();
@@ -228,7 +249,7 @@ describe('AssessmentHistoryPanel', () => {
         assessmentId: 'job-1',
       },
     };
-    render(<AssessmentHistoryPanel buildingId="bld-1" />);
+    renderPanel();
     expect(screen.getByRole('button', { name: 'Regenerate' })).toBeInTheDocument();
   });
 });

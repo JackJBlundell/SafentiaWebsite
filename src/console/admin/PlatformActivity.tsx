@@ -128,6 +128,12 @@ const dateTimeFormat = new Intl.DateTimeFormat('en-GB', {
   hour12: false,
 });
 
+/** The key one reported window is stored under: per ENVIRONMENT and org, so a
+ *  window is only ever read back under the environment it was read from. */
+function sourceKey(env: Environment, orgId: string): string {
+  return `${env}/${orgId}`;
+}
+
 /** One org's bounded window plus its members, reported up as flat rows. Renders
  *  nothing: it exists only to own this org's subscriptions. */
 function OrgActivitySource({
@@ -139,9 +145,10 @@ function OrgActivitySource({
   env: Environment;
   orgId: string;
   name: string;
-  /** Reports this org's settled rows to the parent. Called only when the
-   *  content changes, so the parent can store it without a render loop. */
-  onData: (orgId: string, rows: FlatRow[]) => void;
+  /** Reports this org's settled rows to the parent under its env-scoped key.
+   *  Called only when the content changes, so the parent can store it without a
+   *  render loop. */
+  onData: (sourceId: string, rows: FlatRow[]) => void;
 }) {
   const paths = forEnv(env);
   const buildWindow = useMemo<RtdbQueryBuilder>(
@@ -193,15 +200,19 @@ function OrgActivitySource({
     // A cheap content signature (org name plus each row's id, time and resolved
     // actor) guards the report: the RTDB selector mints a fresh array on every
     // render, so reporting unconditionally would loop the parent's state.
-    const signature = `${name}::${rows
+    // The environment is part of the signature as well as the key: two
+    // environments can hold windows that are identical row for row (both empty,
+    // most often), and without it a switch between them would look like "no
+    // change" and never be reported.
+    const signature = `${env}::${name}::${rows
       .map((row) => `${row.id}~${row.at}~${row.actor}`)
       .join('|')}`;
     if (signature === lastSignature.current) {
       return;
     }
     lastSignature.current = signature;
-    onData(orgId, rows);
-  }, [settled, rows, name, orgId, onData]);
+    onData(sourceKey(env, orgId), rows);
+  }, [settled, rows, env, name, orgId, onData]);
 
   return null;
 }
@@ -216,16 +227,25 @@ export function PlatformActivity() {
   const [orgFilter, setOrgFilter] = useState('all');
   const [timeRange, setTimeRange] = useState('all');
 
-  // Rows reported by each org's source, keyed by org so a re-report replaces
-  // that org's window without disturbing the others.
+  // Rows reported by each org's source, keyed by ENVIRONMENT and org so a
+  // re-report replaces that org's window without disturbing the others.
+  //
+  // Namespaced rather than cleared, deliberately. This map used to be wiped by an
+  // effect on [env] - which also fires on MOUNT, and a child's effect runs BEFORE
+  // its parent's, so the clear landed on top of the windows the children had just
+  // reported. Their content-signature guard then refused to report the same
+  // window a second time, leaving settledCount at 0 and the screen on "Loading
+  // activity" for good. Not a theoretical ordering: the query cache holds data
+  // for the session (staleTime Infinity), so every REVISIT paints synchronously
+  // and every child settles inside the first commit - Activity worked once per
+  // session and never again until a full reload. Keying by environment means
+  // nothing has to be cleared: the other environment's entries are simply never
+  // looked up, which also rules out the flash of live rows under a test heading
+  // that the per-org key allowed while a child was re-reporting.
   const [sources, setSources] = useState<Record<string, FlatRow[]>>({});
-  const onData = useCallback((orgId: string, rows: FlatRow[]) => {
-    setSources((previous) => ({ ...previous, [orgId]: rows }));
+  const onData = useCallback((sourceId: string, rows: FlatRow[]) => {
+    setSources((previous) => ({ ...previous, [sourceId]: rows }));
   }, []);
-  // Switching environment invalidates every reported window at once.
-  useEffect(() => {
-    setSources({});
-  }, [env]);
 
   const orgsQuery = useRtdbQuery<Record<string, Organisation> | null>({
     key: ['platformOrgs', env],
@@ -244,15 +264,14 @@ export function PlatformActivity() {
   // The merged, newest-first trail, restricted to the orgs currently shown so a
   // stale window (an org that dropped out of the cap) never leaks in.
   const allRows = useMemo(() => {
-    const shownIds = new Set(shown.map((org) => org.orgId));
     const merged: FlatRow[] = [];
-    for (const [orgId, rows] of Object.entries(sources)) {
-      if (shownIds.has(orgId)) {
-        merged.push(...rows);
-      }
+    // Driven by the orgs currently SHOWN, so a window belonging to the other
+    // environment - or to an org that has dropped out of the cap - cannot leak in.
+    for (const org of shown) {
+      merged.push(...(sources[sourceKey(env, org.orgId)] ?? []));
     }
     return merged.sort((a, b) => b.at - a.at);
-  }, [sources, shown]);
+  }, [sources, shown, env]);
 
   // The filter option lists come from the loaded rows themselves, so each offers
   // exactly (and only) the values present - never an empty category or org.
@@ -319,7 +338,9 @@ export function PlatformActivity() {
 
   // A window still attaching for one of the shown orgs means the merged list is
   // incomplete; only then is a "no activity" verdict premature.
-  const settledCount = shown.filter((org) => sources[org.orgId]).length;
+  const settledCount = shown.filter(
+    (org) => sources[sourceKey(env, org.orgId)],
+  ).length;
   const stillLoading =
     orgsQuery.isLoading || (shown.length > 0 && settledCount < shown.length);
 

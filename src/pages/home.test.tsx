@@ -5,8 +5,11 @@
 //   - exactly one h1 per page (document outline and SEO both depend on it);
 //   - the two calls to action point at /contact and /login, matching the
 //     header (there is no public sign-up);
-//   - zero <img> elements: every visual is CSS or inline SVG, so no external
-//     request and no layout shift (story 2075);
+//   - exactly one <img> across the whole marketing site - the field-app
+//     screenshot in the home hero - with every other visual drawn in CSS or
+//     inline SVG, so the pages make no external request and shift no layout
+//     (story 2075). The hero is a deliberate exception (see AppScreenshot),
+//     which is why the count is allowed per page rather than banned outright;
 //   - no skipped heading levels on the home page.
 // ============================================================================
 
@@ -21,9 +24,12 @@ import { HowItWorksPage } from './HowItWorks';
 import { AboutPage } from './About';
 
 const PAGES = [
-  { name: 'Home', Page: HomePage, path: '/' },
-  { name: 'How it works', Page: HowItWorksPage, path: '/how-it-works' },
-  { name: 'About', Page: AboutPage, path: '/about' },
+  // `images` is the number of <img> tags the page is ALLOWED to ship. Only the
+  // home hero has one; an entry above zero is a decision, not a default, so an
+  // image added anywhere else still fails this suite.
+  { name: 'Home', Page: HomePage, path: '/', images: 1 },
+  { name: 'How it works', Page: HowItWorksPage, path: '/how-it-works', images: 0 },
+  { name: 'About', Page: AboutPage, path: '/about', images: 0 },
 ] as const;
 
 function renderPage(Page: React.ComponentType, path: string) {
@@ -36,7 +42,7 @@ function renderPage(Page: React.ComponentType, path: string) {
   );
 }
 
-describe.each(PAGES)('$name page', ({ Page, path }) => {
+describe.each(PAGES)('$name page', ({ Page, path, images }) => {
   it('renders exactly one h1', () => {
     const { container } = renderPage(Page, path);
     expect(container.querySelectorAll('h1')).toHaveLength(1);
@@ -60,9 +66,25 @@ describe.each(PAGES)('$name page', ({ Page, path }) => {
     }
   });
 
-  it('ships no <img> elements at all', () => {
+  it('ships only its allowed <img> elements, each sized against layout shift', () => {
     const { container } = renderPage(Page, path);
-    expect(container.querySelectorAll('img')).toHaveLength(0);
+    const found = Array.from(container.querySelectorAll('img'));
+    expect(found).toHaveLength(images);
+    for (const image of found) {
+      // Intrinsic dimensions travel with the tag so the browser reserves the box
+      // before the bytes arrive. The shift is what story 2075 was actually
+      // protecting against, so an image without them fails this rule even though
+      // it is on the allow-list.
+      expect(image).toHaveAttribute('width');
+      expect(image).toHaveAttribute('height');
+      // Decorative: the heading and copy beside it already say what the app is,
+      // so announcing the picture would add noise rather than information.
+      expect(image).toHaveAttribute('alt', '');
+      // Self-hosted. A remote host would disclose visitor IPs to a party the
+      // Agreement does not list as a sub-processor, which is the same reason the
+      // typeface is bundled rather than fetched from a font CDN.
+      expect(image.getAttribute('src')).toMatch(/^\//);
+    }
   });
 });
 

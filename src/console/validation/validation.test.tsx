@@ -20,6 +20,26 @@ import type {
   OrgMember,
   Template,
 } from '../../types';
+import { INFO_REQUEST_DUE_DAYS } from '../../types';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The end of the LOCAL day containing `millis` - the instant the review
+ *  screen sends as a response deadline ("due by the 28th" means all of the
+ *  28th). Mirrors AssessmentReview's date-input round trip so the expected
+ *  value tracks the running clock instead of a date that goes stale. */
+function endOfLocalDay(millis: number): number {
+  const date = new Date(millis);
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    23,
+    59,
+    59,
+    999,
+  ).getTime();
+}
 
 const mocks = vi.hoisted(() => ({
   auth: {
@@ -615,14 +635,56 @@ describe('Flagging and decisions', () => {
     await user.type(messages[1], 'Please photograph the distribution board.');
 
     await user.click(screen.getByRole('button', { name: 'Send to assessor' }));
+    // ONE deadline covers the whole batch, defaulted INFO_REQUEST_DUE_DAYS
+    // ahead and sent with it - a round of questions is one conversation.
     expect(mocks.callable).toHaveBeenCalledWith('requestInfo', {
       assessmentId: 'job-1',
       requests: [
         { questionId: 'q-1', message: 'Please expand on the occupancy profile.' },
         { questionId: 'q-3', message: 'Please photograph the distribution board.' },
       ],
+      dueBy: endOfLocalDay(Date.now() + INFO_REQUEST_DUE_DAYS * DAY_MS),
     });
     expect(await screen.findByText(/has been notified|have been notified/)).toBeInTheDocument();
+  });
+
+  it('sends an edited deadline as the end of that day, and refuses to send without one', async () => {
+    const user = userEvent.setup();
+    seedReview('readyForValidation');
+    mocks.callable.mockResolvedValue({ flagged: 1 });
+    renderValidationAt('/job-1');
+
+    await user.click(
+      screen.getAllByRole('button', { name: 'Request more information' })[0],
+    );
+    await user.type(
+      screen.getByLabelText('What more do you need from the assessor?'),
+      'Please expand on the occupancy profile.',
+    );
+
+    // Cleared deadline: the send is refused in the UI rather than bouncing off
+    // the server, and the hint says which of the two blockers applies.
+    const dueBy = screen.getByLabelText('Response due by');
+    await user.clear(dueBy);
+    expect(screen.getByRole('button', { name: 'Send to assessor' })).toBeDisabled();
+    expect(
+      screen.getByText('Set a valid response deadline before sending.'),
+    ).toBeInTheDocument();
+
+    // An auditor's own date is honoured, converted to the END of that local day
+    // ("due by the 20th" gives the assessor all of the 20th).
+    const chosen = new Date(Date.now() + 20 * DAY_MS);
+    const month = String(chosen.getMonth() + 1).padStart(2, '0');
+    const day = String(chosen.getDate()).padStart(2, '0');
+    await user.type(dueBy, `${chosen.getFullYear()}-${month}-${day}`);
+    await user.click(screen.getByRole('button', { name: 'Send to assessor' }));
+    expect(mocks.callable).toHaveBeenCalledWith('requestInfo', {
+      assessmentId: 'job-1',
+      requests: [
+        { questionId: 'q-1', message: 'Please expand on the occupancy profile.' },
+      ],
+      dueBy: endOfLocalDay(chosen.getTime()),
+    });
   });
 
   it('disables Accept while the basket is non-empty and accepts after confirm when clear', async () => {

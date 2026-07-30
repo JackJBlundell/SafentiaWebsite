@@ -663,14 +663,33 @@ describe('CustomerWizard', () => {
 describe('CustomerDetail contacts', () => {
   it('derives portal status per contact from uid, invitations and email', () => {
     renderCustomersAt('/app/customers/c1');
-    const table = screen.getByRole('table', { name: 'Contacts' });
-    const rowFor = (name: string) =>
-      within(table).getByText(name).closest('tr') as HTMLElement;
+    // The panel sits in the page's narrow aside column, so each contact is a
+    // CARD rather than a table row (see ContactsPanel). Scope by the card the
+    // person's name sits in, exactly as the row used to be scoped.
+    const cardFor = (name: string) =>
+      screen.getByText(name).closest('li') as HTMLElement;
 
-    expect(within(rowFor('Amy Archer')).getByText('Active')).toBeInTheDocument();
-    expect(within(rowFor('Amy Archer')).getByText('Primary')).toBeInTheDocument();
-    expect(within(rowFor('Ben Brook')).getByText('Invited')).toBeInTheDocument();
-    expect(within(rowFor('Cara Cole')).getByText('No email')).toBeInTheDocument();
+    // A linked uid is an account, whatever the invitation records say.
+    expect(
+      within(cardFor('Amy Archer')).getByText('Account active'),
+    ).toBeInTheDocument();
+    expect(
+      within(cardFor('Amy Archer')).getByText('Primary contact'),
+    ).toBeInTheDocument();
+    // No uid, but an invitation that is still live.
+    expect(
+      within(cardFor('Ben Brook')).getByText('Invitation sent'),
+    ).toBeInTheDocument();
+    // No email at all. The headline cannot carry this state on its own - both
+    // "never invited" and "nowhere to send an invitation" read as "No portal
+    // account" - so the REASON sentence is what actually pins the derivation.
+    const cara = within(cardFor('Cara Cole'));
+    expect(cara.getByText('No portal account')).toBeInTheDocument();
+    expect(
+      cara.getByText(
+        'No email address on record, so there is nowhere to send an invitation.',
+      ),
+    ).toBeInTheDocument();
   });
 
 });
