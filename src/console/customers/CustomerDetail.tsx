@@ -38,7 +38,7 @@ import { RagSummary } from './RagSummary';
 import {
   formatDate,
   LoadingNote,
-  RagChip,
+  RiskDot,
   sortByName,
   StatusBadge,
   toEntries,
@@ -303,8 +303,16 @@ export function CustomerDetail() {
   const buildingColumns: Array<Column<EstateBuildingRow>> = [
     {
       header: 'Building',
+      // The risk badge rides WITH the name. In the card layout the Risk column
+      // is dropped (a card of label/value lines has no room for four of them),
+      // which left the one fact the list exists to convey off the card
+      // entirely. Beside the name it costs a single glyph and is the first
+      // thing read - which is the right reading order for a risk list.
       cell: (row) => (
-        <span className={styles.cellName}>{row.building.name}</span>
+        <span className={styles.cellNameRow}>
+          <RiskDot level={row.building.riskLevel ?? 'pending'} />
+          <span className={styles.cellName}>{row.building.name}</span>
+        </span>
       ),
     },
     {
@@ -314,7 +322,9 @@ export function CustomerDetail() {
     },
     {
       header: 'Risk',
-      cell: (row) => <RagChip level={row.building.riskLevel ?? 'pending'} />,
+      // The dot in a COLUMN, the full chip everywhere there is room for it: the
+      // words wrapped to three lines in a risk column and set the row height.
+      cell: (row) => <RiskDot level={row.building.riskLevel ?? 'pending'} />,
       desktopOnly: true,
     },
     {

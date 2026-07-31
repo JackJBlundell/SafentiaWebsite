@@ -40,6 +40,7 @@ import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
 import { LoadingNote, formatDate } from '../customers/shared';
 import { usePortalScope, portalUrls, portalReadStatus } from './shared';
+import { DownloadIcon } from '../ui/DownloadIcon';
 import styles from './PortalReport.module.css';
 
 /** The client mirror of the callable's name check: two characters and at least
@@ -258,7 +259,12 @@ function AcceptedCard({
         </>
       )}
       <div className={styles.formActions}>
+        {/* Icon AND words here, unlike the table rows. This is the primary
+            action of a customer-facing page - the one thing a responsible person
+            came to do - and an icon-only primary CTA asks them to guess. The
+            icon repeated down a column was noise; here it is reinforcement. */}
         <Button onClick={() => void download()} disabled={mintUrl.pending}>
+          <DownloadIcon className={styles.buttonIcon} />
           {mintUrl.pending ? 'Preparing' : 'Download PDF'}
         </Button>
       </div>

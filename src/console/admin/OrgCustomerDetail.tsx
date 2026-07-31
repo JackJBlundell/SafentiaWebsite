@@ -24,8 +24,8 @@ import { DescriptionList, PageGrid, type DescriptionItem } from '../ui/Grid';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { SkeletonRows } from '../ui/Skeleton';
 import {
-  formatDate,
-  RagChip,
+  formatDateShort,
+  RiskDot,
   sortByName,
   StatusBadge,
   toEntries,
@@ -118,14 +118,15 @@ export function OrgCustomerDetail() {
     { header: 'Building', cell: (row) => row.building.name },
     {
       header: 'Risk',
-      cell: (row) => <RagChip level={row.building.riskLevel ?? 'pending'} />,
+      // The dot in a COLUMN; the full label is its accessible name.
+      cell: (row) => <RiskDot level={row.building.riskLevel ?? 'pending'} />,
       desktopOnly: true,
     },
     {
       header: 'Last assessed',
       cell: (row) =>
         row.building.lastAssessedAt
-          ? formatDate(row.building.lastAssessedAt)
+          ? formatDateShort(row.building.lastAssessedAt)
           : 'Never',
       desktopOnly: true,
     },

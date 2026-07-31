@@ -2,10 +2,78 @@
  * How it works. Layout and the small step visuals; tokens only.
  * ========================================================================== */
 
+/* The intro and its screenshot. One column on narrow viewports (copy first, so
+ * the page still leads with what it is about), two side by side once there is
+ * room for the capture to be worth showing. */
+.introRow {
+  display: grid;
+  gap: var(--space-xxxl);
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .introRow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: var(--space-huge);
+  }
+}
+
 .intro {
   display: grid;
   gap: var(--space-xl);
   max-width: var(--reading-measure);
+}
+
+/* The hero's frame, tilted off the grid and lifted.
+ *
+ * Square-on and flat to the page, a browser frame reads as a diagram of a
+ * browser; a few degrees of rotation and a real shadow read as an OBJECT sitting
+ * on the page, which is the whole point of showing a screenshot in the hero. The
+ * angle is small and consistent with the phone pair on the home page, so it
+ * looks like one design decision rather than a flourish.
+ *
+ * perspective + rotateY, not a flat rotate: turning it very slightly towards the
+ * copy suggests depth without knocking the horizontals off true, so the toolbar
+ * and the table rows inside still read as level and the text stays legible. */
+.heroFrame {
+  /* Origin CENTRE and no upscale: with a left origin the turn swung the right
+     edge out past the column and the frame clipped on the viewport. Rotating
+     about the middle keeps the swing inside the box it was given. */
+  transform: perspective(1600px) rotateY(-6deg) rotate(-1.25deg);
+  transform-origin: center;
+  box-shadow:
+    0 2px 4px color-mix(in srgb, var(--shadow-color) 18%, transparent),
+    0 32px 60px -20px color-mix(in srgb, var(--shadow-color) 45%, transparent);
+  /* The tilt lifts the top-right corner past the row's box; a little breathing
+     room keeps it off the section above on tighter viewports. */
+  margin-block: var(--space-md);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+/* Straightens as it is approached - the object settling under attention rather
+   than an animation for its own sake. */
+.heroFrame:hover {
+  transform: perspective(1600px) rotateY(-3deg) rotate(-0.5deg);
+}
+
+/* Stacked layout: the frame has the full column and nothing to lean away from,
+   so the perspective turn goes and only a hint of tilt remains. */
+@media (max-width: 899px) {
+  .heroFrame,
+  .heroFrame:hover {
+    transform: rotate(-1deg);
+    transform-origin: center;
+  }
+}
+
+/* The tilt is decoration. Asked for less effect, the frame sits square - it
+   keeps the shadow, which is what separates it from the background. */
+@media (prefers-reduced-motion: reduce) {
+  .heroFrame,
+  .heroFrame:hover {
+    transform: none;
+    transition: none;
+  }
 }
 
 .pageTitle {
@@ -181,23 +249,39 @@
   grid-column: 2;
 }
 
-.ragDot {
-  width: var(--space-md);
-  height: var(--space-md);
+/* The H/M/L risk badge - the console's RiskDot, in the marketing pages'
+ * vocabulary. Building risk status, not decoration, and the LETTER is what
+ * carries it: the coloured dot this replaced said nothing at all to a reader who
+ * cannot separate red from green, and the level is the only thing these rows
+ * exist to communicate. The words appear in the meta line beside it too. */
+.ragBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  flex: none;
+  aspect-ratio: 1;
   border-radius: var(--radius-pill);
+  border: 1.5px solid currentColor;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
-/* RAG dots: building risk status, not decoration. */
-.ragGreen {
-  background: var(--rag-green);
+.ragLow {
+  color: var(--rag-green);
+  background: color-mix(in srgb, var(--rag-green) 14%, transparent);
 }
 
-.ragAmber {
-  background: var(--rag-amber);
+.ragMedium {
+  color: var(--rag-amber);
+  background: color-mix(in srgb, var(--rag-amber) 14%, transparent);
 }
 
-.ragRed {
-  background: var(--rag-red);
+.ragHigh {
+  color: var(--rag-red);
+  background: color-mix(in srgb, var(--rag-red) 14%, transparent);
 }
 
 /* --- FAQ teaser --------------------------------------------------------------- */
@@ -220,4 +304,41 @@
   font-size: clamp(1.375rem, 1.2rem + 1vw, 1.875rem);
   letter-spacing: -0.02em;
   margin-bottom: var(--space-md);
+}
+
+/* --- Console screen inside the browser frame ---------------------------------
+ *
+ * The frame already draws the chrome and the rounded corner, so the capture only
+ * has to fill it and be clipped by it. No drop shadow of its own: it is sitting
+ * inside a surface, not floating above the page. Mirrors the same treatment on
+ * the home page's report row. */
+
+.shotFramed {
+  display: block;
+}
+
+.shotFramed img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: none;
+}
+
+/* --- A phone capture as a step's visual ----------------------------------------
+ *
+ * The capture already contains the device, so there is no bezel to fit it inside
+ * (that drew a phone around a phone). Capped rather than filling its column: a
+ * portrait phone given a whole step's width would tower over the two paragraphs
+ * beside it and set the height of the row. Tilted a touch, like the hero frame
+ * and the home page's pair, so it reads as an object on the page. */
+.stepPhone {
+  max-width: 260px;
+  margin-inline: auto;
+  transform: rotate(-2deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stepPhone {
+    transform: none;
+  }
 }

@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en-GB">
   <head>
     <meta charset="utf-8" />
@@ -7,12 +7,30 @@
          the PNG is declared after it so any browser that understands both prefers
          the real mark. Both are the icon-only artwork: a horizontal lockup is
          unreadable at 16px. -->
-    <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="icon" type="image/png" href="/logo192.png" sizes="192x192" />
-    <link rel="apple-touch-icon" href="/logo192.png" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#0E1217" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)" />
+    <link
+      rel="icon"
+      type="image/png"
+      href="/favicon-96x96.png"
+      sizes="96x96"
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/apple-touch-icon.png"
+    />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta
+      name="theme-color"
+      content="#0E1217"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="theme-color"
+      content="#F7F8FA"
+      media="(prefers-color-scheme: light)"
+    />
     <!--
       Theme boot. This runs before first paint and before React, so a visitor who
       pinned dark mode never sees a white flash on a pre-rendered page. It reads
@@ -23,9 +41,9 @@
     <script>
       (function () {
         try {
-          var stored = localStorage.getItem('safentia.theme');
-          if (stored === 'light' || stored === 'dark') {
-            document.documentElement.setAttribute('data-theme', stored);
+          var stored = localStorage.getItem("safentia.theme");
+          if (stored === "light" || stored === "dark") {
+            document.documentElement.setAttribute("data-theme", stored);
           }
         } catch (e) {
           /* Storage blocked. The OS preference applies via the media query. */

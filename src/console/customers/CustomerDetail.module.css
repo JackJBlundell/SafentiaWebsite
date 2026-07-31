@@ -10,6 +10,23 @@
   color: var(--color-text);
 }
 
+/* Building name with its risk badge alongside. */
+.cellNameRow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+/* In TABLE layout the badge is dropped from here, because the Risk column is
+ * already showing it and the same fact twice on one row is noise. It earns its
+ * place in the CARD layout, where that column is not rendered at all and the
+ * risk would otherwise be missing from a list whose entire purpose is risk.
+ * Keyed off the attribute DataTable sets, so the two views cannot disagree. */
+:global([data-layout='table']) .cellNameRow > :first-child {
+  display: none;
+}
+
 /* Live count badges beside the organisation name (sites, buildings). Each
    states its own noun, so the badge means something without its surface tint;
    non-interactive, so no 44px target - just legible. */

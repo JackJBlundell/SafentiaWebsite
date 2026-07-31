@@ -1,0 +1,32 @@
+/* ProductShot - a screenshot standing on its own, sized by whatever box the page
+ * gives it. Mirrors AppScreenshot: the captures already contain their device or
+ * browser chrome, so there is no bezel to fit inside and nothing to clip. */
+
+.wrap {
+  display: block;
+  width: 100%;
+}
+
+.shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* The phone mockups are transparent around the device, so the shadow has to
+   * follow the actual silhouette - a box-shadow would draw a rectangle in mid-air
+   * around it. Two drop-shadows: a tight one for contact, a longer soft one for
+   * depth. Also does the work of separating the two overlapping phones from each
+   * other, which is why the front one reads as being in front. */
+  filter:
+    drop-shadow(0 1px 2px color-mix(in srgb, var(--shadow-color) 20%, transparent))
+    drop-shadow(0 24px 40px color-mix(in srgb, var(--shadow-color) 32%, transparent));
+}
+
+/* Expensive to composite on a low-powered device, and decoration rather than
+ * information - drop it where the visitor has asked for less effect. */
+@media (prefers-reduced-motion: reduce) {
+  .shot {
+    filter: drop-shadow(
+      0 1px 2px color-mix(in srgb, var(--shadow-color) 25%, transparent)
+    );
+  }
+}

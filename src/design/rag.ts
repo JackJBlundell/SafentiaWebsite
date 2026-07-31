@@ -19,6 +19,18 @@ export interface RagPresentation {
   label: string;
   /** A simple, dependency-free glyph paired with the colour. */
   icon: string;
+  /**
+   * The single letter the level is shown as where there is only room for one:
+   * H, M, L - and an en dash for the not-yet-assessed state, which has no
+   * letter because it is not a grade.
+   *
+   * ONE vocabulary across the whole product. The letters read the same in a
+   * console table's risk column, in a site's distribution strip and on the
+   * marketing pages, so a customer who learns them in the app recognises them on
+   * the website. They also carry meaning without colour, which the tinted dot
+   * they sit in cannot do on its own.
+   */
+  initial: string;
 }
 
 /** Risk level (building/assessment roll-up). `pending` is a fourth, neutral
@@ -30,11 +42,29 @@ export function riskPresentation(
 ): RagPresentation {
   switch (level) {
     case 'high':
-      return { color: theme.rag.red, surface: theme.rag.redSurface, label: 'High risk', icon: '!' };
+      return {
+        color: theme.rag.red,
+        surface: theme.rag.redSurface,
+        label: 'High risk',
+        icon: '!',
+        initial: 'H',
+      };
     case 'medium':
-      return { color: theme.rag.amber, surface: theme.rag.amberSurface, label: 'Medium risk', icon: '~' };
+      return {
+        color: theme.rag.amber,
+        surface: theme.rag.amberSurface,
+        label: 'Medium risk',
+        icon: '~',
+        initial: 'M',
+      };
     case 'low':
-      return { color: theme.rag.green, surface: theme.rag.greenSurface, label: 'Low risk', icon: '✓' };
+      return {
+        color: theme.rag.green,
+        surface: theme.rag.greenSurface,
+        label: 'Low risk',
+        icon: '✓',
+        initial: 'L',
+      };
     case 'pending':
     default:
       return {
@@ -42,6 +72,7 @@ export function riskPresentation(
         surface: theme.colors.surfaceSunken,
         label: 'Not yet assessed',
         icon: '–',
+        initial: '–',
       };
   }
 }
@@ -53,11 +84,29 @@ export function severityPresentation(
 ): RagPresentation {
   switch (severity) {
     case 'H':
-      return { color: theme.rag.red, surface: theme.rag.redSurface, label: 'High', icon: 'H' };
+      return {
+        color: theme.rag.red,
+        surface: theme.rag.redSurface,
+        label: 'High',
+        icon: 'H',
+        initial: 'H',
+      };
     case 'M':
-      return { color: theme.rag.amber, surface: theme.rag.amberSurface, label: 'Medium', icon: 'M' };
+      return {
+        color: theme.rag.amber,
+        surface: theme.rag.amberSurface,
+        label: 'Medium',
+        icon: 'M',
+        initial: 'M',
+      };
     case 'L':
     default:
-      return { color: theme.rag.green, surface: theme.rag.greenSurface, label: 'Low', icon: 'L' };
+      return {
+        color: theme.rag.green,
+        surface: theme.rag.greenSurface,
+        label: 'Low',
+        icon: 'L',
+        initial: 'L',
+      };
   }
 }

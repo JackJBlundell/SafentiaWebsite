@@ -28,6 +28,7 @@ import type {
   Template,
 } from '../../types';
 import { STANDARD_LABELS } from '../jobs/shared';
+import { DownloadIcon } from '../ui/DownloadIcon';
 import styles from './releaseShared.module.css';
 
 /** The best available release timestamp. releaseAssessment stamps releasedAt,
@@ -247,15 +248,23 @@ export function ReportLink({
   if (download.state === 'resolving') {
     return <span className={styles.reportNote}>Preparing the report</span>;
   }
+  // An ICON, not "Download PDF". In a table this is the same affordance on every
+  // row, so the words were pure repetition taking a column's width - and the one
+  // thing that actually varies (which building's report) was never in them
+  // anyway. The subject moves into the accessible name, so a screen reader gets
+  // "Download the report for Brackla House" - MORE than the visible text said -
+  // and a sighted user gets the same on hover.
+  const label = `Download the report for ${subject}`;
   const link = (
     <a
       className={styles.reportLink}
       href={download.url}
       target="_blank"
       rel="noopener"
+      aria-label={label}
+      title={label}
     >
-      Download PDF
-      <span className={styles.srOnly}> for {subject}</span>
+      <DownloadIcon />
     </a>
   );
   if (match.attribution === 'assessment') {

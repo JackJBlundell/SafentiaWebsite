@@ -103,8 +103,15 @@ export function RagSummary({ counts, overdue, emptyLabel = 'No buildings' }: Rag
           const rag = riskPresentation(theme, level);
           return (
             <span key={level} className={styles.pair} title={`${rag.label}: ${counts[level]}`}>
-              <span className={styles.glyph} style={{ color: rag.color }}>
-                {rag.icon}
+              {/* The LETTER, not the ! ~ ✓ glyph: one risk vocabulary across the
+                  product, so the strip reads the same as the dot in a risk
+                  column and as the badges on the marketing pages. The letter
+                  still differs per level, so colour is not the sole carrier. */}
+              <span
+                className={styles.badge}
+                style={{ color: rag.color, background: rag.surface, borderColor: rag.color }}
+              >
+                {rag.initial}
               </span>
               <span className={styles.count}>{counts[level]}</span>
             </span>

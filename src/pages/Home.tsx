@@ -16,7 +16,7 @@ import {
 } from "../seo/Seo";
 import { BrowserFrame } from "../components/marketing/BrowserFrame";
 import { AppScreenshot } from "../components/marketing/AppScreenshot";
-import { ReportMock } from "../components/marketing/ReportMock";
+import { ProductShot } from "../components/marketing/ProductShot";
 import { FeatureCard } from "../components/marketing/FeatureCard";
 import { LifecycleStages } from "../components/marketing/LifecycleStages";
 import { CtaBand } from "../components/marketing/CtaBand";
@@ -194,38 +194,29 @@ export function HomePage() {
                   site, not reconstructed later at a desk.
                 </p>
               </div>
+              {/* Two real screens, overlapped: the templated form the assessor
+                  answers, and the floor plan they pin a flag on. The pair says
+                  "these are two halves of one job" in a way either alone does
+                  not. The form sits behind and larger with about half of it
+                  showing; the flag screen sits in front, smaller, and is the one
+                  whose content has to stay legible - so it is the one that keeps
+                  its detail at the size it is rendered. */}
               <div className={styles.featureVisual} aria-hidden="true">
-                <div className={styles.planCard}>
-                  <svg viewBox="0 0 280 170" className={styles.planDrawing}>
-                    <rect
-                      x="8"
-                      y="8"
-                      width="264"
-                      height="154"
-                      rx="6"
-                      className={styles.planWall}
-                    />
-                    <path
-                      d="M8 70h108M116 8v100M116 108h-40M180 8v62M180 70h92M180 118v44"
-                      className={styles.planWall}
-                    />
-                    <path
-                      d="M60 70h20M180 40v14M148 162v-14"
-                      className={styles.planDoor}
-                    />
-                    <g className={styles.pinHigh}>
-                      <circle cx="66" cy="118" r="7" />
-                      <path d="M66 125v12" />
-                    </g>
-                    <g className={styles.pinMedium}>
-                      <circle cx="218" cy="44" r="7" />
-                      <path d="M218 51v12" />
-                    </g>
-                  </svg>
-                  <div className={styles.planPhotos}>
-                    <p className={styles.planPhoto}>Riser cupboard, level 2</p>
-                    <p className={styles.planPhoto}>Obstructed escape route</p>
-                  </div>
+                <div className={styles.shotPair}>
+                  <ProductShot
+                    name="app_form_page"
+                    width={700}
+                    height={1379}
+                    sizes="260px"
+                    className={styles.shotBehind}
+                  />
+                  <ProductShot
+                    name="app_flag_page"
+                    width={700}
+                    height={1379}
+                    sizes="210px"
+                    className={styles.shotFront}
+                  />
                 </div>
               </div>
             </article>
@@ -267,9 +258,18 @@ export function HomePage() {
                   Validated by sign-off.
                 </p>
               </div>
+              {/* The real console, in the browser frame the mock used to sit in:
+                  the frame is what says "this is the web side", and it still
+                  earns its place around a genuine screen. */}
               <div className={styles.featureVisual}>
                 <BrowserFrame url="safentia.co.uk/app">
-                  <ReportMock />
+                  <ProductShot
+                    name="site_stats_page"
+                    width={1200}
+                    height={838}
+                    sizes="(min-width: 900px) 520px, 92vw"
+                    className={styles.shotFramed}
+                  />
                 </BrowserFrame>
               </div>
             </article>

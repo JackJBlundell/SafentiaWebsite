@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { Button } from '../../components/Button';
+import { DownloadIcon } from '../ui/DownloadIcon';
 import styles from './Lightbox.module.css';
 
 const FOCUSABLE =
@@ -113,13 +114,19 @@ export function Lightbox({ src, title, downloadUrl, onClose }: LightboxProps) {
         <div className={styles.bar}>
           <span className={styles.title}>{title}</span>
           <div className={styles.barActions}>
+            {/* Icon only: it sits beside Close in a tight toolbar over the
+                image, and the title of what is being downloaded is already the
+                bar's heading. The name moves onto the control so a screen
+                reader gets more than the word "Download" did. */}
             <a
               className={styles.downloadLink}
               href={downloadUrl ?? src}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label={`Download ${title}`}
+              title={`Download ${title}`}
             >
-              Download
+              <DownloadIcon />
             </a>
             <Button variant="secondary" onClick={onClose}>
               Close

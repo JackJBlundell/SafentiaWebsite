@@ -62,11 +62,18 @@ export const PAS79_TEMPLATE_ID = 'tmpl-pas79-default';
 export const PAS79_TEMPLATE_VERSION = 1;
 
 export const BS9792_TEMPLATE_ID = 'tmpl-bs9792-housing';
-// 3, not 1: the deployed /test copy had already moved to 2 independently of this
-// constant, and the matrix estimator (section 34) is a real content change on top
-// of it. Bumping past the deployed version keeps "a higher number means newer
-// content" true, which is the only thing the pinned job version is good for.
-export const BS9792_TEMPLATE_VERSION = 3;
+// v1, like every other base template. It briefly ran to 3, because the /test copy
+// had drifted to 2 during development and the matrix estimator (section 34) was a
+// content change on top of that - so the number was tracking OUR revisions of the
+// seed, which no customer has ever seen.
+//
+// This is a new product going to new organisations: there is no history for them
+// to be compatible with, and a base template arriving at v3 invites the obvious
+// question of where versions 1 and 2 went. The intermediate versions were removed
+// from the data along with this change (seed/migrateBs9792ToV1.ts) rather than
+// left as an archive of drafts nobody published. From here the number means what
+// it should: v2 will be the first revision a CUSTOMER ever sees.
+export const BS9792_TEMPLATE_VERSION = 1;
 
 // --- Customers ---------------------------------------------------------------
 export const CUSTOMER = {

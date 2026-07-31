@@ -93,6 +93,26 @@ export function formatDate(millis: number): string {
   return dateFormat.format(millis);
 }
 
+const dateShortFormat = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
+/**
+ * Numeric British date for TABLE cells: "09/07/2026".
+ *
+ * Long dates and date-times are right in prose and on a detail page, and wrong
+ * in a column: "9 July 2026, 10:25" is three words that wrap in a narrow table
+ * and take a column's width for a precision nobody scans a list for. Padded to
+ * two digits so the column is a fixed width and the dates line up under each
+ * other. Where the time genuinely matters it belongs on the cell's title, not in
+ * the column.
+ */
+export function formatDateShort(millis: number): string {
+  return dateShortFormat.format(millis);
+}
+
 /** Deliberately permissive: catch obvious typos without rejecting valid
  *  addresses. The server revalidates. */
 export function isValidEmail(value: string): boolean {
@@ -115,6 +135,36 @@ export function RagChip({ level }: { level: RiskLevel }) {
     >
       <span aria-hidden="true">{rag.icon}</span>
       {rag.label}
+    </span>
+  );
+}
+
+/**
+ * The RAG dot: the chip's meaning at a column's width.
+ *
+ * A table gives a risk column a few characters, and "Not yet assessed" wrapped to
+ * three lines in it. This is the same fixed safety colour carrying a single
+ * letter - H, M, L - so the column is one glyph wide and the rows stay the height
+ * of a row.
+ *
+ * COLOUR IS STILL NEVER THE SOLE CARRIER: the letter differs per level, and the
+ * full words ("High risk", "Not yet assessed") are the element's accessible name
+ * and its tooltip, so a screen reader and a hover both get the sentence. Use the
+ * full RagChip anywhere there is room for it - a heading, a badge, a card - and
+ * this only where a column is the constraint.
+ */
+export function RiskDot({ level }: { level: RiskLevel }) {
+  const { theme } = useTheme();
+  const rag = riskPresentation(theme, level);
+  return (
+    <span
+      className={styles.riskDot}
+      style={{ color: rag.color, background: rag.surface, borderColor: rag.color }}
+      role="img"
+      aria-label={rag.label}
+      title={rag.label}
+    >
+      <span aria-hidden="true">{rag.initial}</span>
     </span>
   );
 }

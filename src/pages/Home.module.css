@@ -309,76 +309,92 @@
   min-width: 0;
 }
 
-/* --- Floor-plan depiction ----------------------------------------------------- */
+/* --- Overlapping app screens (the offline row) --------------------------------
+ *
+ * Two phone captures, one behind the other. Laid out with a grid whose single
+ * cell both children share, rather than absolute positioning: the taller child
+ * then sets the container's height on its own, so the row cannot collapse and
+ * nothing has to be measured or hard-coded.
+ *
+ * The FORM screen is the larger one and sits behind, offset left with roughly
+ * half of it showing. The FLAG screen is smaller and in front - and it is the one
+ * whose content must stay readable, so it takes the smaller reduction and the
+ * form takes the deeper one. */
 
-.planCard {
+.shotPair {
   display: grid;
-  gap: var(--space-lg);
-  padding: var(--space-xl);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  box-shadow: 0 24px 48px -32px color-mix(in srgb, var(--shadow-color) 35%, transparent);
+  /* One cell. Both children are placed into it and overlap by definition. */
+  grid-template-areas: 'stack';
+  place-items: center;
+  padding-block: var(--space-lg);
 }
 
-.planDrawing {
+.shotPair > * {
+  grid-area: stack;
+}
+
+.shotBehind {
+  /* Larger, and pushed left so the front screen covers its right-hand HALF -
+   * measured, not guessed: at these widths the front screen hides just under 50%
+   * of it, which is the point at which it still reads as a whole screen behind
+   * rather than a sliver. Any further left and it also bleeds out of the column. */
+  width: 62%;
+  transform: translateX(-26%) rotate(-3deg);
+  /* Behind, and slightly receded so the eye reads the front one first. */
+  opacity: 0.92;
+}
+
+.shotFront {
+  /* Smaller than the one behind it, but not so small its content stops being
+   * legible - this is the screen the copy beside it is describing. */
+  width: 52%;
+  transform: translateX(24%) rotate(2deg);
+  position: relative;
+  z-index: 1;
+}
+
+/* Narrow viewports: the row stacks and the visual gets the full column, so the
+ * pair can grow and the overlap tightens rather than the phones shrinking to
+ * illegibility. */
+@media (max-width: 640px) {
+  .shotBehind {
+    width: 58%;
+    transform: translateX(-24%) rotate(-3deg);
+  }
+
+  .shotFront {
+    width: 50%;
+    transform: translateX(22%) rotate(2deg);
+  }
+}
+
+/* The tilt is decoration; a visitor asking for less motion gets the pair square
+ * on, still overlapped. */
+@media (prefers-reduced-motion: reduce) {
+  .shotBehind {
+    transform: translateX(-26%);
+  }
+
+  .shotFront {
+    transform: translateX(24%);
+  }
+}
+
+/* --- Console screen inside the browser frame ---------------------------------
+ *
+ * The frame already draws the chrome and the rounded corner, so the capture only
+ * has to fill it and be clipped by it. No shadow of its own: it is sitting inside
+ * a surface, not floating above the page like the phones. */
+
+.shotFramed {
+  display: block;
+}
+
+.shotFramed img {
+  display: block;
   width: 100%;
   height: auto;
-}
-
-.planWall {
-  fill: none;
-  stroke: var(--color-border-strong);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-.planDoor {
-  fill: none;
-  stroke: var(--color-text-muted);
-  stroke-width: 2;
-  stroke-dasharray: 3 4;
-  stroke-linecap: round;
-}
-
-/* Location pins take RAG colour because they mark risk on the plan. */
-.pinHigh circle,
-.pinMedium circle {
-  fill: var(--color-surface);
-  stroke-width: 3;
-}
-
-.pinHigh path,
-.pinMedium path {
-  fill: none;
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-
-.pinHigh circle,
-.pinHigh path {
-  stroke: var(--rag-red);
-}
-
-.pinMedium circle,
-.pinMedium path {
-  stroke: var(--rag-amber);
-}
-
-.planPhotos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-}
-
-.planPhoto {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  padding: var(--space-xs) var(--space-md);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-alt);
+  filter: none;
 }
 
 /* --- Roles ------------------------------------------------------------------- */

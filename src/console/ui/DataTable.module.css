@@ -34,6 +34,26 @@
   overflow-wrap: anywhere;
 }
 
+/* NO CELL SETS THE HEIGHT OF ITS ROW.
+ *
+ * Long values are normal here - a template name carries its standard, edition,
+ * "(Default)" and version; customer and building names run to four or five
+ * words - and in a squeezed column each of those wrapped to three or four lines.
+ * One such cell made the whole row that tall, so every other column in it sat in
+ * a block of whitespace and a table of five releases read as a wall.
+ *
+ * Two lines is the cap: enough to tell two similar values apart (what
+ * distinguishes them is at the front), and the row stays the height of a row.
+ * The full string is on the cell's title where the column supplies one, so the
+ * clamp hides nothing that cannot be recovered by hovering.
+ *
+ * On the SPAN, never the <td>: -webkit-box on a table cell drops it out of the
+ * table layout. Applied only while this is a table - the card layout below is
+ * built to be tall, and clamping there would hide values for no gain. */
+.cellClamp {
+  max-width: 100%;
+}
+
 /* Tight containers buy back roughly 100px of pure padding across six columns,
    which is the difference between fitting and scrolling for most action plans. */
 @container (max-width: 900px) {
@@ -42,8 +62,20 @@
   }
 }
 
-/* --- Desktop: a real table ---------------------------------------------------- */
-@media (min-width: 768px) {
+/* --- Wide enough for a real table -----------------------------------------------
+ *
+ * Driven by data-layout, which DataTable sets from the width this table actually
+ * has and the number of columns it carries.
+ *
+ * Neither a viewport breakpoint nor a plain container query could do this. The
+ * viewport is simply the wrong measurement - a console page is the window minus
+ * the sidebar, often minus a detail aside too, so a table on a 1440px screen can
+ * have 700px of room. But a container query alone still needs ONE number, and
+ * one number cannot serve a two-column list of sites and a seven-column release
+ * list: whichever value is chosen, one of them flips at the wrong moment. Both
+ * were reported from the same build. The column count is the missing half of the
+ * question, and only the component knows it. */
+.scroll[data-layout='table'] {
   .head .th {
     text-align: left;
     font-size: 0.6875rem;
@@ -60,6 +92,15 @@
     padding: var(--space-lg) var(--cell-inline);
     border-bottom: 1px solid var(--color-border);
     vertical-align: middle;
+  }
+
+  /* The two-line cap, applied only while this IS a table - see .cellClamp. */
+  .cellClamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
   }
 
   tr:last-child .td {
@@ -205,10 +246,11 @@
   border: 0;
 }
 
-/* --- Mobile: labelled cards ----------------------------------------------------
+/* --- Too narrow for a table: labelled cards -------------------------------------
  * The same DOM re-laid: each row becomes a bordered block, each cell a
- * label/value line built from its data-label. */
-@media (max-width: 767px) {
+ * label/value line built from its data-label. Container-queried, so this is
+ * driven by the room the table HAS rather than the size of the window. */
+.scroll[data-layout='cards'] {
   .table,
   .head,
   tbody,

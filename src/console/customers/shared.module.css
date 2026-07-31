@@ -13,6 +13,26 @@
   white-space: nowrap;
 }
 
+/* The RAG dot: the chip's meaning at a column's width (see RiskDot).
+ * A fixed square so the risk column is one glyph wide and every dot in it lines
+ * up, with the border carrying the level's colour at full strength - the surface
+ * tint alone is too pale to read as a status at this size. */
+.riskDot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  flex: none;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid currentColor;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+  /* Never let the dot be squeezed into an ellipse by a tight column. */
+  aspect-ratio: 1;
+}
+
 .statusBadgeActive,
 .statusBadgeMuted {
   display: inline-flex;

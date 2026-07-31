@@ -20,19 +20,36 @@
 }
 
 /* Underlined, so the affordance is never carried by colour alone. */
+/* An icon control, so it is a SQUARE TARGET rather than a run of underlined
+ * text: the same full touch target as before, but the width of a glyph instead
+ * of the width of "Download PDF". The underline goes with the words - there is
+ * no text left to underline, and an underlined icon reads as a mistake. */
 .reportLink {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  inline-size: var(--min-touch-target);
   min-height: var(--min-touch-target);
-  font-size: 0.8125rem;
-  font-weight: 600;
   color: var(--brand-ink);
-  text-decoration: underline;
-  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  flex: none;
+}
+
+.reportLink svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
 }
 
 .reportLink:hover {
   color: var(--color-text);
+  background: var(--color-surface-alt);
+}
+
+/* An icon-only control must show focus on its own box - there is no text
+ * underline left to carry it. */
+.reportLink:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
 }
 
 .reportLink:focus-visible {

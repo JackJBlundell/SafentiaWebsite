@@ -28,7 +28,7 @@ import { useTheme } from '../../design/ThemeProvider';
 import { forEnv } from '../../paths';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import { RISK_LEVELS, type Building, type Organisation, type RiskLevel } from '../../types';
-import { RagChip, formatDate } from '../customers/shared';
+import { RiskDot, formatDateShort } from '../customers/shared';
 import shared from '../customers/shared.module.css';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Toolbar, ToolbarGroup } from '../ui/Grid';
@@ -283,12 +283,14 @@ export function PlatformBuildings() {
         </span>
       ),
     },
-    { header: 'Risk', cell: (row) => <RagChip level={row.riskLevel} /> },
+    // The dot in a COLUMN - the words wrapped to three lines and set the row
+    // height. Full label stays as its accessible name.
+    { header: 'Risk', cell: (row) => <RiskDot level={row.riskLevel} /> },
     {
       header: 'Last assessed',
       cell: (row) =>
         row.lastAssessedAt !== undefined ? (
-          formatDate(row.lastAssessedAt)
+          formatDateShort(row.lastAssessedAt)
         ) : (
           <span className={styles.notAssessed}>Not yet assessed</span>
         ),

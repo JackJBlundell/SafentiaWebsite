@@ -34,7 +34,7 @@ import type { Assessment, OrgMember } from '../../types';
 import { Card, CardHeader } from '../ui/Card';
 import { DataTable } from '../ui/DataTable';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
-import { RagChip } from '../customers/shared';
+import { RiskDot, formatDateShort } from '../customers/shared';
 import { actorName } from '../lib/actorName';
 import {
   ReportLink,
@@ -83,15 +83,35 @@ function BuildingName({ jobId, buildingId }: { jobId: string; buildingId: string
 function BuildingRisk({ jobId, buildingId }: { jobId: string; buildingId: string }) {
   const { building } = useReleaseBuilding(jobId, buildingId);
   if (!building) {
-    return <span className={styles.muted}>Risk unavailable</span>;
+    // A dash carrying the reason, so the column stays one glyph wide even when
+    // the record is missing - the words used to wrap to three lines here.
+    return (
+      <span
+        className={styles.muted}
+        role="img"
+        aria-label="Risk unavailable"
+        title="Risk unavailable"
+      >
+        –
+      </span>
+    );
   }
-  return <RagChip level={building.riskLevel} />;
+  // The dot, not the chip: a risk COLUMN has room for one glyph. The level's
+  // words remain the accessible name and the tooltip.
+  return <RiskDot level={building.riskLevel} />;
 }
 
 /** The customer's name, degrading to the raw customer id when the record is
  *  dangling. */
 function CustomerName({ customerId }: { customerId: string }) {
-  return <span className={styles.wrap}>{useCustomerName(customerId)}</span>;
+  const name = useCustomerName(customerId);
+  // Same two-line clamp as the template column, and for the same reason: a
+  // customer name is often three or four words and was setting the row height.
+  return (
+    <span className={styles.wrap} title={name}>
+      {name}
+    </span>
+  );
 }
 
 /** The report affordance needs a subject for its accessible name, and that
@@ -203,19 +223,31 @@ export function ReleasedList() {
               },
               {
                 header: 'Template',
-                cell: (row) => (
-                  <span className={styles.wrap}>
-                    {templateLabel(row.templateSnapshot)}
-                  </span>
-                ),
+                // Clamped to two lines (see .wrap), so the full name is carried
+                // on the title - the clamp must never be the only copy of it.
+                cell: (row) => {
+                  const label = templateLabel(row.templateSnapshot);
+                  return (
+                    <span className={styles.wrap} title={label}>
+                      {label}
+                    </span>
+                  );
+                },
               },
               {
                 header: 'Released',
+                // Numeric date only. The exact time is on the title for anyone
+                // who needs it; in the column it cost a third of the width for a
+                // precision nobody scans a release list for.
                 cell: (row) => {
                   const at = releasedAt(row);
                   return (
-                    <time className={styles.time} dateTime={new Date(at).toISOString()}>
-                      {dateTimeFormat.format(at)}
+                    <time
+                      className={styles.time}
+                      dateTime={new Date(at).toISOString()}
+                      title={dateTimeFormat.format(at)}
+                    >
+                      {formatDateShort(at)}
                     </time>
                   );
                 },

@@ -24,11 +24,19 @@ import { HowItWorksPage } from './HowItWorks';
 import { AboutPage } from './About';
 
 const PAGES = [
-  // `images` is the number of <img> tags the page is ALLOWED to ship. Only the
-  // home hero has one; an entry above zero is a decision, not a default, so an
-  // image added anywhere else still fails this suite.
-  { name: 'Home', Page: HomePage, path: '/', images: 1 },
-  { name: 'How it works', Page: HowItWorksPage, path: '/how-it-works', images: 0 },
+  // `images` is the number of <img> tags the page is ALLOWED to ship. An entry
+  // above zero is a decision, not a default, so an image added anywhere else
+  // still fails this suite.
+  //
+  // Home ships four, each a REAL product screen in a place where a visitor is
+  // deciding whether this is real software: the hero, the two overlapping app
+  // screens on the offline row, and the console inside the browser frame. Every
+  // other visual on the site is still CSS or inline SVG.
+  { name: 'Home', Page: HomePage, path: '/', images: 4 },
+  // How it works ships two: the console in step 1 (setting up buildings and
+  // templates) and the released report in step 4. The other two steps stay as
+  // CSS mini-cards.
+  { name: 'How it works', Page: HowItWorksPage, path: '/how-it-works', images: 2 },
   { name: 'About', Page: AboutPage, path: '/about', images: 0 },
 ] as const;
 

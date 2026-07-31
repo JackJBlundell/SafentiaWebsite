@@ -37,8 +37,12 @@ import { actorName } from '../lib/actorName';
 import { DataTable, type Column } from '../ui/DataTable';
 import { ErrorNotice } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
+import { formatDateShort } from '../customers/shared';
 import styles from './AssessmentHistoryPanel.module.css';
 
+/** The long British date, for PROSE - "Generated 9 July 2026", "Accepted by X
+ *  on ...". Table columns use formatDateShort instead: the long form takes a
+ *  column's width and wraps, which is what set the row heights. */
 function formatDate(epochMillis: number): string {
   return new Date(epochMillis).toLocaleDateString('en-GB', {
     day: 'numeric',
@@ -106,7 +110,8 @@ export function AssessmentHistoryPanel({ buildingId }: { buildingId: string }) {
   const columns: Array<Column<AssessmentRow>> = [
     {
       header: 'Conducted',
-      cell: (row) => formatDate(row.assessment.conductedAt),
+      // Numeric in a column; the long form stays in prose below.
+      cell: (row) => formatDateShort(row.assessment.conductedAt),
     },
     {
       header: 'Stage',

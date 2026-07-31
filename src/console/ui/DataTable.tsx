@@ -81,15 +81,37 @@ export function DataTable<T>({
   // order. It is an ordinary stop, not a trap: Tab leaves it as usual.
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [scrollable, setScrollable] = React.useState(false);
+
+  // --- Table or cards? ------------------------------------------------------
+  // Decided from the width this table HAS and the number of columns it carries,
+  // because those are the two things that actually determine whether a table
+  // fits. A single breakpoint could not: at 768px a two-column list of sites is
+  // perfectly readable as a table while a seven-column release list is already
+  // crushed, so one number made one of them wrong whichever value was chosen -
+  // and both were reported, from the same build.
+  //
+  // The console compounds it. A page here is the window minus the sidebar, and
+  // often minus a detail aside as well, so a table on a 1440px screen can have
+  // 700px of actual room. A viewport breakpoint never sees that at all.
+  const [layout, setLayout] = React.useState<'table' | 'cards'>('table');
+  // Roughly what a column needs before its content starts wrapping to three and
+  // four lines. Deliberately generous for the first column, which carries the
+  // row's name and is the one worth keeping readable.
+  const minTableWidth = Math.min(140 + columns.length * 120, 1100);
+
   React.useEffect(() => {
     const box = scrollRef.current;
     // jsdom has no ResizeObserver; the tab stop is a progressive enhancement
-    // and its absence must not break rendering under test.
+    // and its absence must not break rendering under test. Defaulting to
+    // 'table' also keeps the server-rendered markup a real table.
     if (!box || typeof ResizeObserver === 'undefined') {
       return;
     }
     // Sub-pixel table widths make an exact comparison report a phantom overflow.
-    const measure = () => setScrollable(box.scrollWidth > box.clientWidth + 1);
+    const measure = () => {
+      setScrollable(box.scrollWidth > box.clientWidth + 1);
+      setLayout(box.clientWidth >= minTableWidth ? 'table' : 'cards');
+    };
     measure();
     // The box and the table resize independently: the box with the column it
     // sits in, the table with the rows and text it is given.
@@ -100,7 +122,9 @@ export function DataTable<T>({
       observer.observe(table);
     }
     return () => observer.disconnect();
-  }, []);
+    // minTableWidth changes only when the column set does, which is exactly when
+    // the decision needs re-taking.
+  }, [minTableWidth]);
 
   const toggleRow = (key: string) =>
     setOpenRows((current) => {
@@ -113,6 +137,8 @@ export function DataTable<T>({
     <div
       ref={scrollRef}
       className={styles.scroll}
+      // The stylesheet lays the same DOM out either way off this one attribute.
+      data-layout={layout}
       tabIndex={scrollable ? 0 : undefined}
       role={scrollable ? 'region' : undefined}
       aria-label={scrollable ? `${label}, scrollable` : undefined}
@@ -172,14 +198,24 @@ export function DataTable<T>({
                         .filter(Boolean)
                         .join(' ')}
                     >
+                      {/* Every cell's content is wrapped, so NO cell can set the
+                          height of its row. The clamp cannot live on the <td>
+                          itself - it needs display:-webkit-box, and a table cell
+                          that stops being display:table-cell drops out of the
+                          table layout entirely - so it goes on a span inside.
+                          See .cellClamp. */}
                       {href && index === 0 ? (
                         // The row's one real link: stretched to cover the row
                         // via CSS, keyboard-reachable, announced with the text.
                         <Link to={href} className={styles.rowLink}>
-                          {column.cell(row)}
+                          <span className={styles.cellClamp}>
+                            {column.cell(row)}
+                          </span>
                         </Link>
                       ) : (
-                        column.cell(row)
+                        <span className={styles.cellClamp}>
+                          {column.cell(row)}
+                        </span>
                       )}
                     </td>
                   ))}

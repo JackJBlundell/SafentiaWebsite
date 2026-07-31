@@ -12,10 +12,8 @@ import { Button } from "../components/Button";
 import { Seo } from "../seo/Seo";
 import { StepList, type Step } from "../components/marketing/StepList";
 import { LifecycleStages } from "../components/marketing/LifecycleStages";
-import { PhoneFrame } from "../components/marketing/PhoneFrame";
 import { BrowserFrame } from "../components/marketing/BrowserFrame";
-import { AssessmentMock } from "../components/marketing/AssessmentMock";
-import { ReportMock } from "../components/marketing/ReportMock";
+import { ProductShot } from "../components/marketing/ProductShot";
 import { CtaBand } from "../components/marketing/CtaBand";
 import styles from "./HowItWorks.module.css";
 
@@ -96,20 +94,33 @@ function TrackVisual() {
     <div className={styles.miniCard}>
       <p className={styles.miniHeading}>Portfolio</p>
       <ul className={styles.miniList}>
+        {/* The SAME H/M/L badges the console shows on a building row, so someone
+            who has seen the product recognises them here - and someone who sees
+            them here first is not learning a second vocabulary later. They also
+            fix what the plain coloured dots could not: a letter carries the level
+            for a reader who cannot separate red from green. */}
         <li className={styles.buildingRow}>
-          <span className={`${styles.ragDot} ${styles.ragGreen}`} />
+          <span className={`${styles.ragBadge} ${styles.ragLow}`} aria-hidden="true">
+            L
+          </span>
           <span className={styles.jobBuilding}>Harbour Point, Block B</span>
-          <span className={styles.jobMeta}>FRA review May 2027</span>
+          <span className={styles.jobMeta}>Low risk &middot; FRA review May 2027</span>
         </li>
         <li className={styles.buildingRow}>
-          <span className={`${styles.ragDot} ${styles.ragAmber}`} />
+          <span className={`${styles.ragBadge} ${styles.ragMedium}`} aria-hidden="true">
+            M
+          </span>
           <span className={styles.jobBuilding}>Weaver Street housing</span>
-          <span className={styles.jobMeta}>Alarm service due</span>
+          <span className={styles.jobMeta}>Medium risk &middot; alarm service due</span>
         </li>
         <li className={styles.buildingRow}>
-          <span className={`${styles.ragDot} ${styles.ragRed}`} />
+          <span className={`${styles.ragBadge} ${styles.ragHigh}`} aria-hidden="true">
+            H
+          </span>
           <span className={styles.jobBuilding}>Corn Exchange</span>
-          <span className={styles.jobMeta}>2 high-severity actions open</span>
+          <span className={styles.jobMeta}>
+            High risk &middot; 2 high-severity actions open
+          </span>
         </li>
       </ul>
     </div>
@@ -165,10 +176,16 @@ const STEPS: readonly Step[] = [
         </p>
       </>
     ),
+    // The real capture, with NO PhoneFrame around it: the mockup already
+    // contains the device, and the CSS bezel drew a phone around a phone.
     visual: (
-      <PhoneFrame>
-        <AssessmentMock />
-      </PhoneFrame>
+      <ProductShot
+        name="app_form_page_2"
+        width={700}
+        height={1379}
+        sizes="(min-width: 900px) 300px, 60vw"
+        className={styles.stepPhone}
+      />
     ),
   },
   {
@@ -201,7 +218,13 @@ const STEPS: readonly Step[] = [
     ),
     visual: (
       <BrowserFrame url="safentia.co.uk/app">
-        <ReportMock />
+        <ProductShot
+          name="site_stats_page"
+          width={1200}
+          height={838}
+          sizes="(min-width: 900px) 520px, 92vw"
+          className={styles.shotFramed}
+        />
       </BrowserFrame>
     ),
   },
@@ -232,15 +255,29 @@ export function HowItWorksPage() {
       {/* --- Intro ----------------------------------------------------------- */}
       <Section spacing="loose" labelledBy="hiw-title">
         <Container>
-          <div className={styles.intro}>
-            <h1 id="hiw-title" className={styles.pageTitle}>
-              From site visit to signed-off report
-            </h1>
-            <p className={styles.lead}>
-              One system carries the assessment the whole way: captured on site,
-              validated by an auditor, released as a formal PDF, and tracked
-              against the building afterwards. Here is the path, step by step.
-            </p>
+          <div className={styles.introRow}>
+            <div className={styles.intro}>
+              <h1 id="hiw-title" className={styles.pageTitle}>
+                From site visit to signed-off report
+              </h1>
+              <p className={styles.lead}>
+                One system carries the assessment the whole way: captured on
+                site, validated by an auditor, released as a formal PDF, and
+                tracked against the building afterwards. Here is the path, step
+                by step.
+              </p>
+            </div>
+            {/* The end of the path, shown at the start of it: the released
+                assessments the whole page is describing the route to. */}
+            <BrowserFrame url="safentia.co.uk/app" className={styles.heroFrame}>
+              <ProductShot
+                name="site_releases_page"
+                width={1200}
+                height={685}
+                sizes="(min-width: 900px) 520px, 92vw"
+                className={styles.shotFramed}
+              />
+            </BrowserFrame>
           </div>
         </Container>
       </Section>

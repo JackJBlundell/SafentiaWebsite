@@ -25,7 +25,7 @@ import { Card } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Toolbar, ToolbarGroup } from '../ui/Grid';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
-import { formatDate, LoadingNote, toEntries, useOrgScope } from '../customers/shared';
+import { formatDateShort, LoadingNote, toEntries, useOrgScope } from '../customers/shared';
 import shared from '../customers/shared.module.css';
 import { templateUrls } from './shared';
 import styles from './ParagraphLibrary.module.css';
@@ -335,7 +335,9 @@ export function ParagraphLibrary() {
       {
         header: 'Updated',
         desktopOnly: true,
-        cell: (row) => formatDate(row.paragraph.updatedAt),
+        // Numeric in a column - the long form takes a column's width for a
+        // precision nobody scans a library list for.
+        cell: (row) => formatDateShort(row.paragraph.updatedAt),
       },
       {
         header: 'Actions',

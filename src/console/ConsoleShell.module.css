@@ -87,6 +87,15 @@
     padding: var(--space-xl) var(--space-lg);
     border-bottom: none;
     border-inline-end: 1px solid var(--color-border);
+    /* A LAST-RESORT scroll for the whole rail. The nav below takes the slack and
+       scrolls on its own, which keeps the brand, the search and the account
+       actions in place; this only engages when even those cannot fit - a laptop
+       at 1024x600, a browser with a debug bar, a 200% zoom. Without it the rail
+       was a fixed 100dvh box with no overflow rule at all, so on a short screen
+       the bottom of it - the org switcher and sign-out among them - was simply
+       unreachable, with no scrollbar to say so. */
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .brandRow {
@@ -107,8 +116,25 @@
     gap: 2px;
     overflow-x: visible;
     order: 0;
+    /* Takes the slack between the search above and the actions below, and
+       scrolls within it. min-height: 0 is what makes that possible - a flex item
+       will not shrink past its content without it, so the nav would push the
+       actions off the bottom instead of scrolling. */
+    flex: 1 1 auto;
     flex-basis: auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding-block-end: 0;
+  }
+
+  /* Tighter in the rail than in the touch bar. Nine items at the full touch
+     height, plus the brand, the search and the account actions, overran a
+     700px-tall viewport; at 34px the whole rail fits a laptop screen with no
+     scrolling at all. The rail is a pointer surface - a phone gets the
+     horizontal bar and keeps the full target. */
+  .navLink {
+    min-height: 34px;
   }
 
   .actions {
@@ -264,7 +290,10 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
-  min-height: 40px;
+  /* Full touch target by default. Below 1024px these items ARE the horizontal
+     bar on a phone or tablet, so they keep it; the rail overrides to something
+     tighter for pointers only (see the rail block). */
+  min-height: var(--min-touch-target);
   padding-inline: var(--space-md);
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);

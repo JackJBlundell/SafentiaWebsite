@@ -20,6 +20,10 @@
 
 /* Long customer and template names break inside the cell rather than forcing
    the table wider than the viewport. */
+/* The two-line cap that keeps a long template or customer name from setting the
+ * row height lives in DataTable (.cellClamp), so it applies to EVERY cell in
+ * every console table rather than the two columns that happened to be reported.
+ * This only has to break an unbreakable token. */
 .wrap {
   overflow-wrap: anywhere;
 }

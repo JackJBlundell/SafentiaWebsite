@@ -43,7 +43,7 @@ import { DataTable, type Column } from '../ui/DataTable';
 import { DescriptionList, PageGrid, type DescriptionItem } from '../ui/Grid';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { SkeletonRows } from '../ui/Skeleton';
-import { formatDate, RagChip } from '../customers/shared';
+import { formatDate, formatDateShort, RagChip } from '../customers/shared';
 import { usePlatformEnv } from './platformEnv';
 import { useRecordPlatformAccess } from './useRecordPlatformAccess';
 import styles from './OrgBuildingDetail.module.css';
@@ -205,7 +205,8 @@ export function OrgBuildingDetail() {
   const assessmentColumns: Array<Column<AssessmentRow>> = [
     {
       header: 'Conducted',
-      cell: (row) => formatDate(row.assessment.conductedAt),
+      // Numeric in a column; the long form stays in prose below.
+      cell: (row) => formatDateShort(row.assessment.conductedAt),
     },
     {
       header: 'Stage',
