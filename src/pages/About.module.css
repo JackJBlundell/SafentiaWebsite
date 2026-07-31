@@ -1,6 +1,100 @@
 /* ==========================================================================
- * About. Prose-led; the Container's prose measure does most of the work.
+ * About. Prose-led; the reading measure does most of the work.
  * ========================================================================== */
+
+/* --- The story and its screenshot ---------------------------------------------
+ *
+ * The hero used to be a `prose` Container, which capped the WHOLE hero at the
+ * reading measure. That measure now lives on .storyCopy instead, so the prose
+ * wraps identically while the row around it is free to give the console a column
+ * of its own. Same reason the How it works intro is built this way.
+ *
+ * One column until 900px - the story is the page, and a browser capture squeezed
+ * beside it on a tablet would be a picture of a screenshot rather than a
+ * screenshot. Two columns above it, with the COPY taking the larger share: three
+ * paragraphs lose more by being cramped than a capture loses at 500px instead of
+ * 550px, which is the opposite balance to How it works, where the copy is a
+ * single lead. */
+.storyRow {
+  display: grid;
+  gap: var(--space-xxxl);
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .storyRow {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    gap: var(--space-huge);
+  }
+}
+
+/* The measure the Container used to impose, imposed here instead, so the story's
+ * wrap point and rhythm are unchanged. */
+.storyCopy {
+  max-width: var(--reading-measure);
+}
+
+/* The hero's frame, tilted off the grid and lifted.
+ *
+ * Deliberately the SAME treatment as the How it works hero and the home page's
+ * phone pair, down to the angle: three heroes tilted alike read as one design
+ * decision, whereas three different angles read as three separate flourishes.
+ *
+ * perspective + rotateY, not a flat rotate: turning it slightly towards the copy
+ * suggests depth without knocking the horizontals off true, so the toolbar and
+ * the stat cards inside still read as level. */
+.heroFrame {
+  /* Origin CENTRE: rotating about the left edge swings the right-hand side out
+     past the column and clips the frame on the viewport. */
+  transform: perspective(1600px) rotateY(-6deg) rotate(-1.25deg);
+  transform-origin: center;
+  box-shadow:
+    0 2px 4px color-mix(in srgb, var(--shadow-color) 18%, transparent),
+    0 32px 60px -20px color-mix(in srgb, var(--shadow-color) 45%, transparent);
+  margin-block: var(--space-md);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+/* Straightens as it is approached - the object settling under attention rather
+   than an animation for its own sake. */
+.heroFrame:hover {
+  transform: perspective(1600px) rotateY(-3deg) rotate(-0.5deg);
+}
+
+/* Stacked layout: the frame has the full column and nothing to lean away from,
+   so the perspective turn goes and only a hint of tilt remains. */
+@media (max-width: 899px) {
+  .heroFrame,
+  .heroFrame:hover {
+    transform: rotate(-1deg);
+    transform-origin: center;
+  }
+}
+
+/* The tilt is decoration. Asked for less effect, the frame sits square - it
+   keeps the shadow, which is what separates it from the background. */
+@media (prefers-reduced-motion: reduce) {
+  .heroFrame,
+  .heroFrame:hover {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* The frame already draws the chrome and the rounded corner, so the capture only
+ * has to fill it and be clipped by it. ProductShot's own drop shadow is dropped:
+ * the screen is sitting INSIDE a surface, not floating above the page like the
+ * phone captures it shares a component with. */
+.shotFramed {
+  display: block;
+}
+
+.shotFramed img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: none;
+}
 
 .pageTitle {
   font-size: clamp(2.25rem, 1.5rem + 3.5vw, 3.75rem);

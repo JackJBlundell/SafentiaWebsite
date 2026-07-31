@@ -227,6 +227,52 @@ describe('JobsBoard', () => {
     expect(screen.getByText(/Showing the most recent 2 jobs/)).toBeInTheDocument();
   });
 
+  it('keeps the filters behind a toggle that says how many are active', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <JobsBoard />
+      </MemoryRouter>,
+    );
+
+    // The panel starts shut, so the board leads with the jobs rather than with
+    // six empty controls. `hidden` is what makes that true for a real user -
+    // jsdom does not enforce visibility, so the sibling tests below can reach
+    // these controls whether the panel is open or not, and this is the one that
+    // proves a person can.
+    const toggle = screen.getByRole('button', { name: /^Filters/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    const panel = document.getElementById(
+      toggle.getAttribute('aria-controls') ?? '',
+    );
+    expect(panel).toHaveAttribute('hidden');
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(panel).not.toHaveAttribute('hidden');
+
+    // Setting a filter names it on the toggle AND as a removable chip beside
+    // it. That pairing is the whole reason collapsing the panel is safe: a
+    // count with nothing to check it against would be worse than the row it
+    // replaced.
+    await user.selectOptions(screen.getByLabelText('Status'), 'released');
+    expect(
+      screen.getByRole('button', { name: /^Filters.*1 active/ }),
+    ).toBeInTheDocument();
+    const chip = screen.getByRole('button', {
+      name: 'Remove filter: Status: Released',
+    });
+
+    // And removing it from the chip clears the filter itself.
+    await user.click(chip);
+    expect(
+      screen.getByRole('button', { name: /^Filters.*none active/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('cell', { name: 'Building One' }),
+    ).toBeInTheDocument();
+  });
+
   it('narrows rows with the status filter', async () => {
     const user = userEvent.setup();
     render(

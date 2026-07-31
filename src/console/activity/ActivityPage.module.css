@@ -104,3 +104,9 @@
   justify-content: center;
   margin-block-start: var(--space-xl);
 }
+
+/* The filter bar owns no outer margin - a bar inside a Card must not carry one
+   - so the page states the gap to the table below it. */
+.filterBar {
+  margin-block-end: var(--space-lg);
+}

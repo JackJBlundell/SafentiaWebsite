@@ -30,6 +30,7 @@ import type {
 } from '../../types';
 import { Card } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
+import { SearchField } from '../ui/SearchField';
 import { Toolbar, ToolbarGroup } from '../ui/Grid';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
@@ -406,19 +407,17 @@ export function CustomersList() {
         <>
           <Toolbar>
             <ToolbarGroup>
-              <div className={shared.field}>
-                <label className={shared.label} htmlFor="customers-search">
-                  Search customers
-                </label>
-                <input
-                  id="customers-search"
-                  className={`${shared.input} ${styles.search}`}
-                  type="search"
-                  autoComplete="off"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
+              {/* The placeholder is the point: the label said WHICH noun is
+                  searched, never that the address and the contacts are matched
+                  too - which is the difference between typing a postcode and
+                  not bothering. */}
+              <SearchField
+                label="Search customers"
+                placeholder="Name, address or contact"
+                value={search}
+                onChange={setSearch}
+                className={styles.search}
+              />
             </ToolbarGroup>
             <ToolbarGroup>
               <label className={shared.checkboxRow}>

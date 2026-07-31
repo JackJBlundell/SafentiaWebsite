@@ -30,13 +30,15 @@ describe('RagSummary', () => {
     render(
       <RagSummary counts={{ high: 2, medium: 0, low: 1, pending: 3 }} />,
     );
-    // Each pair is the level's riskPresentation glyph plus its count; the
-    // glyph differs per level, so colour never stands alone.
-    expect(screen.getByText('!')).toBeInTheDocument(); // high
+    // Each pair is the level's LETTER badge plus its count - the same H/M/L
+    // vocabulary the risk columns and the marketing pages use, so one reading
+    // carries across the product. The letter differs per level, so colour never
+    // stands alone.
+    expect(screen.getByText('H')).toBeInTheDocument(); // high
     expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('✓')).toBeInTheDocument(); // low
+    expect(screen.getByText('L')).toBeInTheDocument(); // low
     expect(screen.getByText('1')).toBeInTheDocument();
-    expect(screen.getByText('–')).toBeInTheDocument(); // pending
+    expect(screen.getByText('–')).toBeInTheDocument(); // not yet assessed
     expect(screen.getByText('3')).toBeInTheDocument();
     // The zero-count level's glyph is omitted, not rendered with a 0.
     expect(screen.queryByText('~')).toBeNull();

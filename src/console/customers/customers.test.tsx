@@ -508,6 +508,8 @@ describe('compliance-at-a-glance band', () => {
     expect(
       within(band).queryByRole('img', { name: /risk distribution/i }),
     ).toBeNull();
+    // The band keeps the WORDS, not the H/M/L dot: this is a standalone status
+    // chip with room for them, and the dot exists only for a table column.
     expect(within(band).getByText('High risk')).toBeInTheDocument();
     // Tiles read this building's own plan: 3 open, 2 overdue, 1 Life Protection.
     const open = within(band).getByRole('link', { name: /Open actions/ });

@@ -6,6 +6,8 @@
 
 import { Container, Section } from '../components/Layout';
 import { Seo } from '../seo/Seo';
+import { BrowserFrame } from '../components/marketing/BrowserFrame';
+import { ProductShot } from '../components/marketing/ProductShot';
 import { CtaBand } from '../components/marketing/CtaBand';
 import styles from './About.module.css';
 
@@ -65,7 +67,14 @@ export function AboutPage() {
 
       {/* --- The story --------------------------------------------------------- */}
       <Section spacing="loose" labelledBy="about-title">
-        <Container prose>
+        {/* `prose` has come OFF the Container and the reading measure has moved
+            down onto the copy column itself. The story therefore wraps at exactly
+            the width it always did, but the row it sits in is no longer capped at
+            text width, so the console beside it can be shown at a size where its
+            content is legible rather than merely present. */}
+        <Container>
+          <div className={styles.storyRow}>
+            <div className={styles.storyCopy}>
           <h1 id="about-title" className={styles.pageTitle}>
             Built inside a fire-safety company, not beside one
           </h1>
@@ -90,6 +99,23 @@ export function AboutPage() {
               Regulatory Reform (Fire Safety) Order 2005. The professional judgement, and the
               responsibility, stay where the law puts them.
             </p>
+              </div>
+            </div>
+            {/* The commissioning company's OWN console, named in the capture's
+                header, and the estate view the second paragraph describes: risk
+                spread across the buildings, and the overdue actions that follow
+                from it. On a page whose whole job is credibility, a screenshot
+                that names the company being credited is evidence rather than
+                assertion - which is the page's own argument, applied to itself. */}
+            <BrowserFrame url="safentia.co.uk/app" className={styles.heroFrame}>
+              <ProductShot
+                name="site_stats_page"
+                width={1200}
+                height={838}
+                sizes="(min-width: 900px) 500px, 92vw"
+                className={styles.shotFramed}
+              />
+            </BrowserFrame>
           </div>
         </Container>
       </Section>

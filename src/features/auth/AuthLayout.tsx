@@ -75,12 +75,21 @@ const Tick = (
 );
 
 /**
- * Decorative plan geometry for the brand panel. The repo ships no photography
- * and the marketing pages use none, so visual interest is authored here: a
- * building footprint with door swings and a stair core, over the document rules
- * that stand in for a report. It is `slice`-scaled so it fills the panel at any
- * aspect ratio, and it is hidden from assistive technology because it says
- * nothing the copy beside it does not.
+ * Decorative circles for the brand panel.
+ *
+ * This was a line drawing - a building footprint with door swings, a stair core
+ * and two concentric rings. It was competing with the words: at any weight dark
+ * enough to see, an outlined PLAN invites you to read it as information, and the
+ * one thing a sign-in panel must not do is give you something to work out.
+ * Overlapping discs carry the same job (break up a large flat field) while
+ * saying nothing at all.
+ *
+ * Painted in `currentColor`, which on this panel is the type's near-black ink,
+ * at low alpha - so every circle DARKENS the brand ground it falls on. That is
+ * what makes them safe: the copy's contrast can only go up where they overlap
+ * it, never down. Sized generously and `slice`-scaled so they bleed off every
+ * edge at any aspect ratio rather than sitting in the middle like a diagram, and
+ * hidden from assistive technology because they mean nothing.
  */
 const PanelArt = (
   <svg
@@ -90,30 +99,17 @@ const PanelArt = (
     aria-hidden="true"
     focusable="false"
   >
-    <g fill="none" stroke="currentColor" strokeWidth={1.5}>
-      <rect x="56" y="72" width="368" height="272" rx="8" />
-      <path d="M56 224h152M208 72v152M208 292h216M312 224v120" />
-      {/* Door swings: the detail that makes the outline read as a plan. */}
-      <path d="M208 176a48 48 0 0 0 48 48" />
-      <path d="M312 292a40 40 0 0 1-40 40" />
-      {/* Stair core. */}
-      <rect x="76" y="244" width="72" height="84" rx="4" />
-      <path d="M76 264h72M76 285h72M76 306h72" />
-      <circle cx="344" cy="480" r="78" />
-      <circle cx="344" cy="480" r="50" />
-    </g>
-    <g
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={9}
-      strokeLinecap="round"
-      opacity="0.7"
-    >
-      <path d="M96 436h136M96 480h96M96 524h136M96 568h72" />
+    <g fill="currentColor">
+      {/* Deliberately uneven: three sizes at three alphas, each bleeding off an
+          edge, so the field reads as depth rather than as a pattern. */}
+      <circle cx="70" cy="104" r="190" opacity="0.10" />
+      <circle cx="430" cy="250" r="140" opacity="0.07" />
+      <circle cx="150" cy="560" r="220" opacity="0.09" />
+      <circle cx="404" cy="596" r="96" opacity="0.06" />
+      <circle cx="286" cy="368" r="58" opacity="0.05" />
     </g>
   </svg>
 );
-
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>

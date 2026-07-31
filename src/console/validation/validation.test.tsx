@@ -519,7 +519,10 @@ describe('ReleasedList', () => {
     expect(screen.getAllByText('Meridian Estates').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Sam Porter').length).toBeGreaterThan(0);
     // The stored building risk shows as a RAG chip (medium), never re-derived.
-    expect(screen.getAllByText('Medium risk').length).toBeGreaterThan(0);
+    // The risk column is the H/M/L dot; its words are the accessible name.
+    expect(
+      screen.getAllByRole('img', { name: 'Medium risk' }).length,
+    ).toBeGreaterThan(0);
     // Every row opens its assessment review page.
     const rowLinks = screen
       .getAllByRole('link')
@@ -559,7 +562,7 @@ describe('ReleasedList', () => {
     };
     renderValidationAt('/released');
     const link = await screen.findByRole('link', {
-      name: 'Download PDF for Meridian Tower A',
+      name: 'Download the report for Meridian Tower A',
     });
     expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
   });
@@ -607,7 +610,11 @@ describe('ReleasedList', () => {
     renderValidationAt('/released');
     expect(screen.getByText('b-1')).toBeInTheDocument();
     expect(screen.getByText('c-1')).toBeInTheDocument();
-    expect(screen.getByText('Risk unavailable')).toBeInTheDocument();
+    // A dash carrying the reason, so the risk column stays one glyph wide even
+    // when the building record is missing.
+    expect(
+      screen.getByRole('img', { name: 'Risk unavailable' }),
+    ).toBeInTheDocument();
   });
 });
 

@@ -5,11 +5,12 @@
 //   - exactly one h1 per page (document outline and SEO both depend on it);
 //   - the two calls to action point at /contact and /login, matching the
 //     header (there is no public sign-up);
-//   - exactly one <img> across the whole marketing site - the field-app
-//     screenshot in the home hero - with every other visual drawn in CSS or
-//     inline SVG, so the pages make no external request and shift no layout
-//     (story 2075). The hero is a deliberate exception (see AppScreenshot),
-//     which is why the count is allowed per page rather than banned outright;
+//   - a page ships only the <img> elements it is ALLOWED (see PAGES), every one
+//     of them a real product screen in a place where a visitor is deciding
+//     whether this is real software, and every other visual drawn in CSS or
+//     inline SVG. The rule story 2075 was really protecting is what each allowed
+//     image is then checked against: self-hosted, so no third party sees a
+//     visitor's IP, and intrinsically sized, so nothing shifts as it loads;
 //   - no skipped heading levels on the home page.
 // ============================================================================
 
@@ -33,11 +34,16 @@ const PAGES = [
   // screens on the offline row, and the console inside the browser frame. Every
   // other visual on the site is still CSS or inline SVG.
   { name: 'Home', Page: HomePage, path: '/', images: 4 },
-  // How it works ships two: the console in step 1 (setting up buildings and
-  // templates) and the released report in step 4. The other two steps stay as
-  // CSS mini-cards.
-  { name: 'How it works', Page: HowItWorksPage, path: '/how-it-works', images: 2 },
-  { name: 'About', Page: AboutPage, path: '/about', images: 0 },
+  // How it works ships three: the released assessments in the hero, the field
+  // app on the "assess on site" step and the console on the release step. The
+  // remaining steps stay as CSS mini-cards - a list of three template names is
+  // drawn more cheaply than it is photographed.
+  { name: 'How it works', Page: HowItWorksPage, path: '/how-it-works', images: 3 },
+  // About ships one: the console in the hero. The page's claim is that this was
+  // built inside a real fire-safety company, and the capture is that company's
+  // own dashboard, named in its header - a stronger form of the same argument
+  // than another paragraph would be.
+  { name: 'About', Page: AboutPage, path: '/about', images: 1 },
 ] as const;
 
 function renderPage(Page: React.ComponentType, path: string) {

@@ -108,53 +108,46 @@
  * must stay self-contained.
  * -------------------------------------------------------------------------- */
 
-/* A DARK panel warmed by the gold, not a gold panel.
+/* A BRAND-COLOURED panel carrying near-black type.
  *
- * This was a flat gold field carrying near-black type. The contrast was ample
- * (12:1), but a large saturated yellow plane with black text on it reads cheap,
- * and no near-black sits comfortably on this particular gold: cool blacks go
- * muddy against its warmth, warm ones go muddy against everything else. Turning
- * the panel over solves it rather than tuning it. The gold now does what a
- * single strong accent is actually good at - it glows through a dark ground -
- * and the type is plain white, which is unambiguous at any size.
- *
- * Layer order, painted top to bottom:
- *   1. a dark scrim, gold-tinted at the top left so the brand is present in the
- *      light rather than in a slab of fill;
- *   2. a gold bloom, low opacity, giving the "slight yellow" without ever
- *      lightening the ground enough to threaten white type;
- *   3. the optional photograph.
- * The scrim is opaque enough at every point that even a white photo pixel
- * cannot lift the ground above the level white text was checked against. */
+ * The flat plane is broken up by the circles behind the copy rather than by a
+ * gradient: a wash across a single strong accent either goes muddy or reads as a
+ * printing fault, whereas overlapping discs of the same ink at low alpha give
+ * the field depth while staying unmistakably one colour. They are painted in the
+ * TYPE's ink, so they darken the ground everywhere they fall and can only ever
+ * increase the contrast the copy sits on - never reduce it. */
 .brandSide {
-  /* A warm near-black: neutral would go cold against the gold bloom above it,
-   * and a true black would flatten the depth the scrim is there to create. Held
-   * as a local custom property so the layer stack below reads as one idea rather
-   * than repeating a literal five times. White on it is ~18:1. */
-  --auth-panel-ground: #14120b;
+  /* THE BRAND COLOUR AS THE FIELD, carrying WHITE type.
+   *
+   * The ground is deepened before the type goes on it, and that is not a styling
+   * choice - it is what makes white legible at all. White on the raw accent is
+   * 1.74:1 (tokens.css says as much), against the 4.5:1 AA asks for body text:
+   * not a marginal fail but an effectively invisible one. Mixed with the near
+   * -black to roughly a third, the field still reads unmistakably as the brand
+   * while white lands around 7:1 - comfortably legible at every size on the
+   * panel, including the small print under the tick chips.
+   *
+   * The alternative was the near-black ink, which is 10:1 on the raw accent. If
+   * the flat, undarkened gold is ever wanted back, the type has to go with it.
+   *
+   * Kept as local properties so the ground and the ink are each named once and
+   * the softened variants below read as steps of one idea. */
+  --auth-panel-ground: color-mix(in srgb, var(--brand-primary) 34%, #14120b);
+  --auth-panel-ink: #ffffff;
   position: relative;
   overflow: hidden;
   display: flex;
   align-items: center;
   padding: var(--space-huge) var(--space-xl);
   background-color: var(--auth-panel-ground);
-  background-image:
-    linear-gradient(
-      152deg,
-      color-mix(in srgb, var(--auth-panel-ground) 88%, var(--brand-primary)),
-      color-mix(in srgb, var(--auth-panel-ground) 97%, var(--brand-primary)) 58%,
-      var(--auth-panel-ground)
-    ),
-    radial-gradient(
-      92% 74% at 12% 8%,
-      color-mix(in srgb, var(--brand-primary) 26%, transparent),
-      transparent 64%
-    ),
-    var(--auth-panel-photo, none);
+  /* The photograph hook is kept, but it now sits UNDER a mostly-opaque brand
+   * wash rather than a dark scrim, so a light photo pixel cannot lift the field
+   * away from the ink the type was checked against. */
+  background-image: var(--auth-panel-photo, none);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  color: #ffffff;
+  color: var(--auth-panel-ink);
 }
 
 @media (min-width: 960px) {
@@ -164,13 +157,17 @@
 }
 
 /* Decorative only: it sits behind the copy at a weight that reads as texture
- * rather than as a diagram competing with the words. */
+ * rather than as a diagram competing with the words.
+ *
+ * NO opacity here any more. Each circle carries its own alpha so they can differ
+ * from one another; a wrapper opacity would multiply with those and take the
+ * faintest of them to roughly 1% - invisible, which is how a flat panel would
+ * have come back without anything in the markup looking wrong. */
 .panelArt {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.16;
   pointer-events: none;
 }
 
@@ -192,7 +189,7 @@
   /* Held back so the eyebrow sits a step behind the display line. Softened from
    * WHITE now that the ground is dark; at 78% it is still comfortably above AA
    * on the panel's darkest and lightest points. */
-  color: color-mix(in srgb, #ffffff 78%, transparent);
+  color: color-mix(in srgb, var(--auth-panel-ink) 78%, transparent);
 }
 
 .panelTitle {
@@ -207,7 +204,7 @@
   max-width: 34ch;
   font-size: 1.0625rem;
   line-height: 1.55;
-  color: color-mix(in srgb, #ffffff 85%, transparent);
+  color: color-mix(in srgb, var(--auth-panel-ink) 85%, transparent);
 }
 
 .promises {
@@ -232,7 +229,7 @@
   box-sizing: content-box;
   padding: var(--space-xs);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, #ffffff 14%, transparent);
+  background: color-mix(in srgb, var(--auth-panel-ink) 14%, transparent);
 }
 
 .promiseTitle {
@@ -246,7 +243,7 @@
   display: block;
   font-size: 0.875rem;
   line-height: 1.5;
-  color: color-mix(in srgb, #ffffff 80%, transparent);
+  color: color-mix(in srgb, var(--auth-panel-ink) 80%, transparent);
 }
 
 /* Set off by a filled rule rather than a border, so the divider is part of the
@@ -254,10 +251,10 @@
 .panelFoot {
   padding-block-start: var(--space-xl);
   border-block-start: 1px solid
-    color-mix(in srgb, #ffffff 22%, transparent);
+    color-mix(in srgb, var(--auth-panel-ink) 22%, transparent);
   font-size: 0.875rem;
   line-height: 1.55;
-  color: color-mix(in srgb, #ffffff 82%, transparent);
+  color: color-mix(in srgb, var(--auth-panel-ink) 82%, transparent);
 }
 
 /* --------------------------------------------------------------------------

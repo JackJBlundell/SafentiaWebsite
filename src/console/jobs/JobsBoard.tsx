@@ -28,13 +28,19 @@ import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
 import { keys } from '../../query/keys';
 import { useRtdbQuery, type RtdbQueryBuilder } from '../../query/useRtdbQuery';
-import type { Building, Customer, Job, JobStatus, OrgMember } from '../../types';
+import type { Building, Customer, Job, OrgMember } from '../../types';
 import { JOB_STATUSES } from '../../types';
 import { Card, CardHeader, StatCard } from '../ui/Card';
 import { CardGrid } from '../ui/Grid';
 import { DataTable } from '../ui/DataTable';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { SkeletonRows } from '../ui/Skeleton';
+import {
+  activeFilters,
+  clearAllFilters,
+  FilterBar,
+  type FilterField,
+} from '../ui/FilterBar';
 import { sortByName, toEntries } from '../customers/shared';
 import {
   formatJobDate,
@@ -307,66 +313,81 @@ export function JobsBoard() {
 
   const windowFull = jobs.length >= windowSize;
 
-  // One reset for both the active-filter "Clear all" and the filtered-empty
-  // state's recovery action, so the two can never drift apart.
-  const resetFilters = useCallback(() => {
-    setSearch('');
-    setStatus('');
-    setAssessorUid('');
-    setCustomerId('');
-    setFromDate('');
-    setToDate('');
-  }, []);
+  // The board's filters, declared ONCE. FilterBar renders these, derives the
+  // active-filter chips from them and clears them, so a filter added here can
+  // never appear in the panel and go missing from the summary - which is
+  // exactly what the hand-written chip list this replaces invited.
+  const filterFields: FilterField[] = [
+    {
+      kind: 'search',
+      id: 'jobs-search',
+      label: 'Search',
+      placeholder: 'Building or customer',
+      value: search,
+      onChange: setSearch,
+    },
+    {
+      kind: 'select',
+      id: 'jobs-status',
+      label: 'Status',
+      allLabel: 'All statuses',
+      value: status,
+      onChange: setStatus,
+      options: JOB_STATUSES.map((value) => ({
+        value,
+        label: JOB_STATUS_LABELS[value],
+      })),
+    },
+    // /orgMembers is readable by admin, assessor and auditor only, so for
+    // anyone else the assessor filter is not offered at all - matching the
+    // gated subscription above and the column's uid fallback.
+    ...(canReadMembers
+      ? [
+          {
+            kind: 'select',
+            id: 'jobs-assessor',
+            label: 'Assessor',
+            allLabel: 'All assessors',
+            value: assessorUid,
+            onChange: setAssessorUid,
+            options: assessorOptions.map(([uid, member]) => ({
+              value: uid,
+              label: member.name,
+            })),
+          } satisfies FilterField,
+        ]
+      : []),
+    {
+      kind: 'select',
+      id: 'jobs-customer',
+      label: 'Customer',
+      allLabel: 'All customers',
+      value: customerId,
+      onChange: setCustomerId,
+      options: customerOptions.map(([id, customer]) => ({
+        value: id,
+        label: customer.name,
+      })),
+    },
+    {
+      kind: 'dateRange',
+      id: 'jobs-date',
+      label: 'Visit date',
+      from: fromDate,
+      to: toDate,
+      onChangeFrom: setFromDate,
+      onChangeTo: setToDate,
+      // Slot times are written from LOCAL date+time inputs (see the wizard), so
+      // a bound reads in local days, matching what the operator scheduled.
+      formatValue: (value) =>
+        formatJobDate(new Date(`${value}T00:00:00`).getTime()),
+    },
+  ];
 
-  const filterDateLabel = (value: string) =>
-    formatJobDate(new Date(`${value}T00:00:00`).getTime());
-
-  // The active filters, each with the wording it shows and the single field it
-  // clears. The presence of any entry reveals the summary row and its Clear all.
-  const activeFilters: Array<{ key: string; label: string; onRemove: () => void }> = [];
-  if (search.trim()) {
-    activeFilters.push({
-      key: 'search',
-      label: `Search: "${search.trim()}"`,
-      onRemove: () => setSearch(''),
-    });
-  }
-  if (status) {
-    activeFilters.push({
-      key: 'status',
-      label: `Status: ${JOB_STATUS_LABELS[status as JobStatus]}`,
-      onRemove: () => setStatus(''),
-    });
-  }
-  if (assessorUid) {
-    activeFilters.push({
-      key: 'assessor',
-      label: `Assessor: ${assessorName(assessorUid)}`,
-      onRemove: () => setAssessorUid(''),
-    });
-  }
-  if (customerId) {
-    activeFilters.push({
-      key: 'customer',
-      label: `Customer: ${customerName(customerId)}`,
-      onRemove: () => setCustomerId(''),
-    });
-  }
-  if (fromDate) {
-    activeFilters.push({
-      key: 'from',
-      label: `From ${filterDateLabel(fromDate)}`,
-      onRemove: () => setFromDate(''),
-    });
-  }
-  if (toDate) {
-    activeFilters.push({
-      key: 'to',
-      label: `To ${filterDateLabel(toDate)}`,
-      onRemove: () => setToDate(''),
-    });
-  }
-  const hasActiveFilters = activeFilters.length > 0;
+  const hasActiveFilters = activeFilters(filterFields).length > 0;
+  // One reset for both the bar's Clear all and the filtered-empty state's
+  // recovery action, derived from the same declaration, so the two cannot drift.
+  const resetFilters = () => clearAllFilters(filterFields);
 
   // The stat tiles, in reading order. Values are undefined until the window
   // attaches (StatCard renders its own value-shaped skeleton for that state).
@@ -439,130 +460,20 @@ export function JobsBoard() {
         </CardGrid>
       </section>
 
-      <Card className={styles.filters}>
-        <div className={styles.filterGrid}>
-          <div className={`${styles.filterField} ${styles.searchField}`}>
-            <label className={styles.filterLabel} htmlFor="jobs-search">
-              Search
-            </label>
-            <input
-              id="jobs-search"
-              type="search"
-              className={styles.filterInput}
-              placeholder="Building or customer"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-          <div className={styles.filterField}>
-            <label className={styles.filterLabel} htmlFor="jobs-status">
-              Status
-            </label>
-            <select
-              id="jobs-status"
-              className={styles.filterInput}
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
-            >
-              <option value="">All statuses</option>
-              {JOB_STATUSES.map((value) => (
-                <option key={value} value={value}>
-                  {JOB_STATUS_LABELS[value as JobStatus]}
-                </option>
-              ))}
-            </select>
-          </div>
-          {canReadMembers && (
-            <div className={styles.filterField}>
-              <label className={styles.filterLabel} htmlFor="jobs-assessor">
-                Assessor
-              </label>
-              <select
-                id="jobs-assessor"
-                className={styles.filterInput}
-                value={assessorUid}
-                onChange={(event) => setAssessorUid(event.target.value)}
-              >
-                <option value="">All assessors</option>
-                {assessorOptions.map(([uid, member]) => (
-                  <option key={uid} value={uid}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div className={styles.filterField}>
-            <label className={styles.filterLabel} htmlFor="jobs-customer">
-              Customer
-            </label>
-            <select
-              id="jobs-customer"
-              className={styles.filterInput}
-              value={customerId}
-              onChange={(event) => setCustomerId(event.target.value)}
-            >
-              <option value="">All customers</option>
-              {customerOptions.map(([id, customer]) => (
-                <option key={id} value={id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className={styles.dateRange}>
-            <div className={styles.filterField}>
-              <label className={styles.filterLabel} htmlFor="jobs-from">
-                From
-              </label>
-              <input
-                id="jobs-from"
-                type="date"
-                className={styles.filterInput}
-                value={fromDate}
-                onChange={(event) => setFromDate(event.target.value)}
-              />
-            </div>
-            <div className={styles.filterField}>
-              <label className={styles.filterLabel} htmlFor="jobs-to">
-                To
-              </label>
-              <input
-                id="jobs-to"
-                type="date"
-                className={styles.filterInput}
-                value={toDate}
-                onChange={(event) => setToDate(event.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-
-        {hasActiveFilters && (
-          <div className={styles.activeRow}>
-            <span className={styles.activeLabel}>Filtered by</span>
-            {activeFilters.map((filter) => (
-              <button
-                key={filter.key}
-                type="button"
-                className={styles.chip}
-                onClick={filter.onRemove}
-                aria-label={`Remove filter: ${filter.label}`}
-              >
-                {filter.label}
-                <span aria-hidden="true" className={styles.chipRemove}>
-                  &times;
-                </span>
-              </button>
-            ))}
-            <span className={styles.clearAll}>
-              <Button variant="ghost" onClick={resetFilters}>
-                Clear all
-              </Button>
-            </span>
-          </div>
-        )}
-      </Card>
+      <FilterBar
+        label="Filter jobs"
+        fields={filterFields}
+        // The count is stated where the reader is looking, not buried in the
+        // table's hint: how much is loaded, and how much of it survived the
+        // filters. Announced, so a narrowing search is heard as well as seen.
+        note={
+          loading
+            ? 'Loading the most recent scheduled visits.'
+            : hasActiveFilters
+              ? `${rows.length} of ${jobs.length} loaded jobs match. Filters search the loaded window only.`
+              : `${jobs.length} jobs loaded. Filters search the loaded window only.`
+        }
+      />
 
       <Card flush>
         <CardHeader

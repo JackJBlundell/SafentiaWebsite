@@ -151,12 +151,14 @@ describe('AssessmentHistoryPanel', () => {
     // The departed assessor renders honestly, never as a raw uid.
     expect(rows[0]).toHaveTextContent('Former staff member');
     expect(rows[1]).toHaveTextContent('Amy Archer');
-    expect(rows[1]).toHaveTextContent('1 June 2026');
+    // Numeric in a column now - the long form belongs in prose, not in a cell
+    // whose width it doubles.
+    expect(rows[1]).toHaveTextContent('01/06/2026');
     // The first cell is the way THROUGH to the assessment. From a building -
     // where "what did we find here?" actually starts - this is the only route
     // in, so the href is part of the contract, not decoration.
     expect(
-      within(rows[1]).getByRole('link', { name: '1 June 2026' }),
+      within(rows[1]).getByRole('link', { name: '01/06/2026' }),
     ).toHaveAttribute('href', '/app/validation/job-old');
   });
 

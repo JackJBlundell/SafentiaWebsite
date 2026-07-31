@@ -765,7 +765,9 @@ describe('PlatformBuildings', () => {
     // The stored risk level, presented (never re-derived). Scoped to the table
     // because the risk filter reuses the same "High risk" label as its chip.
     expect(
-      within(screen.getByRole('table', { name: 'Buildings' })).getByText('High risk'),
+      within(screen.getByRole('table', { name: 'Buildings' })).getByRole('img', {
+        name: 'High risk',
+      }),
     ).toBeInTheDocument();
 
     const hrefs = screen

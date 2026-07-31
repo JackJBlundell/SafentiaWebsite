@@ -37,7 +37,7 @@ import type {
 } from '../../types';
 import { Card, CardHeader } from '../ui/Card';
 import { DataTable } from '../ui/DataTable';
-import { Toolbar, ToolbarGroup } from '../ui/Grid';
+import { activeFilters, FilterBar, type FilterField } from '../ui/FilterBar';
 import { EmptyState, ErrorNotice, PageHeader } from '../ui/Page';
 import { actorName as resolveActorName } from '../lib/actorName';
 import {
@@ -78,6 +78,17 @@ const dateTimeFormat = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
+});
+
+/** A date-range bound as it reads on its filter chip: "12 Jun 2026". Pinned to
+ *  UTC because the bounds themselves are UTC midnights (the platform's
+ *  date-only convention); formatting them locally would show the day before for
+ *  anyone west of Greenwich. */
+const dateOnlyFormat = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
 });
 
 /** yyyy-mm-dd -> epoch millis at midnight UTC (the platform convention). */
@@ -288,9 +299,75 @@ export function ActivityPage() {
     toDate,
   ]);
 
-  const filtersActive = Boolean(
-    search.trim() || action || customerId || buildingId || fromDate || toDate,
-  );
+  // The trail's filters, declared once. FilterBar renders them, derives the
+  // chips and clears them; this page keeps only the state and the predicate.
+  const filterFields: FilterField[] = [
+    {
+      kind: 'search',
+      id: 'activity-search',
+      label: 'Search',
+      placeholder: 'Action or target',
+      value: search,
+      onChange: setSearch,
+    },
+    {
+      kind: 'select',
+      id: 'activity-action',
+      label: 'Action',
+      allLabel: 'All actions',
+      value: action,
+      onChange: setAction,
+      // Options come from the loaded window itself, so the filter offers
+      // exactly - and only - the actions actually present in it.
+      options: distinctActions.map((value) => ({
+        value,
+        label: sentenceCase(humaniseAction(value).phrase),
+      })),
+    },
+    {
+      kind: 'select',
+      id: 'activity-customer',
+      label: 'Customer',
+      allLabel: 'All customers',
+      value: customerId,
+      // A building belongs to one customer, so changing (or clearing, from the
+      // chip) the scope resets the narrower filter rather than stranding it.
+      onChange: (value) => {
+        setCustomerId(value);
+        setBuildingId('');
+      },
+      options: customerOptions.map((option) => ({
+        value: option.id,
+        label: option.name,
+      })),
+    },
+    {
+      kind: 'select',
+      id: 'activity-building',
+      label: 'Building',
+      allLabel: customerId ? "All of this customer's buildings" : 'All buildings',
+      value: buildingId,
+      onChange: setBuildingId,
+      options: buildingOptions.map((option) => ({
+        value: option.id,
+        label: option.name,
+      })),
+    },
+    {
+      kind: 'dateRange',
+      id: 'activity-date',
+      label: 'Date',
+      from: fromDate,
+      to: toDate,
+      onChangeFrom: setFromDate,
+      onChangeTo: setToDate,
+      formatValue: (value) => {
+        const ms = startOfDayUtc(value);
+        return ms === undefined ? value : dateOnlyFormat.format(ms);
+      },
+    },
+  ];
+  const filtersActive = activeFilters(filterFields).length > 0;
   // A full window means older events may exist beyond it; a short one means the
   // whole history is already loaded and "Load more" would be a lie.
   const mayHaveOlder = rows.length >= windowSize;
@@ -321,120 +398,18 @@ export function ActivityPage() {
 
       {rows.length > 0 && (
         <>
-          <form
-            aria-label="Filter activity"
-            onSubmit={(event) => event.preventDefault()}
-          >
-            <Toolbar>
-              <ToolbarGroup>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="activity-search">
-                    Search
-                  </label>
-                  <input
-                    id="activity-search"
-                    className={styles.input}
-                    type="search"
-                    placeholder="Action or target"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                  />
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="activity-action">
-                    Action
-                  </label>
-                  <select
-                    id="activity-action"
-                    className={styles.select}
-                    value={action}
-                    onChange={(event) => setAction(event.target.value)}
-                  >
-                    <option value="">All actions</option>
-                    {distinctActions.map((value) => (
-                      <option key={value} value={value}>
-                        {sentenceCase(humaniseAction(value).phrase)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="activity-customer">
-                    Customer
-                  </label>
-                  <select
-                    id="activity-customer"
-                    className={styles.select}
-                    value={customerId}
-                    onChange={(event) => {
-                      setCustomerId(event.target.value);
-                      // A building belongs to one customer; changing scope
-                      // resets the narrower filter rather than stranding it.
-                      setBuildingId('');
-                    }}
-                  >
-                    <option value="">All customers</option>
-                    {customerOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="activity-building">
-                    Building
-                  </label>
-                  <select
-                    id="activity-building"
-                    className={styles.select}
-                    value={buildingId}
-                    onChange={(event) => setBuildingId(event.target.value)}
-                  >
-                    <option value="">All buildings</option>
-                    {buildingOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </ToolbarGroup>
-              <ToolbarGroup>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="activity-from">
-                    From
-                  </label>
-                  <input
-                    id="activity-from"
-                    className={styles.input}
-                    type="date"
-                    value={fromDate}
-                    onChange={(event) => setFromDate(event.target.value)}
-                  />
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="activity-to">
-                    To
-                  </label>
-                  <input
-                    id="activity-to"
-                    className={styles.input}
-                    type="date"
-                    value={toDate}
-                    onChange={(event) => setToDate(event.target.value)}
-                  />
-                </div>
-              </ToolbarGroup>
-              <ToolbarGroup push>
-                <p className={styles.windowNote} role="status">
-                  Showing the most recent {rows.length} events
-                  {filtersActive ? `, ${filtered.length} matching the filters` : ''}.
-                  Filters search this window only.
-                </p>
-              </ToolbarGroup>
-            </Toolbar>
-          </form>
+          <FilterBar
+            label="Filter activity"
+            className={styles.filterBar}
+            fields={filterFields}
+            note={
+              <>
+                Showing the most recent {rows.length} events
+                {filtersActive ? `, ${filtered.length} matching the filters` : ''}.
+                Filters search this window only.
+              </>
+            }
+          />
 
           <Card flush>
             <CardHeader title="Events" />

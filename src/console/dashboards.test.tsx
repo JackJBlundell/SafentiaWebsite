@@ -449,7 +449,7 @@ describe('ConsoleHome recent releases', () => {
 
     // The control names WHAT it downloads, not a bare "Download".
     const link = await screen.findByRole('link', {
-      name: 'Download PDF for North Tower',
+      name: 'Download the report for North Tower',
     });
     expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
   });
@@ -492,7 +492,7 @@ describe('ConsoleHome recent releases', () => {
     renderHome();
 
     const link = await screen.findByRole('link', {
-      name: /Download PDF for North Tower/,
+      name: /Download the report for North Tower/,
     });
     expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
     expect(
