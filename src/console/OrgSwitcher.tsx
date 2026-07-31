@@ -137,9 +137,6 @@ export function OrgSwitcher() {
 
   const activate = useCallback(
     (space: UserSpace) => {
-      // Crossing halves changes which shell renders, so the session must land on
-      // the new space's home rather than a URL only the old half serves.
-      const crossesHalves = current ? space.kind !== current.kind : true;
       if (inPlatformMode) {
         // Returning to a space from platform mode always leaves /app/admin;
         // only a DIFFERENT space also switches.
@@ -155,9 +152,22 @@ export function OrgSwitcher() {
         close(true);
         return;
       }
-      void switchTo(space, crossesHalves ? '/app' : undefined);
+      // EVERY switch lands on the dashboard, not just one that crosses the
+      // staff/portal line.
+      //
+      // A console URL is full of record ids - /app/customers/{customerId}/sites/
+      // {siteId}/buildings/{buildingId} - and every one of them belongs to the
+      // organisation you were in. Staying put after a switch carries the old
+      // org's ids into the new one, where at best they resolve to nothing and at
+      // worst the rules refuse the read; either way the first thing the new
+      // space shows you is a broken page. Even a list route is wrong: "Jobs"
+      // filtered to an assessor who does not work here.
+      //
+      // The dashboard is the one page that is correct in every space, and it is
+      // where someone who has just changed organisation wants to start.
+      void switchTo(space, '/app');
     },
-    [close, current, inPlatformMode, navigate, switchTo],
+    [close, inPlatformMode, navigate, switchTo],
   );
 
   if (loading) {

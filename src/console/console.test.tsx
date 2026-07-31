@@ -389,6 +389,7 @@ describe('OrgSwitcher', () => {
     ).not.toBeInTheDocument();
   });
 
+
 });
 
 // --- Platform (super admin) mode -----------------------------------------------
@@ -649,6 +650,55 @@ describe('ErrorBoundary', () => {
     armed = false;
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(screen.getByText('Recovered content')).toBeInTheDocument();
+    errorSpy.mockRestore();
+  });
+
+  it('treats a stale page chunk as a new version, not a crash', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // The exact failure a deploy causes: the tab holds the previous build's
+    // index, so the next lazily-loaded page asks for a content-hashed filename
+    // the server no longer has.
+    function StaleChunk(): React.ReactElement {
+      throw new Error(
+        'Failed to fetch dynamically imported module: https://safentia.co.uk/assets/BuildingDetail-C2Y70WsU.js',
+      );
+    }
+    // The automatic reload fires once per session; mark it as spent so this
+    // renders the fallback rather than trying to reload the test runner.
+    sessionStorage.setItem('safentia:stale-chunk-reloaded', '1');
+
+    render(
+      <MemoryRouter>
+        <ErrorBoundary>
+          <StaleChunk />
+        </ErrorBoundary>
+      </MemoryRouter>,
+    );
+
+    // Named for what actually happened. "Something went wrong" would send
+    // someone to support over a routine deploy.
+    expect(
+      screen.getByRole('heading', { name: 'A newer version is available' }),
+    ).toBeInTheDocument();
+    // And the ONE action that can fix it. "Try again" re-runs the same failed
+    // import; "Go to dashboard" loads a chunk that is just as stale.
+    expect(
+      screen.getByRole('button', { name: 'Reload the page' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Try again' }),
+    ).not.toBeInTheDocument();
+
+    // Not reported as a crash: it is the expected consequence of shipping, and
+    // reporting it would bury real faults in deploy noise.
+    expect(reportClientError).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalledWith(
+      '[Safentia console] Page render failed:',
+      expect.any(Error),
+      expect.anything(),
+    );
+
+    sessionStorage.removeItem('safentia:stale-chunk-reloaded');
     errorSpy.mockRestore();
   });
 
