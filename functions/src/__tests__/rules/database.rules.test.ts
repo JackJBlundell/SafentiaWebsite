@@ -8,6 +8,40 @@
 // Actors are defined by their custom claims (the claims onMembershipChange writes).
 // Fixtures are written with rules disabled so a test never depends on the rule it
 // is proving. assertSucceeds / assertFails make each case read as allow / deny.
+//
+// EXECUTION: this suite runs ONLY under the Firebase emulator (CI rules-tests
+// job): from the repo root,
+//   npx firebase-tools emulators:exec --only database,storage \
+//     --project safentia-tech 'npm --prefix functions run test:rules'
+// A plain `npx jest` run excludes it (see jest.config.js / jest.rules.config.js).
+//
+// RULES-EXPRESSIVENESS NOTES (honest limits, per the C1/M1 fix — RTDB
+// `.validate` evaluates only at the write location and BELOW, while `.write`
+// cascades down, so ancestor validates do NOT run for deep writes):
+// - Whole-document invariants (hasChildren, per-field type/length caps on the
+//   merged document, the invitation enabled-lock, templateId existence, the
+//   50-block cap) are enforced for writes at ANY depth by conditions on the
+//   merged `newData` inside the granting `.write` rule itself — the one rule
+//   that always runs. Leaf `.validate` rules additionally catch direct writes
+//   at each leaf.
+// - Unknown-key branches are denied by `$other: {.validate: false}` chains
+//   nested THREE wildcard levels deep at each wildcard site. A write nested
+//   MORE than three levels under an unknown key (e.g. junk/a/b/c/d) is not
+//   expressible finitely in rules and would land; the server treats templates
+//   as opaque and isRenderableTemplate rejects any malformed document at send
+//   time (fallback to the built-in default), so this is a bounded storage
+//   nuisance for an already-trusted org admin, not an auth or send-path hole.
+// - Inside `blocks/$blockId`, per-block invariants (id/type present) hold for
+//   writes at the block or above; a partial write below a block (e.g. text
+//   alone) still hits the text leaf validate (cap 5000) but cannot re-prove
+//   siblings — isRenderableTemplate is the documented backstop.
+// - TEMPLATE COUNT per org is NOT cleanly expressible in rules (no child-count
+//   operator; siblings are invisible to a $templateId write). Left to a future
+//   callable-based create; the 50-block per-template cap IS enforced (arrays
+//   serialise to numeric keys, so `!blocks.child('50').exists()` caps them).
+// - consoleState is deliberately uid-keyed for ANY authenticated principal
+//   (staff and portal both hold console prefs — ratified); with the per-leaf
+//   boolean caps the node cannot exceed a handful of booleans.
 // ============================================================================
 
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
@@ -37,6 +71,10 @@ const testUserA: Actor = {
   roles: { admin: true, assessor: true },
   testMode: true,
 };
+// A customer-portal user (portalOrgId + customerId, NEVER orgId) — the token
+// shape onCustomerMembershipChange writes. Used to prove portal claims open
+// no staff-side write and exactly the ratified platform reads.
+const portalA: Actor = { uid: 'portalU', portalOrgId: 'orgA', customerId: 'c1' };
 
 /** Seed the active member records the rules read for role/status checks. */
 async function seedMembers(): Promise<void> {
@@ -404,5 +442,424 @@ describe('Assessor job index (own-scope only)', () => {
     });
     const db = await dbFor(assessorA);
     await assertFails(db.ref('live/assessorJobs/orgA/multiA').once('value'));
+  });
+});
+
+// ============================================================================
+// Email templates (admin-only, shape-validated at every writable depth — the
+// C1 fix). The fixture mirrors EXACTLY what emailEditorModel writes and
+// isRenderableTemplate accepts: `blocks` is an ARRAY of typed blocks, each
+// carrying id + type (the previous fixture's keyed object without id/type
+// would have been rejected by the send path — M7).
+// ============================================================================
+describe('Email templates (admin-only, shape-validated)', () => {
+  const validTemplate = {
+    name: 'Chase letter',
+    subject: 'Your fire risk assessment',
+    heading: 'Action required',
+    blocks: [{ id: 'b1', type: 'paragraph', text: 'Please review the attached findings.' }],
+    updatedAt: 1,
+    updatedBy: 'adminA',
+  };
+
+  test('an admin writes a well-formed template (allow)', async () => {
+    const db = await dbFor(adminA);
+    await assertSucceeds(db.ref('live/emailTemplates/orgA/t1').set(validTemplate));
+  });
+
+  test('a non-admin cannot write a template (deny)', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/emailTemplates/orgA/t2').set(validTemplate));
+  });
+
+  test('a cross-org admin cannot write a template (deny)', async () => {
+    const db = await dbFor(orgBUser);
+    await assertFails(db.ref('live/emailTemplates/orgA/t2').set(validTemplate));
+  });
+
+  test('a portal-claims caller cannot write a template (deny)', async () => {
+    const db = await dbFor(portalA);
+    await assertFails(db.ref('live/emailTemplates/orgA/t2').set(validTemplate));
+  });
+
+  test('a test-claims admin cannot write a LIVE template (cross-env deny)', async () => {
+    const db = await dbFor(testUserA);
+    await assertFails(db.ref('live/emailTemplates/orgA/t2').set(validTemplate));
+  });
+
+  test('an unexpected extra child on a template is rejected (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/emailTemplates/orgA/t3').set({ ...validTemplate, smuggled: 'x' }),
+    );
+  });
+
+  // --- C1 regressions: deep/partial writes can no longer dodge the guards ---
+  test('C1: an admin deep-write to {id}/junk/x is DENIED (no unvalidated branches)', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('live/emailTemplates/orgA/t1/junk/x').set('smuggled'));
+  });
+
+  test('C1: an oversized text written DIRECTLY at blocks/0/text is DENIED', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/emailTemplates/orgA/t1/blocks/0/text').set('x'.repeat(5001)),
+    );
+  });
+
+  test('C1: a valid PARTIAL text write at blocks/0/text is still allowed', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertSucceeds(
+      db.ref('live/emailTemplates/orgA/t1/blocks/0/text').set('Amended paragraph.'),
+    );
+  });
+
+  test('C1: a deep write under a scalar leaf (name/junk) is DENIED (merged-shape .write)', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('live/emailTemplates/orgA/t1/name/junk').set('x'));
+  });
+
+  test('C1: deleting a required field via a partial write is DENIED', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('live/emailTemplates/orgA/t1/subject').remove());
+  });
+
+  test('a block missing id/type is rejected on a whole-block write (deny)', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/emailTemplates/orgA/t1/blocks/1').set({ text: 'typeless block' }),
+    );
+  });
+
+  test('M1: a template with more than 50 blocks is DENIED (block-count cap)', async () => {
+    const blocks = Array.from({ length: 51 }, (_, i) => ({
+      id: `b${i}`,
+      type: 'paragraph',
+      text: 'p',
+    }));
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('live/emailTemplates/orgA/t4').set({ ...validTemplate, blocks }));
+  });
+
+  test('template deletion by an admin remains allowed', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertSucceeds(db.ref('live/emailTemplates/orgA/t1').remove());
+  });
+});
+
+// ============================================================================
+// Email kind settings — the invitation lock and templateId-existence check now
+// hold at LEAF depth too (C1: a direct child write previously skipped the
+// node-level validate entirely).
+// ============================================================================
+describe('Email kind settings (admin-only, invitation lock at every depth)', () => {
+  const validTemplate = {
+    name: 'Chase letter',
+    subject: 'Your fire risk assessment',
+    heading: 'Action required',
+    blocks: [{ id: 'b1', type: 'paragraph', text: 'Please review the attached findings.' }],
+    updatedAt: 1,
+    updatedBy: 'adminA',
+  };
+
+  test('an admin assigns an EXISTING template to a kind (whole-node allow)', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertSucceeds(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder').set({ enabled: true, templateId: 't1' }),
+    );
+  });
+
+  test('a non-admin cannot write kind settings (deny)', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder').set({ enabled: false }),
+    );
+  });
+
+  test('the invitation kind cannot be disabled by a whole-node write (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/emailSettings/orgA/kinds/invitation').set({ enabled: false }),
+    );
+  });
+
+  test('C1: the invitation kind cannot be disabled by a DIRECT leaf write (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/emailSettings/orgA/kinds/invitation/enabled').set(false),
+    );
+  });
+
+  test('a dangling templateId on a whole-node write is rejected (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder').set({ templateId: 'no-such-doc' }),
+    );
+  });
+
+  test('C1: a dangling templateId written DIRECTLY at the leaf is rejected (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder/templateId').set('no-such-doc'),
+    );
+  });
+
+  test('a valid direct enabled toggle is allowed (leaf allow)', async () => {
+    const db = await dbFor(adminA);
+    await assertSucceeds(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder/enabled').set(false),
+    );
+  });
+
+  test('a valid direct templateId assignment at the leaf is allowed', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertSucceeds(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder/templateId').set('t1'),
+    );
+  });
+
+  test('deep junk under a kind is DENIED', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder/junk/x').set('y'),
+    );
+  });
+});
+
+// ============================================================================
+// Console UI state (C2 fix) — uid-keyed for ANY authenticated principal
+// (ratified: staff and portal users both hold console prefs), but the node is
+// CAPPED: every allowed leaf is a boolean, everything else is invalid, so no
+// storage abuse is possible. The C1 leaf-write hole (tourDone as a string) and
+// deep-write hole (junk branches) are both closed.
+// ============================================================================
+describe('Console state (own-uid booleans only)', () => {
+  test('owner writes gettingStartedDismissed=true (allow)', async () => {
+    const db = await dbFor(adminA);
+    await assertSucceeds(db.ref('consoleState/adminA/gettingStartedDismissed').set(true));
+  });
+
+  test('owner writes tourDone/desktop=true (allow)', async () => {
+    const db = await dbFor(adminA);
+    await assertSucceeds(db.ref('consoleState/adminA/tourDone/desktop').set(true));
+  });
+
+  test('owner writes gettingStarted/templatesVisited=true (allow)', async () => {
+    const db = await dbFor(adminA);
+    await assertSucceeds(
+      db.ref('consoleState/adminA/gettingStarted/templatesVisited').set(true),
+    );
+  });
+
+  test('owner whole-node write of a valid shape (allow)', async () => {
+    const db = await dbFor(adminA);
+    await assertSucceeds(
+      db.ref('consoleState/adminA').set({
+        tourDone: { desktop: true, mobile: false },
+        gettingStarted: { templatesVisited: true },
+        gettingStartedDismissed: false,
+      }),
+    );
+  });
+
+  test('C1: tourDone written as a string LEAF is DENIED', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('consoleState/adminA/tourDone').set('done'));
+  });
+
+  test('C1: deep junk (consoleState/{uid}/junk/x) is DENIED', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('consoleState/adminA/junk/x').set('y'));
+  });
+
+  test('C1: a non-boolean under a known branch (tourDone/desktop/junk) is DENIED', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('consoleState/adminA/tourDone/desktop/junk').set(true));
+  });
+
+  test('writing ANOTHER user console state is DENIED', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('consoleState/assessorA/gettingStartedDismissed').set(true));
+  });
+
+  test('reading another user console state is DENIED', async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'consoleState/assessorA/gettingStartedDismissed': true,
+    });
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('consoleState/assessorA').once('value'));
+  });
+});
+
+// ============================================================================
+// Billing surfaces (3053): subscription + usage are ADMIN-read, server-write;
+// profile stays member-readable (regression guard for the org read split).
+// ============================================================================
+describe('Organisation subscription and usage (admin-read, server-write)', () => {
+  beforeEach(async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'live/organisations/orgA/profile': { name: 'Org A Fire Safety' },
+      'live/organisations/orgA/subscription': { planId: 'silver', status: 'active' },
+      'live/organisations/orgA/usage': { period: '2026-08', assessmentsUsed: 3 },
+    });
+  });
+
+  test('an org admin reads subscription (allow)', async () => {
+    const db = await dbFor(adminA);
+    await assertSucceeds(db.ref('live/organisations/orgA/subscription').once('value'));
+  });
+
+  test('an org admin reads usage (allow)', async () => {
+    const db = await dbFor(adminA);
+    await assertSucceeds(db.ref('live/organisations/orgA/usage').once('value'));
+  });
+
+  test('a non-admin member cannot read subscription (deny)', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/organisations/orgA/subscription').once('value'));
+  });
+
+  test('a non-admin member cannot read usage (deny)', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/organisations/orgA/usage').once('value'));
+  });
+
+  test('no client can write subscription — not even the org admin (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/organisations/orgA/subscription/planId').set('gold'),
+    );
+  });
+
+  test('no client can write usage (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('live/organisations/orgA/usage/assessmentsUsed').set(0));
+  });
+
+  test('REGRESSION: a plain member still reads the org profile (allow)', async () => {
+    const db = await dbFor(assessorA);
+    await assertSucceeds(db.ref('live/organisations/orgA/profile').once('value'));
+  });
+});
+
+// ============================================================================
+// Platform tree (3053): plans are world-readable to any signed-in principal
+// (including portal claims — ratified, they price the portal upsell), finance
+// events are superAdmin-only, and everything is server-write.
+// ============================================================================
+describe('Platform plans and finance events', () => {
+  const superAdmin: Actor = { uid: 'superU', superAdmin: true };
+
+  beforeEach(async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'platform/superAdmins/superU': true,
+      'platform/plans/bronze': { name: 'Bronze', pricePence: 4900 },
+      'platform/financeEvents/live/evt1': { type: 'payment_succeeded', at: 1 },
+    });
+  });
+
+  test('an authed staff user reads plans (allow)', async () => {
+    const db = await dbFor(adminA);
+    await assertSucceeds(db.ref('platform/plans').once('value'));
+  });
+
+  test('a portal-claims user reads plans (allow — ratified)', async () => {
+    const db = await dbFor(portalA);
+    await assertSucceeds(db.ref('platform/plans').once('value'));
+  });
+
+  test('an unauthenticated caller cannot read plans (deny)', async () => {
+    const db = await dbFor(null);
+    await assertFails(db.ref('platform/plans').once('value'));
+  });
+
+  test('no client can write plans — not even a superAdmin (deny)', async () => {
+    const db = await dbFor(superAdmin);
+    await assertFails(db.ref('platform/plans/bronze/pricePence').set(1));
+  });
+
+  test('a listed superAdmin reads financeEvents (allow)', async () => {
+    const db = await dbFor(superAdmin);
+    await assertSucceeds(db.ref('platform/financeEvents/live').once('value'));
+  });
+
+  test('an org admin cannot read financeEvents (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('platform/financeEvents/live').once('value'));
+  });
+
+  test('no client can write financeEvents (deny)', async () => {
+    const db = await dbFor(superAdmin);
+    await assertFails(
+      db.ref('platform/financeEvents/live/evt2').set({ type: 'x', at: 2 }),
+    );
+  });
+});
+
+// ============================================================================
+// usersOnboarding (3053): own-uid read, server-only write.
+// ============================================================================
+describe('usersOnboarding (own-read, server-write)', () => {
+  beforeEach(async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'usersOnboarding/adminA': { surveySeen: true },
+    });
+  });
+
+  test('the owner reads their onboarding record (allow)', async () => {
+    const db = await dbFor(adminA);
+    await assertSucceeds(db.ref('usersOnboarding/adminA').once('value'));
+  });
+
+  test('another user cannot read it (deny)', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('usersOnboarding/adminA').once('value'));
+  });
+
+  test('the owner cannot write it (deny — server only)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('usersOnboarding/adminA/surveySeen').set(false));
+  });
+});
+
+// ============================================================================
+// ops/* (3053): server-internal (Stripe event claims, provisioning markers) —
+// invisible and unwritable to EVERY client principal, superAdmin included.
+// The .indexOn under ops/stripeEvents serves admin-SDK queries only.
+// ============================================================================
+describe('ops/* is fully closed to clients', () => {
+  const superAdmin: Actor = { uid: 'superU', superAdmin: true };
+
+  beforeEach(async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'platform/superAdmins/superU': true,
+      'ops/stripeEvents/live/evt1': { status: 'done', receivedAt: 1 },
+    });
+  });
+
+  test('a superAdmin cannot read ops/stripeEvents (deny)', async () => {
+    const db = await dbFor(superAdmin);
+    await assertFails(db.ref('ops/stripeEvents/live').once('value'));
+  });
+
+  test('an org admin cannot read ops (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(db.ref('ops/stripeEvents/live/evt1').once('value'));
+  });
+
+  test('no client can write ops (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('ops/stripeEvents/live/evt9').set({ status: 'done', receivedAt: 2 }),
+    );
   });
 });

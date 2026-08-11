@@ -8,7 +8,16 @@
         ".write": false
       },
       "plans": {
+        ".read": "auth != null",
         ".write": false
+      },
+      "financeEvents": {
+        ".write": false,
+        "$feedEnv": {
+          ".indexOn": [
+            "at"
+          ]
+        }
       },
       "stats": {
         ".write": false
@@ -21,20 +30,107 @@
         ".write": false
       }
     },
+    "ops": {
+      ".read": false,
+      ".write": false,
+      "stripeEvents": {
+        "$opsEnv": {
+          ".indexOn": [
+            "receivedAt"
+          ]
+        }
+      }
+    },
     "metadata": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         ".write": false
       }
     },
+    "usersOnboarding": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+    "consoleState": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && (!newData.exists() || ((!newData.child('gettingStartedDismissed').exists() || newData.child('gettingStartedDismissed').isBoolean()) && (!newData.child('tourDone').exists() || (newData.child('tourDone').hasChildren() && (!newData.child('tourDone').child('desktop').exists() || newData.child('tourDone').child('desktop').isBoolean()) && (!newData.child('tourDone').child('mobile').exists() || newData.child('tourDone').child('mobile').isBoolean()))) && (!newData.child('gettingStarted').exists() || (newData.child('gettingStarted').hasChildren() && (!newData.child('gettingStarted').child('templatesVisited').exists() || newData.child('gettingStarted').child('templatesVisited').isBoolean())))))",
+        "tourDone": {
+          ".validate": "newData.hasChildren()",
+          "desktop": {
+            ".validate": "newData.isBoolean()"
+          },
+          "mobile": {
+            ".validate": "newData.isBoolean()"
+          },
+          "$other": {
+            ".validate": false,
+            "$z1": {
+              ".validate": false,
+              "$z2": {
+                ".validate": false,
+                "$z3": {
+                  ".validate": false
+                }
+              }
+            }
+          }
+        },
+        "gettingStartedDismissed": {
+          ".validate": "newData.isBoolean()"
+        },
+        "gettingStarted": {
+          ".validate": "newData.hasChildren()",
+          "templatesVisited": {
+            ".validate": "newData.isBoolean()"
+          },
+          "$other": {
+            ".validate": false,
+            "$z1": {
+              ".validate": false,
+              "$z2": {
+                ".validate": false,
+                "$z3": {
+                  ".validate": false
+                }
+              }
+            }
+          }
+        },
+        "$other": {
+          ".validate": false,
+          "$z1": {
+            ".validate": false,
+            "$z2": {
+              ".validate": false,
+              "$z3": {
+                ".validate": false
+              }
+            }
+          }
+        }
+      }
+    },
     "$env": {
       ".validate": "$env === 'live' || $env === 'test'",
       "organisations": {
         "$orgId": {
-          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
           ".write": false,
           "profile": {
             ".read": "auth != null && ((auth.token.testMode === true) === ($env === 'test')) && (root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' || (auth.token.portalOrgId === $orgId && root.child($env).child('customers').child($orgId).child(auth.token.customerId).child('status').val() !== 'archived'))"
+          },
+          "settings": {
+            ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'"
+          },
+          "subscription": {
+            ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+            ".write": false
+          },
+          "usage": {
+            ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+            ".write": false
           }
         }
       },
@@ -396,6 +492,183 @@
           ".indexOn": [
             "sentAt"
           ]
+        }
+      },
+      "emailTemplates": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          "$templateId": {
+            ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && (!newData.exists() || (newData.hasChildren(['name','subject','heading','blocks','updatedAt','updatedBy']) && newData.child('name').isString() && newData.child('name').val().length <= 100 && newData.child('subject').isString() && newData.child('subject').val().length <= 200 && (!newData.child('preheader').exists() || (newData.child('preheader').isString() && newData.child('preheader').val().length <= 200)) && newData.child('heading').isString() && newData.child('heading').val().length <= 200 && (!newData.child('footerNote').exists() || (newData.child('footerNote').isString() && newData.child('footerNote').val().length <= 500)) && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString() && newData.child('blocks').hasChildren() && !newData.child('blocks').child('50').exists()))",
+            ".validate": "newData.hasChildren(['name','subject','heading','blocks','updatedAt','updatedBy'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "subject": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
+            "preheader": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
+            "heading": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
+            "blocks": {
+              "$blockId": {
+                ".validate": "newData.hasChildren(['id','type']) && (newData.child('type').val() !== 'paragraph' || newData.child('text').exists()) && (newData.child('type').val() !== 'cta' || newData.child('label').exists()) && (newData.child('type').val() !== 'detail-rows' || newData.child('source').exists())",
+                "id": {
+                  ".validate": "newData.isString() && newData.val().length <= 64",
+                  "$other": {
+                    ".validate": false
+                  }
+                },
+                "type": {
+                  ".validate": "newData.val() === 'paragraph' || newData.val() === 'detail-rows' || newData.val() === 'cta'",
+                  "$other": {
+                    ".validate": false
+                  }
+                },
+                "text": {
+                  ".validate": "newData.isString() && newData.val().length <= 5000",
+                  "$other": {
+                    ".validate": false
+                  }
+                },
+                "omitIfEmpty": {
+                  ".validate": "newData.isBoolean()",
+                  "$other": {
+                    ".validate": false
+                  }
+                },
+                "source": {
+                  ".validate": "newData.val() === 'custom' || newData.val() === 'kind'",
+                  "$other": {
+                    ".validate": false
+                  }
+                },
+                "rows": {
+                  "$rowId": {
+                    ".validate": "newData.hasChildren(['id','label','value'])",
+                    "id": {
+                      ".validate": "newData.isString() && newData.val().length <= 64",
+                      "$other": {
+                        ".validate": false
+                      }
+                    },
+                    "label": {
+                      ".validate": "newData.isString() && newData.val().length <= 200",
+                      "$other": {
+                        ".validate": false
+                      }
+                    },
+                    "value": {
+                      ".validate": "newData.isString() && newData.val().length <= 1000",
+                      "$other": {
+                        ".validate": false
+                      }
+                    },
+                    "$other": {
+                      ".validate": false,
+                      "$z1": {
+                        ".validate": false,
+                        "$z2": {
+                          ".validate": false,
+                          "$z3": {
+                            ".validate": false
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "label": {
+                  ".validate": "newData.isString() && newData.val().length <= 200",
+                  "$other": {
+                    ".validate": false
+                  }
+                },
+                "href": {
+                  ".validate": "newData.isString() && newData.val().length <= 2000",
+                  "$other": {
+                    ".validate": false
+                  }
+                },
+                "useKindLink": {
+                  ".validate": "newData.isBoolean()",
+                  "$other": {
+                    ".validate": false
+                  }
+                },
+                "$other": {
+                  ".validate": false,
+                  "$z1": {
+                    ".validate": false,
+                    "$z2": {
+                      ".validate": false,
+                      "$z3": {
+                        ".validate": false
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "footerNote": {
+              ".validate": "newData.isString() && newData.val().length <= 500"
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "updatedBy": {
+              ".validate": "newData.isString()"
+            },
+            "$other": {
+              ".validate": false,
+              "$z1": {
+                ".validate": false,
+                "$z2": {
+                  ".validate": false,
+                  "$z3": {
+                    ".validate": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "emailSettings": {
+        "$orgId": {
+          ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
+          "kinds": {
+            "$kindId": {
+              ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && (!newData.exists() || ((!newData.child('enabled').exists() || newData.child('enabled').isBoolean()) && ($kindId !== 'invitation' || newData.child('enabled').val() !== false) && (!newData.child('templateId').exists() || (newData.child('templateId').isString() && newData.child('templateId').val().length <= 200 && !newData.child('templateId').val().contains('/') && root.child($env).child('emailTemplates').child($orgId).child(newData.child('templateId').val()).exists()))))",
+              ".validate": "($kindId !== 'invitation' || newData.child('enabled').val() !== false) && (!newData.child('templateId').exists() || (newData.child('templateId').isString() && root.child($env).child('emailTemplates').child($orgId).child(newData.child('templateId').val()).exists()))",
+              "enabled": {
+                ".validate": "newData.isBoolean() && ($kindId !== 'invitation' || newData.val() === true)",
+                "$other": {
+                  ".validate": false
+                }
+              },
+              "templateId": {
+                ".validate": "newData.isString() && newData.val().length <= 200 && !newData.val().contains('/') && root.child($env).child('emailTemplates').child($orgId).child(newData.val()).exists()",
+                "$other": {
+                  ".validate": false
+                }
+              },
+              "$other": {
+                ".validate": false,
+                "$z1": {
+                  ".validate": false,
+                  "$z2": {
+                    ".validate": false,
+                    "$z3": {
+                      ".validate": false
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       },
       ".read": "auth != null && auth.token.superAdmin === true"

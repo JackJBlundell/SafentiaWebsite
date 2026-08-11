@@ -1,0 +1,2 @@
+import{a as e,o as t}from"./Page-14S43EDK.js";import{f as n}from"./shared-Cyn-gjdJ.js";import{t as r}from"./emailHtml-BuHBwtEG.js";var i=/^#[0-9a-fA-F]{6}$/;function a(){let{ready:a,orgId:o,db:s}=n(),c=e({key:t.orgProfile(o),path:s?.orgProfile(o)??``,enabled:a}),l=c.data?.name,u=c.data?.brand?.primary;return{name:typeof l==`string`&&l.trim()!==``?l:r.name,accent:typeof u==`string`&&i.test(u)?u:r.accent}}export{a as t};
+//# sourceMappingURL=useOrgEmailBrand-C9-k5Nuw.js.map

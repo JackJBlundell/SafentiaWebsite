@@ -14,7 +14,7 @@
 // expects.
 // ============================================================================
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { startFirebase } from '../firebase';
@@ -23,18 +23,31 @@ import { useUserSpaces } from '../auth/useUserSpaces';
 import { useSuperAdminClaim } from './admin/useSuperAdminClaim';
 import { hasChosenSpace } from '../auth/spaceChoice';
 import { SpacePicker } from './SpacePicker';
-import type { EnvPaths } from '../paths';
+import { type EnvPaths } from '../paths';
 import { queryClient } from '../query/queryClient';
 import { keys } from '../query/keys';
 import { useRtdbQuery } from '../query/useRtdbQuery';
 import { ThemeProvider } from '../design/ThemeProvider';
 import { Seo } from '../seo/Seo';
 import { Wordmark } from '../components/Wordmark';
-import { HoldingScreen } from './HoldingScreen';
 import { EmailVerificationScreen } from './EmailVerificationScreen';
 import { ConsoleShell } from './ConsoleShell';
 import { PortalShell } from './portal/PortalShell';
+import { pickNoMembershipView } from './billing/gating';
+import { useEntitlements } from './billing/useEntitlements';
+import { useOnboardingNode } from './billing/useOnboardingNode';
+import { ConfirmingScreen } from './billing/ConfirmingScreen';
+// Type-only: erased at build time, so the lazy chunk boundary is untouched.
+import type { SetupSummary } from './billing/SetupCompleteScreen';
 import type { OrgProfile } from '../types';
+
+// The two Phase 3 onboarding gates are their own chunk: everything that faces
+// Stripe stays out of the main console bundle, and the overwhelming majority
+// of sessions (existing members) never download either. Lazy at module scope
+// is SSG-safe - nothing loads until a render actually reaches a gate.
+const SubscribeGate = lazy(() => import('./billing/SubscribeGate'));
+const SetupGate = lazy(() => import('./billing/SetupGate'));
+const SetupCompleteScreen = lazy(() => import('./billing/SetupCompleteScreen'));
 
 /**
  * The splash. Identical output on the server and on the first client frame, so
@@ -146,6 +159,56 @@ function ConsoleGate() {
     return () => clearTimeout(timer);
   }, [spaceSettled, spaces.loading]);
 
+  // The caller's self-serve onboarding node (Phase 3 §3.1/§5.4, owner-read) -
+  // the single resume point for the subscribe -> pay -> provision -> wizard
+  // journey. Read lazily: only past email verification, and only for the
+  // sessions a billing gate could actually apply to - a membership-less one
+  // (is a subscribe underway?) or a claimed STAFF one (is the setup wizard
+  // unfinished?). Portal sessions never onboard an organisation, so they
+  // never read the node at all. The hook picks the read posture: a live
+  // listener while the subscribe journey is in motion, one cached get() for
+  // the claimed majority whose node is simply absent.
+  const onboardingEnabled =
+    uid !== null &&
+    emailVerified &&
+    (status === 'noMembership' ||
+      (status === 'authenticated' && claims?.kind !== 'portal'));
+  const onboardingQuery = useOnboardingNode(uid, {
+    enabled: onboardingEnabled,
+    wantLive: status === 'noMembership',
+  });
+  // Same BOUNDED wait as the spaces read above, for the same reason: the gates
+  // are routing decisions, and a browser that cannot reach the database must
+  // not sit on the splash forever waiting for one. On timeout the node reads
+  // as absent, which fails towards the ordinary (pre-Phase-3) behaviour.
+  const [waitedForOnboarding, setWaitedForOnboarding] = useState(false);
+  useEffect(() => {
+    if (!onboardingEnabled || !onboardingQuery.isLoading) {
+      return;
+    }
+    const timer = setTimeout(() => setWaitedForOnboarding(true), 4_000);
+    return () => clearTimeout(timer);
+  }, [onboardingEnabled, onboardingQuery.isLoading]);
+  const onboardingSettled =
+    !onboardingEnabled || !onboardingQuery.isLoading || waitedForOnboarding;
+  // A denied/errored read degrades to "no journey" rather than surfacing: the
+  // server remains the boundary, and the fallback views are all safe.
+  const onboarding = onboardingQuery.isError
+    ? null
+    : (onboardingQuery.data ?? null);
+
+  // The setup wizard's "Finish setup" celebration. Held HERE, not in the gate:
+  // advanceOnboarding({finish: true}) flips the node to 'done' almost at once,
+  // which unmounts SetupGate (and the wizard) below - this component is the
+  // nearest thing that survives the flip. While the flag is set the
+  // celebration renders regardless of node state; the CTA clears it and the
+  // session falls through to the shell. A reload during the celebration lands
+  // straight on the dashboard (the node is done) - acceptable, it is a one-off
+  // flourish, not state anyone needs back.
+  const [setupCelebration, setSetupCelebration] = useState<SetupSummary | null>(
+    null,
+  );
+
   if (status === 'initialising') {
     return (
       <ThemeProvider>
@@ -181,10 +244,36 @@ function ConsoleGate() {
     );
   }
 
+  // A verified account with no membership is where self-serve onboarding
+  // lives (Phase 3 §3.1). The onboarding node decides the view: no journey
+  // (or an abandoned/finished one) gets the subscribe pitch - which carries
+  // the "expecting an invitation?" swap to the old HoldingScreen default; a
+  // journey at 'payment' resumes inside the same gate; a journey at 'setup'
+  // means the org exists and the freshly-minted claims are seconds away, so
+  // the confirming screen polls for them. The splash holds only until the
+  // node's BOUNDED first read settles.
   if (status === 'noMembership') {
+    if (!onboardingSettled) {
+      return (
+        <ThemeProvider>
+          <ConsoleSplash />
+        </ThemeProvider>
+      );
+    }
+    if (pickNoMembershipView('noMembership', onboarding) === 'confirming') {
+      return (
+        <ThemeProvider>
+          <ConfirmingScreen />
+        </ThemeProvider>
+      );
+    }
+    // 'subscribe' or 'payment': SubscribeGate reads the node's step itself to
+    // choose between the plan matrix and the resumed payment page.
     return (
       <ThemeProvider>
-        <HoldingScreen />
+        <Suspense fallback={<ConsoleSplash />}>
+          <SubscribeGate onboarding={onboarding} />
+        </Suspense>
       </ThemeProvider>
     );
   }
@@ -195,6 +284,51 @@ function ConsoleGate() {
     return (
       <ThemeProvider>
         <ConsoleSplash />
+      </ThemeProvider>
+    );
+  }
+
+  // Between the claims guard and the space picker (Phase 3 §3.1 gate order): a
+  // founding admin whose organisation was just provisioned but whose setup
+  // wizard is unfinished gets the wizard, not the shell. Scoped to the ACTIVE
+  // org - a node left over from onboarding a DIFFERENT organisation must not
+  // gate a session that was since invited elsewhere - and released the moment
+  // the server stamps completedAt (or step 'done'). The splash covers the
+  // node's bounded first read for staff sessions; portal sessions never read
+  // it, so they settle immediately.
+  if (!onboardingSettled) {
+    return (
+      <ThemeProvider>
+        <ConsoleSplash />
+      </ThemeProvider>
+    );
+  }
+  if (setupCelebration) {
+    return (
+      <ThemeProvider>
+        <Suspense fallback={<ConsoleSplash />}>
+          <SetupCompleteScreen
+            summary={setupCelebration}
+            onContinue={() => setSetupCelebration(null)}
+          />
+        </Suspense>
+      </ThemeProvider>
+    );
+  }
+  const activeOrgOnboarding =
+    onboarding && onboarding.orgId === claims.orgId ? onboarding : null;
+  if (
+    activeOrgOnboarding &&
+    pickNoMembershipView('authenticated', activeOrgOnboarding) === 'setup'
+  ) {
+    return (
+      <ThemeProvider>
+        <Suspense fallback={<ConsoleSplash />}>
+          <SetupGate
+            onboarding={activeOrgOnboarding}
+            onCelebrate={setSetupCelebration}
+          />
+        </Suspense>
       </ThemeProvider>
     );
   }
@@ -246,7 +380,7 @@ function ConsoleGate() {
   // portalOrgId arm of that node's rule, so a customer sees the identity of the
   // organisation that assessed their buildings rather than bare Safentia.
   return (
-    <BrandedShell orgId={claims.orgId} paths={paths}>
+    <BrandedShell orgId={claims.orgId} paths={paths} platformMode={usePlatformShell}>
       {claims.kind === 'portal' && !usePlatformShell ? (
         <PortalShell />
       ) : (
@@ -263,26 +397,58 @@ function ConsoleGate() {
  * than a remount. Chrome that needs the profile's own fields (name, logo)
  * subscribes to `keys.orgProfile` too, which is the same cache entry and the
  * same single listener, never a second one.
+ *
+ * The stored brand is APPLIED only when the org is entitled to it (Phase 3
+ * §6.3 - the same applyBrandingEntitlement rule the report cover and themed
+ * emails enforce server-side):
+ *   - the entitlement resolution must be settled AND grant `branding` - a
+ *     silver/gold or grandfathered org keeps its whitelabel, a bronze org
+ *     renders the Safentia default. While the billing reads attach, the
+ *     default applies too, so a bronze admin never sees a flash of their
+ *     stored brand before the gate lands (default-first is this shell's
+ *     documented posture for the profile read already);
+ *   - the member-readable `profile.suspended` mirror must be clear - it is
+ *     what lets non-admin staff and portal sessions (which cannot read the
+ *     subscription and resolve the grandfather posture) drop the whitelabel
+ *     the moment the webhook suspends the org. A bronze org's non-admin
+ *     sessions have no readable plan signal, so they keep the whitelabel
+ *     until an admin session or a server render tells them otherwise -
+ *     presentation only, the server strips every artefact regardless;
+ *   - PLATFORM MODE (a super admin under /app/admin) forces the default
+ *     Safentia chrome outright: operator surfaces are never whitelabelled,
+ *     whatever the tenant's or the operator's own org entitles. The flag is
+ *     derived from the same render's location, so entering or leaving
+ *     /app/admin swaps in the same frame - no flash of tenant colours.
  */
 function BrandedShell({
   orgId,
   paths,
+  platformMode,
   children,
 }: {
   orgId: string;
   paths: EnvPaths;
+  /** True when this render is the operator (platform) shell under /app/admin. */
+  platformMode: boolean;
   children: ReactNode;
 }) {
   const profile = useRtdbQuery<OrgProfile | null>({
     key: keys.orgProfile(orgId),
     path: paths.db.orgProfile(orgId),
   });
+  const billing = useEntitlements();
+
+  const applyBrand =
+    !platformMode &&
+    !billing.loading &&
+    billing.entitlements.features.branding &&
+    profile.data?.suspended !== true;
 
   return (
     <ThemeProvider
-      brand={profile.data?.brand}
-      logoUrl={profile.data?.logoUrl}
-      fontFamily={profile.data?.fontFamily}
+      brand={applyBrand ? profile.data?.brand : undefined}
+      logoUrl={applyBrand ? profile.data?.logoUrl : undefined}
+      fontFamily={applyBrand ? profile.data?.fontFamily : undefined}
     >
       {children}
     </ThemeProvider>

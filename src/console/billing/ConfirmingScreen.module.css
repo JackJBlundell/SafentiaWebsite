@@ -1,0 +1,61 @@
+/* ConfirmingScreen - centred and quiet, matching HoldingScreen's chrome: the
+ * visitor has done everything right and is simply waiting on our webhook. */
+
+.root {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-xl);
+  background: var(--color-background);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  max-width: 26rem;
+  text-align: center;
+}
+
+.heading {
+  font-size: 1.25rem;
+  font-weight: 650;
+  color: var(--color-text);
+  letter-spacing: -0.012em;
+  line-height: 1.35;
+}
+
+.copy {
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.supportLink {
+  color: var(--color-text);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* A quiet ring spinner from the border tokens - no brand fill (the gold is a
+ * fill-only token) and honours reduced-motion by standing still. */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-text-secondary);
+  animation: confirmingSpin 0.9s linear infinite;
+}
+
+@keyframes confirmingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

@@ -23,7 +23,7 @@ import { CtaBand } from "../components/marketing/CtaBand";
 import styles from "./Home.module.css";
 
 const DESCRIPTION =
-  "Software for fire risk assessment: PAS 79-1:2020, BS 9792 and your own custom templates. " +
+  "Software for fire risk assessment: BS 9792, PAS 79-1:2020 and your own custom templates. " +
   "Offline capture on site, auditor validation and a branded PDF report on release.";
 
 // --- Small inline icons: 20px, currentColor strokes, no library. ------------
@@ -114,17 +114,17 @@ export function HomePage() {
               </h1>
               <p className={styles.heroLead}>
                 Safentia is software for fire risk assessment, with templates
-                for PAS 79-1:2020 and BS 9792, or built to your own methodology.
+                for BS 9792 and PAS 79-1:2020, or built to your own methodology.
                 Assessors capture evidence on site, auditors validate it
                 question by question, and the Responsible Person receives a
                 report they can act on.
               </p>
               <div className={styles.heroActions}>
-                <Button to="/contact" variant="primary" size="lg">
-                  Book a demonstration
+                <Button to="/login" variant="primary" size="lg">
+                  Get started
                 </Button>
-                <Button to="/login" variant="secondary" size="lg">
-                  Sign in
+                <Button to="/contact" variant="secondary" size="lg">
+                  or book a demonstration
                 </Button>
               </div>
               <p className={styles.heroNote}>

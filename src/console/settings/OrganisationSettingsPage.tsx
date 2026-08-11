@@ -27,6 +27,8 @@ import type {
   UpdateOrgProfileInput,
   UpdateOrgProfileResult,
 } from '../../types';
+import { useEntitlements } from '../billing/useEntitlements';
+import { UpsellNotice } from '../billing/UpsellNotice';
 import { fileIsImage, uploadFile } from '../lib/upload';
 import { BrandingPreview } from './BrandingPreview';
 import { Card, CardHeader } from '../ui/Card';
@@ -118,6 +120,16 @@ export function OrganisationSettingsPage() {
   const update = useCallable<UpdateOrgProfileInput, UpdateOrgProfileResult>(
     'updateOrgProfile',
   );
+
+  // Entitlement gate (§6.3 visible-but-locked): without the branding feature
+  // the brand controls render DISABLED - never hidden - behind one upsell
+  // notice. Stored colours and images stay in RTDB untouched; the server-side
+  // brand resolution simply does not apply them while the feature is off, and
+  // updateOrgProfile rejects brand writes, so this fieldset is presentation
+  // over that boundary, not the boundary itself.
+  const billing = useEntitlements();
+  const brandingLocked =
+    !billing.loading && !billing.entitlements.features.branding;
 
   const [form, setForm] = useState<FormState | null>(null);
   const [saved, setSaved] = useState(false);
@@ -351,6 +363,15 @@ export function OrganisationSettingsPage() {
             hint="Colours, logo and report cover image, used across the console, the app and your reports."
           />
           <div className={styles.cardBody}>
+          {brandingLocked && (
+            <UpsellNotice
+              message="Custom branding isn't included in your current plan. Your saved brand is kept safe and will apply again when your plan includes it."
+              isAdmin={billing.isAdmin}
+            />
+          )}
+          {/* A disabled fieldset locks every brand control in one move; the
+              values stay visible so the admin can see what upgrading restores. */}
+          <fieldset className={styles.lockedGroup} disabled={brandingLocked}>
           <ColourField
             id="org-brand-primary"
             label="Primary colour"
@@ -395,6 +416,7 @@ export function OrganisationSettingsPage() {
             cropOutputSize={1024}
             hint="Your organisation's own decorative image for the top-left panel of the report cover - not a photo of any building. If you leave it empty, that panel is painted from your brand colours instead."
           />
+          </fieldset>
           </div>
         </Card>
         </CardGrid>

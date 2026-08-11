@@ -1,0 +1,2 @@
+import{h as e,t}from"./dist-Ducpb61W.js";var n={notice:`_notice_1p14u_6`,message:`_message_1p14u_17`,link:`_link_1p14u_23`},r=e();function i({message:e,isAdmin:i}){return(0,r.jsxs)(`div`,{className:n.notice,role:`status`,children:[(0,r.jsx)(`p`,{className:n.message,children:e}),i?(0,r.jsx)(t,{className:n.link,to:`/app/settings/billing`,children:`View plans`}):(0,r.jsx)(`p`,{className:n.message,children:`Ask your administrator about upgrading your plan.`})]})}export{i as t};
+//# sourceMappingURL=UpsellNotice-BdGwCWMe.js.map

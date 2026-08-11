@@ -158,6 +158,16 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
               Invited by the organisation that assesses your buildings? Signing
               in shows you your own buildings, scores and released reports.
             </p>
+            {/* The demonstration stays available as the guided path now that
+                self-serve is the front door; the quiet footnote keeps it one
+                click away without competing with the form. */}
+            <p className={styles.panelFootNote}>
+              Prefer a guided look first?{' '}
+              <Link to="/contact" className={styles.panelFootLink}>
+                Book a demonstration
+              </Link>
+              .
+            </p>
           </div>
         </aside>
       </div>

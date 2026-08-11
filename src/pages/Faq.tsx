@@ -6,9 +6,9 @@
 // answer is in the HTML a crawler reads. The same question/answer data feeds the
 // FAQPage structured data, so the JSON-LD can never drift from the visible copy.
 //
-// Copy discipline: every claim here is a shipped product fact. Pricing is not
-// stated because it is discussed at demonstration, and no limits or figures are
-// invented.
+// Copy discipline: every claim here is a shipped product fact. Pricing figures
+// are not stated here - plans are shown inside the sign-up journey - and no
+// limits or figures are invented (pages.test.tsx enforces the no-price rule).
 // ============================================================================
 
 import { Container, Section } from '../components/Layout';
@@ -55,7 +55,7 @@ const FAQ_GROUPS: FaqGroup[] = [
       {
         question: 'How much does it cost?',
         answer:
-          'Pricing is discussed at demonstration, because it depends on the size and shape of your organisation. Book a demonstration through the contact page and we will walk you through the product and the commercials together.',
+          'Plans and pricing are shown when you sign up, so you can see exactly what fits the size and shape of your organisation before you commit. If you would rather talk it through first, book a demonstration through the contact page and we will walk you through the product and the commercials together.',
       },
     ],
   },
@@ -182,9 +182,12 @@ export function FaqPage() {
       <Section spacing="tight">
         <Container prose>
           <div className={styles.cta}>
-            <p className={styles.ctaText}>Still have a question?</p>
-            <Button to="/contact" variant="primary">
-              Book a demonstration
+            <p className={styles.ctaText}>Ready when you are.</p>
+            <Button to="/login" variant="primary">
+              Get started
+            </Button>
+            <Button to="/contact" variant="ghost">
+              or book a demonstration
             </Button>
           </div>
         </Container>

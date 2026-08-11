@@ -1,0 +1,49 @@
+/* EmailsRoutes - the Emails area's sub-nav (sent / templates, with room for
+   email types and compose later). Horizontal tabs above the full-width
+   content, matching the activity and settings sub-nav presentation. */
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.content {
+  min-width: 0;
+}
+
+.subNav {
+  display: flex;
+  /* Four tabs; the narrowest phones need the row to break rather than clip. */
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  border-block-end: 1px solid var(--color-border);
+  padding-block-end: var(--space-sm);
+}
+
+.subNavLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.subNavLink:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.subNavLink:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+}
+
+.subNavLinkActive {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}

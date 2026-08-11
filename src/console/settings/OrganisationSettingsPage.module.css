@@ -17,6 +17,25 @@
   gap: var(--space-lg);
 }
 
+/* The entitlement lock around the brand controls: a bare structural fieldset
+   (no chrome of its own) that dims as one block when disabled. Controls stay
+   visible-but-locked (§6.3) - nothing is hidden or removed. */
+.lockedGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-lg);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.lockedGroup:disabled {
+  opacity: 0.6;
+}
+
 .field {
   display: flex;
   flex-direction: column;

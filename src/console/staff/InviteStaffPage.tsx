@@ -17,6 +17,14 @@ import type {
   OrgRole,
   OrgRoleSet,
 } from '../../types';
+import { isWithinLimit } from '../billing/entitlements';
+import { useEntitlements } from '../billing/useEntitlements';
+import { UpsellNotice } from '../billing/UpsellNotice';
+import { useAuth } from '../../auth/AuthProvider';
+import { keys } from '../../query/keys';
+import { useRtdbQuery } from '../../query/useRtdbQuery';
+import type { InvitationSummary } from '../../types';
+import { countPendingStaffInvites } from './inviteSeats';
 import { Card } from '../ui/Card';
 import { ErrorNotice, PageHeader } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
@@ -31,6 +39,19 @@ export function InviteStaffPage() {
   const create = useCallable<CreateInvitationInput, CreateInvitationResult>(
     'createInvitation',
   );
+  // Read before any conditional return below (rules of hooks); the gate that
+  // consumes it sits after the sent-confirmation branch.
+  const billing = useEntitlements();
+  // The org's invitation summaries (same admin-read node - and cache entry -
+  // the staff directory lists), so the gate can count pending invites as the
+  // reserved seats the server treats them as.
+  const { claims, paths } = useAuth();
+  const orgId = claims?.orgId ?? '';
+  const invitations = useRtdbQuery<Record<string, InvitationSummary> | null>({
+    key: keys.orgInvitations(orgId),
+    path: paths ? paths.db.orgInvitations(orgId) : '',
+    enabled: Boolean(claims && paths),
+  });
   const [email, setEmail] = useState('');
   const [roles, setRoles] = useState<OrgRoleSet>({});
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -98,6 +119,43 @@ export function InviteStaffPage() {
             </div>
           </div>
         </Card>
+      </div>
+    );
+  }
+
+  // Entitlement gate for the direct-URL route (the directory already swaps its
+  // button): at the plan's staff ceiling the form gives way to the upsell
+  // notice, so nobody fills in a form the server would reject. Presentation
+  // only - createInvitation enforces the same limit. The sent confirmation
+  // above stays reachable even if THAT invitation was the one that hit the
+  // ceiling.
+  const staffAtLimit =
+    !billing.loading &&
+    !isWithinLimit(
+      billing.entitlements.limits.orgStaff,
+      // Occupied seats PLUS pending invites - the server's arithmetic, so the
+      // form never invites into a seat an outstanding invitation has reserved.
+      (billing.usage?.staffCount ?? 0) +
+        countPendingStaffInvites(invitations.data, Date.now()),
+    );
+  if (staffAtLimit) {
+    const limit = billing.entitlements.limits.orgStaff;
+    return (
+      <div className={styles.root}>
+        <PageHeader
+          title="Invite staff"
+          crumbs={[{ label: 'Staff', to: '/app/staff' }, { label: 'Invite' }]}
+        />
+        <UpsellNotice
+          message={
+            billing.entitlements.suspended
+              ? 'Your subscription has ended, so staff invitations are paused. Your existing staff are unaffected.'
+              : billing.plan
+                ? `You're on ${billing.plan.name} (${limit} staff included). Upgrade to invite more staff.`
+                : `Your plan includes ${limit} staff members. Upgrade to invite more.`
+          }
+          isAdmin={billing.isAdmin}
+        />
       </div>
     );
   }

@@ -57,8 +57,8 @@ describe('FaqPage', () => {
 
   it('never states a price', () => {
     const { container } = renderAt('/faq', <FaqPage />);
-    // Pricing is discussed at demonstration; a figure on this page would be an
-    // invented commercial claim.
+    // Plans and pricing are shown inside the sign-up journey; a figure on this
+    // page would be an invented commercial claim.
     expect(container.textContent).not.toMatch(/£|\bper (month|user|year)\b/i);
   });
 });

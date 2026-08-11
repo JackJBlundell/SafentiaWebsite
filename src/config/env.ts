@@ -7,11 +7,13 @@
 // design, and the real access boundary is the security rules plus App Check
 // attestation, never the secrecy of an API key.
 //
-// The one value that is NOT hard-coded is the reCAPTCHA v3 site key used by App
-// Check. It is created in the Firebase console (App Check > Apps > Web) and read
-// from an environment variable, so a fork or a preview deployment can point at a
-// different key without a code change. `hasUnfilledConfig()` makes a missing slot
-// loud rather than silent.
+// The values that are NOT hard-coded are the reCAPTCHA v3 site key used by App
+// Check and the Stripe publishable keys used by billing. Each is created in its
+// provider's dashboard and read from an environment variable, so a fork or a
+// preview deployment can point at a different key without a code change.
+// `hasUnfilledConfig()` makes a missing reCAPTCHA key loud rather than silent;
+// the Stripe keys degrade gracefully instead (see stripeClient.ts): an unfilled
+// key means the billing UI shows a not-configured notice, never a crash.
 // ============================================================================
 
 import type { Environment } from "../types";
@@ -52,6 +54,18 @@ export interface WebConfig {
    * used instead) and reported loudly in production.
    */
   recaptchaV3SiteKey: string;
+  /**
+   * Stripe publishable keys for the billing surface (Phase 3). Publishable
+   * keys are public by design - they can only create client-side tokens, never
+   * charge anyone; the secret keys live in Cloud Functions secrets. Two keys
+   * because Stripe test mode and live mode are separate keyspaces: the client
+   * picks by the signed-in user's `testMode` claim, exactly as the data root
+   * does. Set `VITE_STRIPE_PUBLISHABLE_KEY` / `VITE_STRIPE_PUBLISHABLE_KEY_TEST`
+   * at build time. Empty or placeholder means billing is not configured, which
+   * the billing UI reports with a notice rather than crashing.
+   */
+  stripePublishableKey: string;
+  stripePublishableKeyTest: string;
   /** Region every callable is deployed to (functions/src/lib/region.ts). */
   functionsRegion: string;
   /** Public Mapbox token (same one the app ships) for address search in the
@@ -67,16 +81,31 @@ export const webConfig: WebConfig = {
   siteUrl: "https://safentia.co.uk",
   brandName: "Safentia",
   recaptchaV3SiteKey: import.meta.env.VITE_RECAPTCHA_V3_SITE_KEY ?? "",
+  stripePublishableKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "",
+  stripePublishableKeyTest:
+    import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY_TEST ?? "",
   functionsRegion: "europe-west1",
   mapboxAccessToken:
     "pk.eyJ1Ijoic2FmZW50aWEiLCJhIjoiY21yM29iZWFpMDMycDJ6cXJnMXFheTVidiJ9.8UIrzgb3Lwm99rDNRmyJ0A",
   fallbackEnvironment: "live",
 };
 
+/** True when a slot holds no usable value: empty, or still carrying the
+ *  committed `.env` placeholder. Exported so the billing client can apply the
+ *  same test when deciding whether Stripe is configured. */
+export function isUnfilled(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed === "" || trimmed === "REPLACE";
+}
+
 /** True when a required slot has not been filled. Surfaced at startup so an
- *  unconfigured production deployment is loud, never silent. */
+ *  unconfigured production deployment is loud, never silent. Deliberately does
+ *  NOT include the Stripe keys: its one caller uses it to decide whether App
+ *  Check can initialise, and an unconfigured Stripe key must never switch App
+ *  Check off. Stripe absence is reported by the billing client itself
+ *  (console/billing/stripeClient.ts), which shows a not-configured notice. */
 export function hasUnfilledConfig(): boolean {
-  return webConfig.recaptchaV3SiteKey.trim() === "";
+  return isUnfilled(webConfig.recaptchaV3SiteKey);
 }
 
 /** True when we are rendering at build time (pre-render) rather than in a

@@ -48,9 +48,10 @@ import {
 } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
-import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { WEB_ORIGIN } from '../lib/webOrigin';
-import { orgEmailBrand, renderBrandedEmail } from '../lib/emailTemplates';
+import { orgEmailBrand } from '../lib/emailTemplates';
+import { sendKindEmail } from '../lib/templatedEmail';
 import { resolveResponsibleAssignment } from '../lib/responsibleParty';
 import {
   createActionRecord,
@@ -349,46 +350,40 @@ async function emailAssignedAction(
     // falling back to the Safentia brand when the org has not set a valid one.
     const profileSnap = await db.ref(paths.db.orgProfile(orgId)).get();
     const brand = orgEmailBrand(profileSnap.val() as OrgProfile | null);
-    const subject = 'An action has been assigned to you';
-    const body = `A fire-safety action at ${building.name} has been assigned to you on Safentia.`;
-    const html = renderBrandedEmail({
-      brand,
-      preheader: body,
-      heading: subject,
-      paragraphs: [
-        body,
-        'Please review the detail below and arrange the remedial work before the due date passes.',
-      ],
-      detailRows: [
-        { label: 'Building', value: building.name },
-        { label: 'Observation', value: excerpt },
-        { label: 'Severity', value: SEVERITY_LABELS[view.severity] },
-        ...(view.dueBy !== undefined
-          ? [{ label: 'Due by', value: formatDueDate(view.dueBy) }]
-          : []),
-        ...(view.lifeProtection
-          ? [
-              {
-                label: 'Life protection',
-                value: 'This action affects life-safety measures.',
-              },
-            ]
-          : []),
-      ],
-      // Straight to the building in the customer's own portal, where its action
-      // plan lives. The staff console (/app/customers/...) would only show this
-      // recipient a permission wall.
-      cta: {
-        label: 'View the action plan',
-        url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
+    // The copy lives in the 'action-assigned' catalogue entry (or the org's own
+    // saved template); this site supplies the values and the detail card it
+    // computes - the conditional Due by / Life protection rows included.
+    await sendKindEmail(
+      {
+        kind: 'action-assigned',
+        env: paths.env,
+        orgId,
+        to: contact.email,
+        variables: { 'building.name': building.name },
+        brand,
+        kindRows: [
+          { label: 'Building', value: building.name },
+          { label: 'Observation', value: excerpt },
+          { label: 'Severity', value: SEVERITY_LABELS[view.severity] },
+          ...(view.dueBy !== undefined
+            ? [{ label: 'Due by', value: formatDueDate(view.dueBy) }]
+            : []),
+          ...(view.lifeProtection
+            ? [
+                {
+                  label: 'Life protection',
+                  value: 'This action affects life-safety measures.',
+                },
+              ]
+            : []),
+        ],
+        // Straight to the building in the customer's own portal, where its
+        // action plan lives. The staff console (/app/customers/...) would only
+        // show this recipient a permission wall.
+        kindLink: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
       },
-      footerNote: `You are receiving this because you are recorded as responsible for this action at ${building.name} on Safentia.`,
-    });
-    await dispatchEmail({ to: contact.email, subject, body, html }, logger, {
-      orgId,
-      env: paths.env,
-      category: 'action-assigned',
-    });
+      logger,
+    );
   } catch (error) {
     // The action mutation already landed; the courtesy email must not undo it.
     logger.warn('Assignment email failed', {

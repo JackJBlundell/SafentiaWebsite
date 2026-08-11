@@ -37,7 +37,13 @@ export const EMAIL_PROVIDER_SECRETS = [EMAIL_PROVIDER_API_KEY];
  * switch to 'Safentia <notifications@safentia.com>' - a one-line change
  * here, as promised in FUTURE_WORK.md section 1.
  */
-const FROM_ADDRESS = 'Safentia <onboarding@resend.dev>';
+// Deploy-configurable so the switch to the verified domain is an env var, not
+// a code change: set EMAIL_FROM_ADDRESS='Safentia <noreply@safentia.co.uk>'
+// once safentia.co.uk is VERIFIED in Resend (Domains -> Add domain -> DNS).
+// Until verification, the sandbox default below is the only sender Resend
+// accepts - flipping early would fail every send.
+const FROM_ADDRESS =
+  process.env.EMAIL_FROM_ADDRESS ?? 'Safentia <onboarding@resend.dev>';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
@@ -83,6 +89,12 @@ export interface EmailDispatchContext {
   env?: Environment;
   /** The send's business category (e.g. 'invitation', 'review-reminder'). */
   category: string;
+  /** The EmailKindId that produced the send (templated-email seam). Optional
+   *  because pre-templating call sites pass only a category. */
+  kindId?: string;
+  /** The org template rendered for the send; absent means the built-in
+   *  default copy was used. */
+  templateId?: string;
 }
 
 /**
@@ -90,8 +102,11 @@ export interface EmailDispatchContext {
  * part plus the full domain (j***@example.com). The log needs enough for an
  * admin to recognise the recipient and no more - storing the full address would
  * duplicate PII into a long-lived log (data minimisation, brief 18.4).
+ *
+ * Exported (not just used by the log) so sendManualEmail can return the SAME
+ * redacted form in its per-recipient results - one redaction rule everywhere.
  */
-function redactRecipient(to: string): string {
+export function redactRecipient(to: string): string {
   const at = to.indexOf('@');
   if (at <= 0) {
     // Malformed address: reveal nothing beyond the fact there was one.
@@ -124,6 +139,13 @@ async function appendEmailLog(
       category: context.category,
       sentAt: Date.now(),
       outcome,
+      // ====
+      // Conditional spread, not plain assignment: RTDB rejects any write that
+      // carries an `undefined` value, so the optional templating fields may
+      // only appear on the entry when the send actually supplied them.
+      // ====
+      ...(context.kindId !== undefined ? { kindId: context.kindId } : {}),
+      ...(context.templateId !== undefined ? { templateId: context.templateId } : {}),
     };
     await db.ref(forEnv(context.env).db.emailLog(context.orgId)).push(entry);
   } catch (error) {

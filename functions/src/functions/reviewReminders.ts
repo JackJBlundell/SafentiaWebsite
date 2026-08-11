@@ -37,12 +37,9 @@ import { createLogger } from '../lib/logging';
 import { forEnv } from '../shared/paths';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import { sendNotification } from '../lib/notifications';
-import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
-import {
-  orgEmailBrand,
-  renderBrandedEmail,
-  type EmailBrand,
-} from '../lib/emailTemplates';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { orgEmailBrand, type EmailBrand } from '../lib/emailTemplates';
+import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
 import {
   reviewReminderStage,
   resolveReviewReminderDays,
@@ -60,6 +57,10 @@ import type {
 } from '../shared/types';
 
 const ENVIRONMENTS: Environment[] = ['live', 'test'];
+
+/** The per-org template resolution the seam returns, read once per (org, kind)
+ *  so the building fan-out below never re-resolves it. */
+type KindConfig = Awaited<ReturnType<typeof loadKindConfig>>;
 
 /** The due date rendered for the email, in UTC so it names the stored day. */
 function formatDueDate(millis: number): string {
@@ -151,6 +152,11 @@ export const reviewReminders = onSchedule(
         // multi-org sweep brands every message with the organisation it concerns,
         // falling back to the Safentia brand when an org has not set a valid one.
         let orgBrand: EmailBrand | null = null;
+        // The resolved templates for the two kinds this sweep sends, each read
+        // once per org (never per building or per recipient) - these loops are
+        // fan-outs, and the seam accepts the resolution back as `config`.
+        let adminConfig: KindConfig | null = null;
+        let contactConfig: KindConfig | null = null;
 
         // Entries, not values: the CTA below deep-links to the building, whose
         // console route carries the site it sits under.
@@ -207,40 +213,25 @@ export const reviewReminders = onSchedule(
               const profile = profileSnap.val() as OrgProfile | null;
               orgName = profile?.name ?? 'Your organisation';
               orgBrand = orgEmailBrand(profile);
+              adminConfig = await loadKindConfig(
+                env,
+                orgId,
+                'review-reminder-admin',
+                logger,
+              );
             }
 
             const buildingName = building.name ?? buildingId;
             const body = stageCopy(stage, buildingName);
-            const subject =
+            // The seam owns the rendering now; what it needs from here are the
+            // exact phrases this sweep has always computed, supplied as the
+            // catalogue's declared variables.
+            const subjectPhrase =
               stage === 'lapsed'
-                ? `FRA review overdue: ${buildingName}`
-                : `FRA review due in ${stage} days: ${buildingName}`;
-            const html = renderBrandedEmail({
-              brand: orgBrand ?? undefined,
-              preheader: body,
-              // The org's name leads the heading so a multi-org admin knows
-              // whose estate this concerns before reading further.
-              heading: `${orgName}: fire risk assessment review`,
-              paragraphs: [
-                body,
-                'Reviews keep the assessment current; please arrange the review before the due date passes.',
-              ],
-              detailRows: [
-                { label: 'Building', value: buildingName },
-                { label: 'Review due', value: formatDueDate(nextDue) },
-                {
-                  label: 'Days remaining',
-                  value: stage === 'lapsed' ? 'Overdue' : `${stage} days`,
-                },
-              ],
-              // Straight to the building's record, where the service schedule
-              // that raised this reminder is edited.
-              cta: {
-                label: 'View the building',
-                url: `${WEB_ORIGIN}/app/customers/${building.customerId}/sites/${siteId}/buildings/${buildingId}`,
-              },
-              footerNote: `You are receiving this because you are an administrator of ${orgName} on Safentia.`,
-            });
+                ? 'FRA review overdue'
+                : `FRA review due in ${stage} days`;
+            const bodyStagePhrase =
+              stage === 'lapsed' ? 'now overdue' : `due in ${stage} days`;
 
             for (const admin of admins) {
               // ONE in-app notification (plus best-effort push) per admin...
@@ -257,13 +248,33 @@ export const reviewReminders = onSchedule(
                 logger,
               );
               // ...and one branded email, unless the admin quietened the
-              // review-due category. Best-effort by design: dispatchEmail
+              // review-due category. Best-effort by design: sendKindEmail
               // never throws, so a provider outage cannot abort the sweep.
               if (admin.email && admin.emailReviewDue) {
-                await dispatchEmail(
-                  { to: admin.email, subject, body, html },
+                await sendKindEmail(
+                  {
+                    kind: 'review-reminder-admin',
+                    env,
+                    orgId,
+                    to: admin.email,
+                    variables: {
+                      'org.name': orgName ?? 'Your organisation',
+                      'building.name': buildingName,
+                      'review.subjectPhrase': subjectPhrase,
+                      'review.stagePhrase': bodyStagePhrase,
+                      'review.dueDate': formatDueDate(nextDue),
+                      'review.daysRemaining':
+                        stage === 'lapsed' ? 'Overdue' : `${stage} days`,
+                    },
+                    // Guaranteed set alongside `admins`; the fallback is the
+                    // same Safentia default the renderer would choose.
+                    brand: orgBrand ?? orgEmailBrand(null),
+                    // Straight to the building's record, where the service
+                    // schedule that raised this reminder is edited.
+                    kindLink: `${WEB_ORIGIN}/app/customers/${building.customerId}/sites/${siteId}/buildings/${buildingId}`,
+                    config: adminConfig ?? undefined,
+                  },
                   logger,
-                  { orgId, env, category: 'review-reminder' },
                 );
               }
             }
@@ -292,36 +303,30 @@ export const reviewReminders = onSchedule(
               const contacts =
                 (contactsSnap.val() as Record<string, CustomerContact> | null) ??
                 {};
-              const customerSubject =
-                stage === 'lapsed'
-                  ? `FRA review overdue: ${buildingName}`
-                  : `FRA review due in ${stage} days: ${buildingName}`;
               const customerBody =
                 stage === 'lapsed'
                   ? `The fire risk assessment review for ${buildingName} is now overdue. Please contact ${orgName ?? 'your fire safety provider'} to arrange the review.`
                   : `The fire risk assessment review for ${buildingName} is due in ${stage} days. ${orgName ?? 'Your fire safety provider'} arranges this; there is nothing you need to do unless they ask you to.`;
-              // The message is the same for every contact, so it is rendered
-              // once and sent to each de-duplicated address.
-              const customerHtml = renderBrandedEmail({
-                brand: orgBrand ?? undefined,
-                preheader: customerBody,
-                heading:
+              if (contactConfig === null) {
+                contactConfig = await loadKindConfig(
+                  env,
+                  orgId,
+                  'review-reminder-contact',
+                  logger,
+                );
+              }
+              // The message is the same for every contact, so its variables are
+              // computed once and sent to each de-duplicated address.
+              const contactVariables = {
+                'building.name': buildingName,
+                'review.subjectPhrase': subjectPhrase,
+                'review.headingPhrase':
                   stage === 'lapsed'
                     ? 'Fire risk assessment review overdue'
                     : 'Fire risk assessment review due',
-                paragraphs: [customerBody],
-                detailRows: [
-                  { label: 'Building', value: buildingName },
-                  { label: 'Review due', value: formatDueDate(nextDue) },
-                ],
-                // The customer's own portal building page, never the staff
-                // console - the console would only show them a permission wall.
-                cta: {
-                  label: 'View your building',
-                  url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
-                },
-                footerNote: `You are receiving this because you are a contact for ${buildingName} on Safentia.`,
-              });
+                'review.bodyText': customerBody,
+                'review.dueDate': formatDueDate(nextDue),
+              };
               const seen = new Set<string>();
               for (const contact of Object.values(contacts)) {
                 const email = contact?.email?.trim();
@@ -335,17 +340,23 @@ export const reviewReminders = onSchedule(
                   continue;
                 }
                 seen.add(key);
-                // Best-effort per recipient: dispatchEmail never throws, so one
+                // Best-effort per recipient: sendKindEmail never throws, so one
                 // contact's provider failure cannot abort the sweep.
-                await dispatchEmail(
+                await sendKindEmail(
                   {
+                    kind: 'review-reminder-contact',
+                    env,
+                    orgId,
                     to: email,
-                    subject: customerSubject,
-                    body: customerBody,
-                    html: customerHtml,
+                    variables: contactVariables,
+                    brand: orgBrand ?? orgEmailBrand(null),
+                    // The customer's own portal building page, never the staff
+                    // console - the console would only show them a permission
+                    // wall.
+                    kindLink: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
+                    config: contactConfig,
                   },
                   logger,
-                  { orgId, env, category: 'review-reminder' },
                 );
               }
             }

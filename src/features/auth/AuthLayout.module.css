@@ -257,6 +257,26 @@
   color: color-mix(in srgb, var(--auth-panel-ink) 82%, transparent);
 }
 
+/* The demonstration footnote: same ink family as .panelFoot, no second rule -
+ * one divider is a full stop, two would be a fence. */
+.panelFootNote {
+  padding-block-start: var(--space-md);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--auth-panel-ink) 82%, transparent);
+}
+
+.panelFootLink {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.panelFootLink:hover {
+  color: var(--auth-panel-ink);
+}
+
 /* --------------------------------------------------------------------------
  * Shared form vocabulary for the auth screens. It lives in this module so the
  * sign-in, reset and invitation forms cannot drift apart visually.

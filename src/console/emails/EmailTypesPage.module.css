@@ -1,0 +1,160 @@
+/* EmailTypesPage - grouped Cards of kind rows. Each row: the kind's name and
+   description on the left, its three controls (toggle, template select,
+   preview) on the right, stacking on narrow screens. Tokens only. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.skeletonWrap {
+  padding: var(--space-lg) var(--space-xxl) var(--space-xxl);
+}
+
+/* The transient 'Saved' announcement; keeps its line so the page never
+   reflows when it appears. */
+.saveStatus {
+  margin: 0;
+  min-height: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.kindList {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-xxl) var(--space-lg);
+}
+
+.kindRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.kindRow:first-child {
+  border-top: none;
+}
+
+.kindText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.kindLabel {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.kindDescription {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  max-width: 52ch;
+}
+
+.kindControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-shrink: 0;
+}
+
+/* The house checkbox-label toggle. */
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  font-size: 0.875rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.lockedToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.templateField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.templateLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.templateSelect {
+  min-height: var(--min-touch-target);
+  max-width: 14rem;
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.templateSelect:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+/* Preview dialog internals. */
+.previewMeta {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.previewSubject {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.previewSubjectLabel {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-right: var(--space-xs);
+}
+
+.previewFrame {
+  width: 100%;
+  height: min(60vh, 34rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.previewFooter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .kindRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .kindControls {
+    flex-wrap: wrap;
+  }
+}

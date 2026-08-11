@@ -28,6 +28,9 @@ import type {
   ManageCustomerResult,
   RiskLevel,
 } from '../../types';
+import { isWithinLimit } from '../billing/entitlements';
+import { useEntitlements } from '../billing/useEntitlements';
+import { UpsellNotice } from '../billing/UpsellNotice';
 import { Card } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { SearchField } from '../ui/SearchField';
@@ -236,6 +239,22 @@ function RestoreRowAction({ customerId, name }: { customerId: string; name: stri
 
 export function CustomersList() {
   const { ready, orgId, db, isAdmin } = useOrgScope();
+
+  // Entitlement gate (presentation only - manageCustomer's create branch
+  // enforces the same limit server-side): at the plan's customer ceiling the
+  // add action gives way to the calm upsell notice (§6.3 - block new creates,
+  // hide nothing). While the billing reads attach, the button shows as normal.
+  const billing = useEntitlements();
+  const customerLimit = billing.entitlements.limits.customers;
+  const customersAtLimit =
+    !billing.loading &&
+    !isWithinLimit(customerLimit, billing.usage?.customerCount ?? 0);
+  const customerGateMessage = billing.entitlements.suspended
+    ? 'Your subscription has ended, so adding customers is paused. Your existing customers are unaffected.'
+    : billing.plan
+      ? `You're on ${billing.plan.name} (${customerLimit} customers included). Upgrade to add more.`
+      : `Your plan includes ${customerLimit} customers. Upgrade to add more.`;
+
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -400,7 +419,13 @@ export function CustomersList() {
           title="No customers yet"
           body="Add your first customer organisation to start recording its sites, buildings and assessments."
           action={
-            isAdmin ? <Button to={urls.customerNew}>Add customer</Button> : undefined
+            isAdmin ? (
+              customersAtLimit ? (
+                <UpsellNotice message={customerGateMessage} isAdmin={isAdmin} />
+              ) : (
+                <Button to={urls.customerNew}>Add customer</Button>
+              )
+            ) : undefined
           }
         />
       ) : (
@@ -433,7 +458,11 @@ export function CustomersList() {
             </ToolbarGroup>
             {isAdmin && (
               <ToolbarGroup push>
-                <Button to={urls.customerNew}>Add customer</Button>
+                {customersAtLimit ? (
+                  <UpsellNotice message={customerGateMessage} isAdmin={isAdmin} />
+                ) : (
+                  <Button to={urls.customerNew}>Add customer</Button>
+                )}
               </ToolbarGroup>
             )}
           </Toolbar>

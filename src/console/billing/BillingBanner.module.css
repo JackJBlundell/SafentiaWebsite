@@ -1,0 +1,41 @@
+/* ============================================================================
+   BillingBanner - full-width strips above the routed content. Status tokens
+   only: warning surface for the dunning nudges, error surface for the
+   suspended state. Both keep to text-on-surface pairings the token sheet
+   contrast-checks.
+   ============================================================================ */
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-xs) var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-lg);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.warning {
+  background: var(--status-warning-surface);
+  border: 1px solid var(--status-warning);
+}
+
+.suspended {
+  background: var(--status-error-surface);
+  border: 1px solid var(--status-error);
+}
+
+.link {
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.link:hover {
+  text-decoration: none;
+}

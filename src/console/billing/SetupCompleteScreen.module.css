@@ -1,0 +1,123 @@
+/* SetupCompleteScreen - the full-viewport celebration after Finish setup.
+ * One quiet flourish: the brand badge scales in, the tick draws itself, and
+ * the copy rises in on a stagger. Every duration and curve is a motion token;
+ * the global prefers-reduced-motion rule (design/global.css) collapses all of
+ * it to an instant settled state, and the local guard below removes the
+ * movement outright as belt and braces. */
+
+.root {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-xl);
+  background: var(--color-background);
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 34rem;
+  text-align: center;
+}
+
+/* --- the badge: brand-filled circle + drawn tick --------------------------- */
+
+.badge {
+  animation: badge-in var(--motion-slow) var(--easing) both;
+}
+
+/* --brand-primary is a FILL here, exactly as the tokens header demands - the
+ * tick on top uses the paired on-primary ink, so contrast holds whatever the
+ * organisation's brand colour is. */
+.badgeCircle {
+  fill: var(--brand-primary);
+  stroke: none;
+}
+
+.badgeTick {
+  fill: none;
+  stroke: var(--brand-on-primary);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* pathLength="1" on the element makes this unit dash draw from nothing. */
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tick-draw var(--motion-slow) var(--easing) both;
+  animation-delay: var(--motion-base);
+}
+
+/* --- staggered copy -------------------------------------------------------- */
+
+.heading {
+  font-size: 1.5rem;
+  font-weight: 650;
+  color: var(--color-text);
+  letter-spacing: -0.012em;
+  line-height: 1.3;
+  animation: rise-in var(--motion-slow) var(--easing) both;
+  animation-delay: calc(var(--motion-base) + var(--motion-fast));
+}
+
+.summary {
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  animation: rise-in var(--motion-slow) var(--easing) both;
+  animation-delay: calc(var(--motion-base) + (2 * var(--motion-fast)));
+}
+
+.cta {
+  animation: rise-in var(--motion-slow) var(--easing) both;
+  animation-delay: calc(var(--motion-base) + (3 * var(--motion-fast)));
+}
+
+@keyframes badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes tick-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-sm));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Belt and braces on top of the global 0.01ms blanket: no movement at all,
+ * everything simply present in its settled state. */
+@media (prefers-reduced-motion: reduce) {
+  .badge,
+  .badgeTick,
+  .heading,
+  .summary,
+  .cta {
+    animation: none;
+  }
+
+  .badgeTick {
+    stroke-dashoffset: 0;
+  }
+}

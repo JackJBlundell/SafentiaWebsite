@@ -1,0 +1,33 @@
+/* ============================================================================
+   UpsellNotice - a muted inline card-let, quieter than a Card, never a toast.
+   Info-surface tones so it reads as guidance, not an error.
+   ============================================================================ */
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--status-info-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.message {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.link {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--status-info);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:hover {
+  text-decoration: none;
+}

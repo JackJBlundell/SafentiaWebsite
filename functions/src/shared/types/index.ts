@@ -118,17 +118,125 @@ export const SEVERITIES = ['L', 'M', 'H'] as const;
 // ----------------------------------------------------------------------------
 
 export interface PlanLimits {
+  /** -1 = unlimited. The sentinel is used consistently across every limit so
+   *  the entitlements module can treat all four identically (Phase 3 §5.3). */
   orgStaff: number;
   customers: number;
   notificationsPerMonth: number;
+  assessmentTemplates: number;
 }
 
 /** Phase 3 fills the values; the shape is fixed now so the invite-limit hook
- *  (story 1023) and Phase 3 entitlements slot in without reshaping. */
+ *  (story 1023) and Phase 3 entitlements slot in without reshaping. Stored at
+ *  `/platform/plans/{env}/{planId}` - env-nested because `stripePriceId`
+ *  differs between Stripe test and live modes (Phase 3 §5.3). */
 export interface Plan {
   name: string;
   stripePriceId: string;
+  /** Display only; Stripe is the billing truth. */
+  priceMonthlyPence: number;
+  currency: 'gbp';
+  /** Feature flags gate whole surfaces; limits meter countable resources. */
+  features: { branding: boolean; emailTemplates: boolean; prioritySupport: boolean };
   limits: PlanLimits;
+  /** Display sort order on the subscribe matrix (bronze < silver < gold). */
+  order: number;
+}
+
+/**
+ * Self-serve onboarding state at `usersOnboarding/{uid}` (Phase 3 §5.4) - a
+ * TOP-LEVEL node, outside the `/live`/`/test` env roots, because onboarding
+ * spans the moment before the user's organisation (and therefore its env tree)
+ * exists; the env is derived from the user's testMode claim at provisioning.
+ * Owner-read, server-write only: the single resume point for the subscribe →
+ * pay → provision → setup-wizard journey, so a reload at any stage lands the
+ * user exactly where they left off.
+ */
+/**
+ * The organisation details collected by the pre-plan onboarding step
+ * (saveOnboardingDetails). `name` is what the organisation is founded under;
+ * the optional fields use OrgContact's exact vocabulary so provisioning copies
+ * them straight into the new org's `profile.contact` with no translation.
+ */
+export interface OnboardingOrgDetails {
+  name: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+}
+
+export interface UserOnboarding {
+  step: 'details' | 'plan' | 'payment' | 'setup' | 'done';
+  planId?: string;
+  /** The founding name, kept alongside orgDetails.name for compatibility -
+   *  provisioning and the webhook read this field. */
+  orgName?: string;
+  /** Collected BEFORE plan choice ('details' is the journey's initial step);
+   *  carried on the node so provisioning writes it into the org profile. */
+  orgDetails?: OnboardingOrgDetails;
+  /** Which environment (and therefore which STRIPE MODE) minted the Stripe
+   *  ids below. An account's testMode claim can change between attempts
+   *  (operator grant); ids from the other mode are invisible to the current
+   *  mode's API and must be discarded, not retried - the flow self-heals by
+   *  keeping the typed details and starting the payment afresh. Optional
+   *  because nodes predating the stamp exist; absent reads as unknown, which
+   *  callers treat as not-current. */
+  env?: Environment;
+  stripeCustomerId?: string;
+  subscriptionId?: string;
+  /** Set when the webhook provisions the organisation (step moves to 'setup'). */
+  orgId?: string;
+  setupStep?: 'profile' | 'team' | 'customer' | 'building';
+  setupDone?: Partial<Record<'profile' | 'team' | 'customer' | 'building', boolean>>;
+  /** Persisted so Stripe idempotency keys survive retries (Phase 3 §2). */
+  attemptNonce?: string;
+  createdAt: number;
+  completedAt?: number;
+}
+
+/**
+ * Per-user console UI state at `consoleState/{uid}` (Phase 3 §5.6) - the
+ * dashboard's Getting Started checklist and the guided tour remember what this
+ * PERSON has seen, not what their organisation has done, so the node is keyed
+ * by uid and sits TOP-LEVEL beside `usersOnboarding` (a preference does not
+ * change meaning between the live and test envs). Owner read/write: this is
+ * presentation state only - nothing here grants access to anything, so there
+ * is no server involvement to route through.
+ */
+export interface ConsoleState {
+  /** The first-load tour, completed once per device class (Phase 3 §7). */
+  tourDone?: { desktop?: boolean; mobile?: boolean };
+  /** "Hide this checklist" on the dashboard's Getting Started card. */
+  gettingStartedDismissed?: boolean;
+  /** Checklist ticks that cannot be derived from org data (visit-based). */
+  gettingStarted?: { templatesVisited?: boolean };
+}
+
+/** Finance-feed entry kinds (Phase 3 §5.5), written by the Stripe webhook. */
+export type FinanceEventType =
+  | 'payment'
+  | 'payment_failed'
+  | 'refund'
+  | 'subscription_started'
+  | 'subscription_canceled'
+  | 'plan_changed';
+
+/**
+ * One entry in the super-admin billing activity feed at
+ * `platform/financeEvents/{env}/{pushId}` (Phase 3 §5.5). Server-write only,
+ * superAdmin read; capped to 12 months by the cleanup job. `orgName` is
+ * denormalised at write time so the feed renders without N org lookups.
+ */
+export interface FinanceEvent {
+  at: number;
+  type: FinanceEventType;
+  orgId: string;
+  orgName: string;
+  planId?: string;
+  amountPence?: number;
+  currency?: string;
+  /** The Stripe event that produced this entry, for dashboard cross-reference. */
+  stripeEventId: string;
 }
 
 /**
@@ -215,14 +323,45 @@ export interface OrgProfile {
    * licence and would look like someone else's brand on every report.
    */
   coverImageUrl?: string;
+  /**
+   * Member-readable suspension mirror (Phase 3 SEV-1 fix). The subscription
+   * node is admin-read by design, so non-admin staff in a suspended
+   * organisation would otherwise meet raw server errors with no explanation;
+   * this single boolean leaks no billing detail while letting every member see
+   * an honest "subscription paused" notice. Written EXCLUSIVELY by the Stripe
+   * webhook alongside status transitions (true on unpaid/canceled/incomplete,
+   * removed on active) - updateOrgProfile's field whitelist rejects it from
+   * client input, and the rules deny all client writes under /organisations.
+   */
+  suspended?: true;
 }
 
-/** Phase 3 billing block; present in the schema now, populated later. */
+/** Stripe subscription lifecycle states mirrored into RTDB by the webhook
+ *  (Phase 3 §5.1). Narrowed from `string` - additive-safe: nothing wrote a
+ *  status before Phase 3, so the union is the first and only vocabulary. */
+export type SubscriptionStatus =
+  | 'incomplete' | 'active' | 'past_due' | 'canceled' | 'unpaid' | 'trialing';
+
+/** Phase 3 billing block; all additions optional so pre-billing orgs (no block,
+ *  or a bare planId) remain valid - the entitlements module grandfathers them.
+ *  Written ONLY server-side (webhook + billing callables); clients never write. */
 export interface OrgSubscription {
   stripeCustomerId?: string;
-  planId?: string;
-  status?: string;
-  currentPeriodEnd?: number;
+  planId?: string;                    // 'bronze' | 'silver' | 'gold'
+  status?: SubscriptionStatus;
+  currentPeriodEnd?: number;          // ms epoch
+  stripeSubscriptionId?: string;
+  priceId?: string;
+  cancelAtPeriodEnd?: boolean;
+  /** Downgrade landing at period end (subscription schedule, Phase 3 §3.2). */
+  pendingPlanId?: string;
+  /** Dunning state machine (Phase 3 §3.5); entitlements stay unchanged while a
+   *  grace window is open - never degrade a live safety tool over a card hiccup. */
+  paymentState?: 'past_due' | 'action_required';
+  graceUntil?: number;
+  /** Display metadata only (SAQ-A): never any card data beyond brand/last4/exp. */
+  paymentMethod?: { brand: string; last4: string; expMonth: number; expYear: number };
+  updatedAt?: number;
 }
 
 export interface OrgUsage {
@@ -1174,6 +1313,156 @@ export interface EmailLogEntry {
   /** What actually happened: delivered to the provider, skipped because no
    *  provider key is configured, or the provider rejected / was unreachable. */
   outcome: 'sent' | 'skipped-no-provider' | 'failed';
+  /** The EmailKindId that produced the send. Optional because entries written
+   *  before the templating seam existed lack it; the console must tolerate
+   *  both. */
+  kindId?: string;
+  /** The org template rendered for the send; absent means the built-in default
+   *  copy was used. */
+  templateId?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Org email templating (section 6b). Admins customise the copy of every
+// outgoing email kind, toggle kinds off, and compose manual sends. A template
+// is a subject plus an ordered list of blocks whose vocabulary matches the
+// branded renderer one-to-one, so anything an admin can author is renderable
+// by construction. Absent settings mean "enabled, built-in default copy" -
+// the system needs no seeding and behaves exactly as before until an admin
+// edits something.
+// ----------------------------------------------------------------------------
+
+/**
+ * Every distinct outgoing email the platform sends, one id per (purpose,
+ * audience) pair - the same business event can address admins, assessors and
+ * customer contacts with different copy, and blurring them would make toggles
+ * and templates ambiguous. 'manual' is the admin-composed send. The full
+ * definitions (default copy, variable catalogues, audiences) live in the
+ * mirrored emailKindCatalogue module; this is only the schema-level
+ * vocabulary.
+ */
+export type EmailKindId =
+  | 'invitation'
+  | 'review-reminder-admin'
+  | 'review-reminder-contact'
+  | 'deadline-info-assessor'
+  | 'deadline-action-contact'
+  | 'deadline-admin-digest'
+  | 'job-reminder'
+  | 'job-assigned'
+  | 'job-rescheduled'
+  | 'job-cancelled'
+  | 'visit-scheduled'
+  | 'visit-rescheduled'
+  | 'visit-reassigned'
+  | 'visit-cancelled'
+  | 'awaiting-validation'
+  | 'released-admin'
+  | 'released-contact'
+  | 'released-assessor'
+  | 'release-digest'
+  | 'info-requested'
+  | 'action-assigned'
+  | 'field-contact-added'
+  | 'contract-ended'
+  | 'payment-failed'
+  | 'payment-receipt'
+  | 'subscription-ended'
+  | 'manual';
+
+export const EMAIL_KIND_IDS = [
+  'invitation',
+  'review-reminder-admin',
+  'review-reminder-contact',
+  'deadline-info-assessor',
+  'deadline-action-contact',
+  'deadline-admin-digest',
+  'job-reminder',
+  'job-assigned',
+  'job-rescheduled',
+  'job-cancelled',
+  'visit-scheduled',
+  'visit-rescheduled',
+  'visit-reassigned',
+  'visit-cancelled',
+  'awaiting-validation',
+  'released-admin',
+  'released-contact',
+  'released-assessor',
+  'release-digest',
+  'info-requested',
+  'action-assigned',
+  'field-contact-added',
+  'contract-ended',
+  'payment-failed',
+  'payment-receipt',
+  'subscription-ended',
+  'manual',
+] as const;
+
+/** A label/value row authored inside a 'detail-rows' block. */
+export interface EmailTemplateDetailRow {
+  id: string;
+  label: string;
+  value: string;
+}
+
+/**
+ * One block of an org email template. Every text field may carry {{variable}}
+ * tokens resolved by the mirrored variable engine at render time; values are
+ * HTML-escaped inside the renderer, never earlier.
+ */
+export type EmailTemplateBlock =
+  | {
+      id: string;
+      type: 'paragraph';
+      text: string;
+      /** Drop the paragraph entirely when every {{variable}} in it resolves
+       *  empty - e.g. an optional cancellation reason. */
+      omitIfEmpty?: boolean;
+    }
+  | {
+      id: string;
+      type: 'detail-rows';
+      /** 'kind' rows are supplied dynamically by the send site (digest lists,
+       *  visit cards); 'custom' rows are authored in `rows`. */
+      source: 'custom' | 'kind';
+      rows?: EmailTemplateDetailRow[];
+    }
+  | {
+      id: string;
+      type: 'cta';
+      label: string;
+      /** Templated URL; ignored when useKindLink is set. */
+      href?: string;
+      /** Take the kind's canonical per-recipient link from the send site
+       *  instead of an authored URL. */
+      useKindLink?: boolean;
+    };
+
+/** An org-authored email template (`/{env}/emailTemplates/{orgId}/{id}`).
+ *  Admin-editable directly under rules (the editor autosaves); the server
+ *  validates renderability at send time and falls back to the built-in
+ *  default rather than failing a business operation over a bad template. */
+export interface EmailTemplate {
+  name: string;
+  /** Templated, like preheader, heading and all block text. */
+  subject: string;
+  preheader?: string;
+  heading: string;
+  blocks: EmailTemplateBlock[];
+  /** Absent means the kind's default footer. */
+  footerNote?: string;
+  updatedAt: number;
+  updatedBy: string;
+}
+
+/** Per-kind org settings (`/{env}/emailSettings/{orgId}/kinds/{kindId}`).
+ *  Absent node = enabled with the built-in default template. 'invitation' may
+ *  never be disabled (security email); rules and server both enforce it. */
+export interface EmailKindSettings {
+  enabled?: boolean;
+  templateId?: string;
 }
 
 export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
@@ -1535,6 +1824,50 @@ export interface UpdateOrgSettingsInput {
 }
 export interface UpdateOrgSettingsResult {
   updated: true;
+}
+
+// --- sendManualEmail (admin; explicit one-off send of an org template) ---
+/** One addressee of a manual send, named by reference wherever possible so the
+ *  server resolves the CURRENT address (a stale client cannot mail an old one):
+ *  a member by uid, a customer contact by its customer/contact pair, or - for
+ *  someone outside the system - a raw address. */
+export type ManualEmailRecipient =
+  | { type: 'member'; uid: string }
+  | { type: 'contact'; customerId: string; contactId: string }
+  | { type: 'email'; email: string };
+export interface SendManualEmailInput {
+  /** The org template to render (`/{env}/emailTemplates/{orgId}/{id}`); it must
+   *  exist and be renderable - a manual send is an explicit act, so there is NO
+   *  fall back to built-in copy. */
+  templateId: string;
+  /** 1..50 recipients; duplicates (case-insensitive on the resolved address)
+   *  are sent once. */
+  recipients: ManualEmailRecipient[];
+  /** Author-supplied variable values for the template's tokens. Keys must not
+   *  start `org.` or `recipient.` - those namespaces are server-derived and a
+   *  caller must not be able to spoof them. */
+  variables?: Record<string, string>;
+}
+export interface SendManualEmailResult {
+  /** EXACTLY one row per INPUT recipient, in INPUT order (results.length ===
+   *  recipients.length) - the client can join each row back to what it sent by
+   *  index without guessing. `to` is REDACTED (j***@example.com) - the full
+   *  address never travels back to the client (data minimisation, brief 18.4) -
+   *  and is '***' where no address resolved at all. */
+  results: Array<{
+    /** Index into the request's `recipients` array this row reports on. */
+    recipient: number;
+    to: string;
+    /** 'duplicate' = the same resolved address (case-insensitive) appeared
+     *  earlier in the list; the earlier row carries the send outcome and this
+     *  one was deliberately not sent twice. */
+    outcome:
+      | 'sent'
+      | 'skipped-no-provider'
+      | 'failed'
+      | 'invalid-recipient'
+      | 'duplicate';
+  }>;
 }
 
 // --- updateMember (admin; the last active admin is protected server-side) ---
@@ -1984,6 +2317,102 @@ export interface PlatformLead {
   /** Epoch millis, server clock, at receipt. */
   receivedAt: number;
 }
+
+// ----------------------------------------------------------------------------
+// Phase 3 billing callables (§9). Named Request/Response per the billing plan
+// (the plan's contracts are quoted verbatim so the client, the Functions and
+// the plan document all agree on one shape).
+// ----------------------------------------------------------------------------
+
+// --- saveOnboardingDetails (verified-email authed user, no org yet) ---
+// The FIRST self-serve step (§3.1): collect the organisation's details before
+// any plan is chosen. Creates or updates usersOnboarding/{uid} at step 'plan';
+// resubmitting while a journey is at 'details'/'plan'/'payment' updates the
+// details without disturbing a payment already in flight (step stays
+// 'payment' so the resume point survives an edit).
+export interface SaveOnboardingDetailsRequest { details: OnboardingOrgDetails; }
+export interface SaveOnboardingDetailsResponse { onboarding: UserOnboarding; }
+
+// --- createSubscription (verified-email authed user, no org yet) ---
+export interface CreateSubscriptionRequest {
+  planId: string;
+  /** @deprecated The organisation's name now comes from the onboarding node
+   *  written by saveOnboardingDetails; the server ignores this field. Kept
+   *  optional so older clients' payloads remain type-valid. */
+  orgName?: string;
+}
+export interface CreateSubscriptionResponse {
+  clientSecret: string; subscriptionId: string; stripeCustomerId: string;
+}
+
+// --- changeSubscription (org admin) ---
+export interface ChangeSubscriptionRequest {
+  orgId: string;
+  planId: string;
+  /** True = quote only: return what the change WOULD do (direction, proration
+   *  amount for an upgrade, effective date) without touching Stripe state. */
+  preview?: true;
+}
+export interface ChangeSubscriptionResponse {
+  /** Upgrades apply immediately (prorated); downgrades land at period end. */
+  effective: 'immediate' | 'period_end';
+  prorationAmountPence?: number;
+  effectiveAt: number;
+}
+
+// --- cancelSubscription (org admin; period-end only, resume until then) ---
+export interface CancelSubscriptionRequest { orgId: string; resume?: boolean; }
+export interface CancelSubscriptionResponse { cancelAtPeriodEnd: boolean; periodEnd: number; }
+
+// --- resubscribe (org admin; restart a canceled subscription) ---
+// A NEW subscription on the org's existing Stripe customer (the old one is
+// terminally dead - Stripe subscriptions cannot be revived). Permitted only
+// while the mirrored status is 'canceled' or 'incomplete' (a restart already
+// in flight); the returned client secret drives the Payment Element, and the
+// webhook lands the org snapshot when the payment confirms.
+export interface ResubscribeRequest { orgId: string; planId: string; }
+export interface ResubscribeResponse { clientSecret: string; subscriptionId: string; }
+
+// --- createCardUpdateIntent (org admin; SetupIntent for Payment Element) ---
+export interface CreateCardUpdateIntentRequest { orgId: string; }
+export interface CreateCardUpdateIntentResponse { clientSecret: string; }
+
+// --- listInvoices (org admin) ---
+export interface ListInvoicesRequest { orgId: string; limit?: number; startingAfter?: string; }
+export interface InvoiceSummary {
+  id: string; number: string; created: number; amountPence: number;
+  currency: string; status: 'paid' | 'open' | 'void' | 'uncollectible';
+  /** Stripe-hosted invoice page / PDF - keeps invoice delivery out of PCI scope. */
+  hostedInvoiceUrl?: string; pdfUrl?: string;
+}
+export interface ListInvoicesResponse { invoices: InvoiceSummary[]; hasMore: boolean; }
+
+// --- getBillingState (authed - onboarding resume - or org admin) ---
+export interface GetBillingStateRequest { orgId?: string; }
+export interface GetBillingStateResponse {
+  onboarding?: UserOnboarding;
+  subscription?: OrgSubscription;
+  /** For finishing an outstanding payment (existing PI/invoice client secret):
+   *  an incomplete first payment, a 3DS challenge, or - the SEV-1 reactivation
+   *  path - a suspended (unpaid/past_due) subscription's latest open invoice. */
+  pendingPaymentClientSecret?: string;
+  /** Ms epoch of Stripe's next automatic collection attempt on that open
+   *  invoice (the dunning retry) - present only when Stripe has one scheduled,
+   *  so the Billing tab can say WHEN the card will be tried again. */
+  nextPaymentAttempt?: number;
+}
+
+// --- advanceOnboarding (authed owner of the onboarding node; §5.4) ---
+// The setup wizard's steps are marked done by the callables that perform them
+// (updateOrgProfile, createInvitation, manageCustomer, manageBuilding); this
+// callable exists ONLY for skip and finish, which perform no other action.
+export interface AdvanceOnboardingRequest {
+  /** Skip to this setup step without completing the current one. */
+  skipTo?: 'profile' | 'team' | 'customer' | 'building';
+  /** Finish the wizard: stamps completedAt and sets step 'done'. */
+  finish?: boolean;
+}
+export interface AdvanceOnboardingResponse { onboarding: UserOnboarding; }
 
 // ----------------------------------------------------------------------------
 // Helper: a record keyed by id, as RTDB returns a node of children.

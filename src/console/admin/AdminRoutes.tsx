@@ -19,6 +19,7 @@ import { Route, Routes } from 'react-router-dom';
 import { EmptyState } from '../ui/Page';
 import { useSuperAdminClaim } from './useSuperAdminClaim';
 import { PlatformDashboard } from './PlatformDashboard';
+import { FinancePage } from './FinancePage';
 import { OrgsOverview } from './OrgsOverview';
 import { OrgDetail } from './OrgDetail';
 import { OrgCustomerDetail } from './OrgCustomerDetail';
@@ -57,9 +58,11 @@ export function AdminRoutes() {
       <Route path="organisations" element={<OrgsOverview />} />
       {/* Static list segments come BEFORE the dynamic ":orgId" route.
           React-router v6 ranks static over dynamic, but keeping them above is
-          the readable guarantee that /members, /buildings, /customers and
-          /activity are never swallowed by the org drill-down. Org ids are push
-          ids, never the literal words, so no real collision exists. */}
+          the readable guarantee that /finance, /members, /buildings,
+          /customers and /activity are never swallowed by the org drill-down.
+          Org ids are push ids, never the literal words, so no real collision
+          exists. */}
+      <Route path="finance" element={<FinancePage />} />
       <Route path="members" element={<PlatformMembers />} />
       <Route path="buildings" element={<PlatformBuildings />} />
       <Route path="customers" element={<PlatformCustomers />} />

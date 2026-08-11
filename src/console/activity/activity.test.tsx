@@ -30,7 +30,6 @@ const mocks = vi.hoisted(() => {
     },
     activityRows: [] as unknown[],
     logBookRows: [] as unknown[],
-    emailRows: [] as unknown[],
     members: null as unknown,
     customers: null as unknown,
     buildingsRoot: null as unknown,
@@ -50,15 +49,13 @@ vi.mock('../../query/useRtdbQuery', () => ({
         ? mocks.activityRows
         : domain === 'logBook'
           ? mocks.logBookRows
-          : domain === 'emailLog'
-            ? mocks.emailRows
-            : domain === 'orgMembers'
-              ? mocks.members
-              : domain === 'customers'
-                ? mocks.customers
-                : domain === 'buildings'
-                  ? mocks.buildingsRoot
-                  : undefined;
+          : domain === 'orgMembers'
+            ? mocks.members
+            : domain === 'customers'
+              ? mocks.customers
+              : domain === 'buildings'
+                ? mocks.buildingsRoot
+                : undefined;
     return { data, isLoading: false, isError: false };
   },
   subscribeToQuery: vi.fn(() => () => undefined),
@@ -124,32 +121,6 @@ beforeEach(() => {
       payload: { notes: 'Bin fire in the yard', brigadeCalled: true },
       byUid: 'uid-ghost',
       at: Date.UTC(2026, 5, 10, 17, 45),
-    },
-  ];
-  mocks.emailRows = [
-    {
-      id: 'm3',
-      to: 'j***@example.com',
-      subject: 'You have been invited to Safentia',
-      category: 'invitation',
-      sentAt: Date.UTC(2026, 5, 12, 9, 0),
-      outcome: 'sent',
-    },
-    {
-      id: 'm2',
-      to: 'r***@borough.gov.uk',
-      subject: 'A review is due',
-      category: 'review-reminder',
-      sentAt: Date.UTC(2026, 5, 11, 9, 0),
-      outcome: 'skipped-no-provider',
-    },
-    {
-      id: 'm1',
-      to: 'a***@acme.test',
-      subject: 'Your report has been released',
-      category: 'released',
-      sentAt: Date.UTC(2026, 5, 10, 9, 0),
-      outcome: 'failed',
     },
   ];
 });
@@ -272,98 +243,21 @@ describe('ActivityPage', () => {
   });
 });
 
-// --- Email log -----------------------------------------------------------------
+// --- Old email log URL ---------------------------------------------------------
 
-/** ActivityRoutes owns the admin gate and the tab switcher, so the email tests
- *  drive it through a router at the relevant URL, exactly as the app mounts it. */
-function renderActivityRoutes(path: string) {
-  return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/app/activity/*" element={<ActivityRoutes />} />
-      </Routes>
-    </MemoryRouter>,
-  );
-}
-
-describe('EmailLogPanel', () => {
-  it('renders the send rows for an admin, redacted recipients as stored', () => {
-    renderActivityRoutes('/app/activity/emails');
-    expect(
-      screen.getByRole('cell', { name: 'You have been invited to Safentia' }),
-    ).toBeInTheDocument();
-    // The recipient is shown exactly as the server redacted it.
-    expect(
-      screen.getByRole('cell', { name: 'j***@example.com' }),
-    ).toBeInTheDocument();
-    // The window statement is honest about how much is loaded and the redaction
-    // (the sentence appears in both the lede and the note).
-    expect(
-      screen.getByText(/The most recent 3 sends/),
-    ).toBeInTheDocument();
-    expect(
-      screen.getAllByText(/Recipients are stored redacted for privacy\./).length,
-    ).toBeGreaterThan(0);
-  });
-
-  it('labels each outcome in words, never colour alone', () => {
-    renderActivityRoutes('/app/activity/emails');
-    // The badge text carries the meaning; scoped to the badge span so the
-    // "Sent" column header does not double-match.
-    expect(screen.getByText('Sent', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.getByText('Skipped (no provider)')).toBeInTheDocument();
-    expect(screen.getByText('Failed')).toBeInTheDocument();
-  });
-
-  it('narrows sends with the category filter, derived from the loaded window', async () => {
-    const user = userEvent.setup();
-    renderActivityRoutes('/app/activity/emails');
-    await user.selectOptions(screen.getByLabelText('Category'), 'invitation');
-    expect(
-      screen.getByRole('cell', { name: 'You have been invited to Safentia' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('cell', { name: 'A review is due' }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('shows the empty state when no emails have been sent', () => {
-    mocks.emailRows = [];
-    renderActivityRoutes('/app/activity/emails');
-    expect(
-      screen.getByText('No emails have been sent yet.', { exact: false }),
-    ).toBeInTheDocument();
-  });
-
-  it('shows the Emails tab to an admin but hides it from a non-admin', () => {
-    const { unmount } = renderActivityRoutes('/app/activity');
-    expect(screen.getByRole('link', { name: 'Emails' })).toBeInTheDocument();
-    unmount();
-
-    mocks.auth.claims = {
-      orgId: 'org-1',
-      roles: { assessor: true },
-      environment: 'test',
-    } as unknown;
-    renderActivityRoutes('/app/activity');
-    expect(screen.queryByRole('link', { name: 'Emails' })).toBeNull();
-  });
-
-  it('gates the emails route for a non-admin reaching it by direct URL', () => {
-    mocks.auth.claims = {
-      orgId: 'org-1',
-      roles: { assessor: true },
-      environment: 'test',
-    } as unknown;
-    renderActivityRoutes('/app/activity/emails');
-    // The panel never mounts; the access notice stands in for it, so the
-    // admin-only listener is never attached.
-    expect(
-      screen.getByText('Administrator access required'),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('cell', { name: 'You have been invited to Safentia' }),
-    ).toBeNull();
+describe('ActivityRoutes', () => {
+  it('redirects the old /app/activity/emails URL to the Emails area', () => {
+    // The send log moved to its own Emails area (section 6b); the old URL must
+    // land there rather than dead-ending, so bookmarks keep working.
+    render(
+      <MemoryRouter initialEntries={['/app/activity/emails']}>
+        <Routes>
+          <Route path="/app/activity/*" element={<ActivityRoutes />} />
+          <Route path="/app/emails" element={<div>Emails area</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Emails area')).toBeInTheDocument();
   });
 });
 

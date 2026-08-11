@@ -1,0 +1,38 @@
+/* EmailTemplatesPage - the templates directory: row actions and the two-step
+   delete confirm. Tokens only. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Why deletion is unavailable, said in place rather than with a dead button. */
+.blockedNote {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  max-width: 16rem;
+  text-align: end;
+  line-height: 1.4;
+}
+
+.confirmGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.confirmPrompt {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}

@@ -1,0 +1,296 @@
+/* ComposePage - the manual-send wizard: the shared Stepper over one Card per
+   step. Recipient sources stack as sections; chips carry the added outside
+   addresses; the review step holds the sandboxed preview. Tokens only. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.stepper {
+  display: flex;
+  justify-content: center;
+}
+
+.skeletonWrap {
+  padding: var(--space-lg) var(--space-xxl) var(--space-xxl);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: 0 var(--space-xxl) var(--space-lg);
+}
+
+.cardFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  padding: 0 var(--space-xxl) var(--space-xl);
+}
+
+/* Step 1: template choice. */
+.templateList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.templateOption {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  padding: var(--space-sm) 0;
+  border-top: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.templateList li:first-child .templateOption {
+  border-top: none;
+}
+
+.templateOptionText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.templateName {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.templateSubject {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* Step 2: recipient sections. */
+.recipientSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.sectionNote {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.checkList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  font-size: 0.875rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.checkDetail {
+  color: var(--color-text-muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-width: 26rem;
+}
+
+.fieldLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.select,
+.input {
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+}
+
+.select:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.manualRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-md);
+}
+
+.chipList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-background);
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.chipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chipRemove:hover {
+  color: var(--color-text);
+}
+
+.chipRemove:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+}
+
+.countLine {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.capNotice {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+/* Step 4: review. */
+.previewSubject {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.previewFrame {
+  width: 100%;
+  height: min(55vh, 30rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.summaryList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.summaryRow {
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+/* Outcome screen. */
+.outcomeList {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-xxl) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.outcomeRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding: var(--space-sm) 0;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.875rem;
+}
+
+.outcomeRow:first-child {
+  border-top: none;
+}
+
+.outcomeTo {
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.outcomeSent {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.outcomeNotSent {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* Confirm dialog. */
+.confirmCopy {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+}
+
+.confirmFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+}

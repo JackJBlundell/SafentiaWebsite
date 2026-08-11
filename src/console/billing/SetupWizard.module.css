@@ -1,0 +1,229 @@
+/* SetupWizard - the full-screen post-subscribe first run (HoldingScreen's
+ * centred, quiet chrome, widened for a form). The new admin has just paid:
+ * this must feel like the product opening up, not another gate. */
+
+.root {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-xl);
+  background: var(--color-background);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 34rem;
+}
+
+.heading {
+  font-size: 1.25rem;
+  font-weight: 650;
+  color: var(--color-text);
+  letter-spacing: -0.012em;
+  line-height: 1.35;
+  text-align: center;
+}
+
+/* --- pane scaffolding ----------------------------------------------------- */
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+}
+
+.paneHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.paneTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 1.0625rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.paneCopy {
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  font-size: 0.9375rem;
+}
+
+/* The live tick a server-side setupDone mark paints onto a step's heading. */
+.doneChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* --- form ----------------------------------------------------------------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.input {
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-md);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.colourRow {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.colourInput {
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+/* Wraps on a narrow viewport so neither control is pushed off the panel. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.status {
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+/* --- list builder (team + first customer share this pattern) --------------- */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+/* One pending entry: its fields, its outcome line and its remove control. */
+.row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+/* Fields sit side by side where they fit and wrap on narrow viewports. */
+.rowFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  /* Leave room for the absolutely-positioned remove control. */
+  padding-inline-end: var(--space-xl);
+}
+
+.rowFields .field {
+  flex: 1 1 12rem;
+}
+
+/* A sent row locks into its confirmation line. */
+.rowSent {
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+/* The server's calm per-row failure message; the row stays editable. */
+.rowError {
+  color: var(--status-error);
+  font-size: 0.875rem;
+}
+
+.removeButton {
+  position: absolute;
+  top: var(--space-xs);
+  inset-inline-end: var(--space-xs);
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.removeButton:hover:not(:disabled) {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.removeButton:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+}
+
+.addRowLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+/* The calm note shown when the add-row control has run out of allowance. */
+.allowanceNote {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}

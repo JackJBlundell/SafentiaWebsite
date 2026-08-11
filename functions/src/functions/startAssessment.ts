@@ -36,6 +36,7 @@ import {
 } from '../lib/guards';
 import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
+import { assertNotSuspended, resolvePlanContext } from '../lib/planContext';
 import { resolveResponsibleParty } from '../lib/responsibleParty';
 import type {
   StartAssessmentInput,
@@ -97,6 +98,18 @@ export const startAssessment = onCall<StartAssessmentInput>(
           logger.info('Resumed existing assessment', { jobId, assessmentId });
           return { assessmentId, resumed: true };
         }
+
+        // Suspension gate (Phase 3 §6.3 degrade policy), deliberately placed
+        // AFTER the resume branch: an assessment that already exists is
+        // in-flight safety work and stays available whatever the billing
+        // state - only the CREATION of a new one is a metered create. The
+        // caller is an assessor, not an admin, so the copy routes them to the
+        // person who can act.
+        const { entitlements } = await resolvePlanContext(paths, orgId);
+        assertNotSuspended(
+          entitlements,
+          'Your organisation’s subscription has ended, so new assessments cannot be started. Please ask an administrator to check the Billing page.',
+        );
 
         // 4a. Load the PINNED template version as the snapshot. We re-read the
         // template and confirm the pinned version still matches, so the assessment

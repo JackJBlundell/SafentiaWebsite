@@ -46,6 +46,12 @@ import {
 } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
+import { resolvePlanContext } from '../lib/planContext';
+import {
+  assertWithinTemplateLimit,
+  countBillableTemplates,
+  isNewTemplatePublish,
+} from '../lib/templateLimits';
 import {
   CERTIFICATE_POSITIONS,
   QUESTION_TYPES,
@@ -673,6 +679,29 @@ export const publishTemplate = onCall<PublishTemplateInput>(
         const liveSnap = await liveRef.get();
         const live = liveSnap.val() as Template | null;
         const nextVersion = (live?.version ?? 0) + 1;
+
+        // 4a. Plan ceiling (Phase 3 §6): only the FIRST publish of a template
+        // id creates one, so only that path is metered - a republish edits a
+        // template the org already has, and §6.3's block-new-creates-only
+        // policy must never stop an org correcting a template it relies on.
+        // Checked before the claim so a refusal leaves nothing to clean up.
+        // The count itself (non-archived live templates) is read only when the
+        // resolved plan actually carries a ceiling: the unlimited/grandfather
+        // path skips the /templates read entirely.
+        if (isNewTemplatePublish(live)) {
+          const { plan, entitlements } = await resolvePlanContext(paths, orgId);
+          const limit = entitlements.limits.assessmentTemplates;
+          if (limit !== -1) {
+            const templatesSnap = await db.ref(paths.db.templates(orgId)).get();
+            assertWithinTemplateLimit({
+              currentTemplateCount: countBillableTemplates(
+                templatesSnap.val() as Record<string, Template> | null,
+              ),
+              templateLimit: limit,
+              ...(plan?.name ? { planName: plan.name } : {}),
+            });
+          }
+        }
 
         const archiveRef = db.ref(
           paths.db.templateVersion(orgId, templateId, nextVersion),

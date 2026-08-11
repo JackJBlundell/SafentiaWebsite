@@ -52,8 +52,20 @@ export const platform = {
   stats: (date: string): RtdbPath => join('platform', 'stats', date),
   superAdmins: (): RtdbPath => join('platform', 'superAdmins'),
   superAdmin: (uid: string): RtdbPath => join('platform', 'superAdmins', uid),
-  plans: (): RtdbPath => join('platform', 'plans'),
-  plan: (planId: string): RtdbPath => join('platform', 'plans', planId),
+  /** Plans are env-NESTED under the global platform root (Phase 3 §5.3):
+   *  `stripePriceId` differs between Stripe test and live modes, so each env
+   *  carries its own copy of the plan catalogue. The env argument keeps the
+   *  builders global (plans are platform data, not tenant data) while making
+   *  the mode explicit at every call site. */
+  plans: (env: Environment): RtdbPath => join('platform', 'plans', env),
+  plan: (env: Environment, planId: string): RtdbPath =>
+    join('platform', 'plans', env, planId),
+  /** Super-admin billing activity feed (Phase 3 §5.5). Env-nested for the same
+   *  reason as plans: test-mode Stripe events must never mix into live revenue. */
+  financeEvents: (env: Environment): RtdbPath =>
+    join('platform', 'financeEvents', env),
+  financeEvent: (env: Environment, eventId: string): RtdbPath =>
+    join('platform', 'financeEvents', env, eventId),
   /** Publicly-readable client config (force-update gate, story 1080). */
   clientConfig: (): RtdbPath => join('platform', 'clientConfig'),
   /** Admin-editable AI context (regulatory source-of-truth for the assessment
@@ -67,6 +79,26 @@ export const platform = {
   leads: (): RtdbPath => join('platform', 'leads'),
   lead: (leadId: string): RtdbPath => join('platform', 'leads', leadId),
 } as const;
+
+/**
+ * Self-serve onboarding state (Phase 3 §5.4). TOP-LEVEL and outside the
+ * `/live`/`/test` env roots BY DESIGN: onboarding begins before the user has an
+ * organisation, so there is no tenant tree to scope it to - the env is derived
+ * from the user's testMode claim only later, at provisioning. Keyed by uid;
+ * owner-read, server-write (rules). Not under `platform` because it is per-user
+ * journey state, not operator data.
+ */
+export const usersOnboarding = (uid: string): RtdbPath =>
+  join('usersOnboarding', uid);
+
+/**
+ * Per-user console UI state (Phase 3 §5.6): the Getting Started checklist and
+ * guided-tour flags. TOP-LEVEL beside `usersOnboarding` for the same reason -
+ * it is per-PERSON presentation state, not tenant data, and a preference does
+ * not change meaning between the live and test envs. Owner read/write (rules).
+ */
+export const consoleState = (uid: string): RtdbPath =>
+  join('consoleState', uid);
 
 // ----------------------------------------------------------------------------
 // RTDB builders for a given environment. Every path is prefixed with the env
@@ -249,6 +281,18 @@ function rtdbFor(env: Environment) {
     emailLog: (orgId: string) => root('emailLog', orgId),
     emailLogEntry: (orgId: string, entryId: string) =>
       root('emailLog', orgId, entryId),
+
+    /** Org-authored email templates (admin-edited directly under rules; the
+     *  editor autosaves here, assignment to a kind is what makes one live). */
+    emailTemplates: (orgId: string) => root('emailTemplates', orgId),
+    emailTemplate: (orgId: string, templateId: string) =>
+      root('emailTemplates', orgId, templateId),
+
+    /** Per-kind email settings: enabled toggle + assigned template. An absent
+     *  node means enabled with the built-in default, so nothing is seeded. */
+    emailKindSettings: (orgId: string) => root('emailSettings', orgId, 'kinds'),
+    emailKindSetting: (orgId: string, kindId: string) =>
+      root('emailSettings', orgId, 'kinds', kindId),
 
     /** Invitations (token-accepted; env carried on the invite link). */
     invitations: () => root('invitations'),

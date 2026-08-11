@@ -36,14 +36,11 @@ import {
 } from '../lib/guards';
 import { assertObject, requireString, requireTimestamp, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
+import { assertNotSuspended, resolvePlanContext } from '../lib/planContext';
 import { assertValidSlot, assertNoSlotClash } from '../lib/jobSlots';
 import { sendNotification } from '../lib/notifications';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
-import {
-  sendJobChangeEmail,
-  sendVisitCustomerEmails,
-  formatVisitDate,
-} from '../lib/jobEmails';
+import { sendJobChangeEmail, sendVisitCustomerEmails } from '../lib/jobEmails';
 import { isUkToday, ukWhenPhrase } from '../lib/ukCalendar';
 import type {
   CreateJobInput,
@@ -94,6 +91,18 @@ export const createJob = onCall<CreateJobInput>(
       if (scheduledUntil !== undefined) {
         assertValidSlot(scheduledFor, scheduledUntil);
       }
+
+      // Suspension gate (Phase 3 §6.3 degrade policy): a dead subscription
+      // blocks CREATES only - existing jobs, in-flight assessments and every
+      // read stay untouched. Checked after validation so a malformed payload
+      // still gets its precise validation error (the manageCustomer idiom),
+      // and the caller here is always an admin, so the copy can point at
+      // Billing directly.
+      const { entitlements } = await resolvePlanContext(paths, orgId);
+      assertNotSuspended(
+        entitlements,
+        'Your organisation’s subscription has ended, so new jobs cannot be created. Restart it from the Billing page to continue.',
+      );
 
       // 3a. Template must exist and be PUBLISHED at the requested version (1031).
       const templateSnap = await db
@@ -225,24 +234,20 @@ export const createJob = onCall<CreateJobInput>(
         orgId,
         assessorUid,
         {
+          kind: 'job-assigned',
           jobId,
           buildingName: building.name,
           customerId,
           scheduledFor,
           scheduledUntil,
-          subject: today
-            ? `New job today: ${building.name}`
-            : `New job assigned: ${building.name}`,
-          heading: today
+          // The email's template names the DATE where the notification says
+          // 'today': it is read hours or days after it lands, by which time a
+          // relative phrase would be a lie. Only the same-day subject/heading
+          // variance travels from here.
+          subjectPhrase: today ? 'New job today' : 'New job assigned',
+          headingPhrase: today
             ? 'A new job in your diary today'
             : 'A new job in your diary',
-          // The email names the DATE where the notification says 'today': it is
-          // read hours or days after it lands, by which time a relative phrase
-          // would be a lie.
-          body: `You have been assigned an assessment at ${building.name}, scheduled for ${formatVisitDate(scheduledFor, scheduledUntil)}.`,
-          extraParagraphs: [
-            'Open the job for the building, its records and the assessment you will be carrying out.',
-          ],
         },
         logger,
       );

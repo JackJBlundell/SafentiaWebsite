@@ -2,9 +2,9 @@
 // PlatformDashboard - the super-admin platform landing (FR-E24).
 //
 // The oversight home: top-line stat tiles (organisations, members, buildings,
-// customers), a real growth line chart, and a preview of the future billing
-// view. The full organisations table lives one link away at
-// /app/admin/organisations.
+// customers), a real growth line chart, and the live revenue summary (the
+// Finance tab's headline tiles, one link away from the full tab). The full
+// organisations table lives one link away at /app/admin/organisations.
 //
 // Counts and growth are live per-org reads, exactly the technique OrgsOverview
 // uses: one bounded subscription per org per node, each read by a tiny invisible
@@ -33,7 +33,7 @@ import { PageHeader, ErrorNotice } from '../ui/Page';
 import { Skeleton, SkeletonStatus } from '../ui/Skeleton';
 import { GrowthChart } from './GrowthChart';
 import { usePlatformEnv } from './platformEnv';
-import { RevenuePreview } from './RevenuePreview';
+import { FinanceSummary } from './FinancePage';
 import styles from './PlatformDashboard.module.css';
 
 /** How many months of invitation history the growth chart plots. */
@@ -310,7 +310,9 @@ export function PlatformDashboard() {
           )}
         </Card>
 
-        <RevenuePreview />
+        {/* Live revenue summary: the same helpers and cached reads as the
+            Finance tab, so the two surfaces always agree. */}
+        <FinanceSummary />
       </div>
 
       <Card>

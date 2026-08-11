@@ -45,8 +45,9 @@ import {
 import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
-import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
-import { orgEmailBrand, renderBrandedEmail } from '../lib/emailTemplates';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { orgEmailBrand } from '../lib/emailTemplates';
+import { sendKindEmail } from '../lib/templatedEmail';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import type {
   RequestInfoInput,
@@ -126,43 +127,27 @@ async function sendInfoRequestedEmail(
 
     const profileSnap = await db.ref(paths.db.orgProfile(orgId)).get();
     const brand = orgEmailBrand(profileSnap.val() as OrgProfile | null);
-    const subject = `More information needed on your assessment of ${buildingName}`;
-    const body = `An auditor has asked for more information on ${flagged} ${flagged === 1 ? 'question' : 'questions'} in your fire risk assessment of ${buildingName}.`;
-    await dispatchEmail(
+    // The copy lives in the 'info-requested' catalogue entry (or the org's own
+    // saved template); this site supplies only the values it computes.
+    await sendKindEmail(
       {
+        kind: 'info-requested',
+        env: paths.env,
+        orgId,
         to: member.email,
-        subject,
-        body,
-        html: renderBrandedEmail({
-          brand,
-          preheader: body,
-          heading: 'More information required',
-          paragraphs: [
-            body,
-            'Open the assessment, answer each flagged question and resubmit it. The assessment returns to the validation queue once you do.',
-          ],
-          detailRows: [
-            { label: 'Building', value: buildingName },
-            {
-              label: 'Questions flagged',
-              value: `${flagged} ${flagged === 1 ? 'question' : 'questions'}`,
-            },
-            { label: 'Response due by', value: formatDueDate(dueBy) },
-          ],
-          // The job is the assessor's own view of this work in the console
-          // (/app/validation is the auditors' queue, which an assessor has no
-          // business landing in). On a phone the app deep link is the better
-          // route, but a web CTA works on every device the email opens on.
-          cta: {
-            label: 'Open the job',
-            url: `${WEB_ORIGIN}/app/jobs/${assessment.jobId}`,
-          },
-          footerNote:
-            'You are receiving this because you are the assessor on this job. You can turn these emails off in your Safentia account settings.',
-        }),
+        variables: {
+          'building.name': buildingName,
+          'info.flaggedPhrase': `${flagged} ${flagged === 1 ? 'question' : 'questions'}`,
+          'info.dueDate': formatDueDate(dueBy),
+        },
+        brand,
+        // The job is the assessor's own view of this work in the console
+        // (/app/validation is the auditors' queue, which an assessor has no
+        // business landing in). On a phone the app deep link is the better
+        // route, but a web CTA works on every device the email opens on.
+        kindLink: `${WEB_ORIGIN}/app/jobs/${assessment.jobId}`,
       },
       logger,
-      { orgId, env: paths.env, category: 'info-requested' },
     );
   } catch (error) {
     logger.warn('Information-requested email failed', {

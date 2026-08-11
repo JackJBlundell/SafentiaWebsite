@@ -13,16 +13,21 @@
 // separate, server-owned publishTemplate step.
 // ============================================================================
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import { push, ref, set } from 'firebase/database';
+import { push, ref, set, update } from 'firebase/database';
+import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
 import { firebase } from '../../firebase';
+import { consoleState as consoleStatePath } from '../../paths';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import type { ReportStandard, Template } from '../../types';
 import { REPORT_STANDARDS } from '../../types';
+import { isWithinLimit } from '../billing/entitlements';
+import { useEntitlements } from '../billing/useEntitlements';
+import { UpsellNotice } from '../billing/UpsellNotice';
 import { Card } from '../ui/Card';
 import { DataTable, type Column, type RowExpansion } from '../ui/DataTable';
 import { Toolbar, ToolbarGroup } from '../ui/Grid';
@@ -363,10 +368,25 @@ interface PublishedState {
 export function TemplatesList() {
   // No isAdmin branches here: TemplatesRoutes gates the whole area to admins.
   const { ready, orgId, db } = useOrgScope();
+  const { user } = useAuth();
+  const uid = user?.uid;
   const location = useLocation();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // The Getting Started "View your templates" tick (Phase 3 §5.6): viewing IS
+  // the step, so the visit is recorded per-person at consoleState/{uid}. An
+  // update() with a nested path touches only this one flag; best-effort - a
+  // failed write simply leaves the tick for a later visit.
+  useEffect(() => {
+    if (!uid) {
+      return;
+    }
+    update(ref(firebase.db(), consoleStatePath(uid)), {
+      'gettingStarted/templatesVisited': true,
+    }).catch(() => {});
+  }, [uid]);
 
   // The builder lands here straight after a publish, carrying what it
   // published in navigation state; dismissing replaces the entry with no
@@ -401,6 +421,22 @@ export function TemplatesList() {
 
   const total = mergeRows(templates.data, drafts.data).length;
   const loading = templates.isLoading || drafts.isLoading;
+
+  // Entitlement gate (presentation only - publishTemplate enforces the same
+  // ceiling server-side): at the plan's template limit the New/Duplicate entry
+  // point gives way to the upsell notice. Counted over non-archived PUBLISHED
+  // templates, the same population the server counts at publish, so the gate
+  // and the enforcement can never disagree about the number.
+  const billing = useEntitlements();
+  const templateLimit = billing.entitlements.limits.assessmentTemplates;
+  const publishedCount = Object.values(templates.data ?? {}).filter(
+    (template) => template.status !== 'archived',
+  ).length;
+  const templatesAtLimit =
+    !billing.loading && !isWithinLimit(templateLimit, publishedCount);
+  const templateGateMessage = billing.entitlements.suspended
+    ? 'Your subscription has ended, so creating templates is paused. Your existing templates are unaffected.'
+    : `Your plan includes ${templateLimit} assessment ${templateLimit === 1 ? 'template' : 'templates'}. Upgrade to add more.`;
 
   return (
     <div className={styles.root}>
@@ -456,7 +492,14 @@ export function TemplatesList() {
             </ToolbarGroup>
             {!creating && (
               <ToolbarGroup push>
-                <Button onClick={() => setCreating(true)}>New template</Button>
+                {templatesAtLimit ? (
+                  <UpsellNotice
+                    message={templateGateMessage}
+                    isAdmin={billing.isAdmin}
+                  />
+                ) : (
+                  <Button onClick={() => setCreating(true)}>New template</Button>
+                )}
               </ToolbarGroup>
             )}
           </Toolbar>
@@ -474,7 +517,14 @@ export function TemplatesList() {
               body="Create your first assessment template. Start blank, or duplicate a base template and customise it."
               action={
                 !creating ? (
-                  <Button onClick={() => setCreating(true)}>New template</Button>
+                  templatesAtLimit ? (
+                    <UpsellNotice
+                      message={templateGateMessage}
+                      isAdmin={billing.isAdmin}
+                    />
+                  ) : (
+                    <Button onClick={() => setCreating(true)}>New template</Button>
+                  )
                 ) : undefined
               }
             />

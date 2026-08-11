@@ -1,0 +1,310 @@
+/* FloatingGettingStarted - the onboarding checklist as a floating widget.
+
+   Layering: z-index 90, deliberately BELOW the guided tour's overlay
+   (tour/ConsoleTour.module.css, z-index 100), so a running tour always covers
+   the widget; the mobile scrim sits one step lower again.
+
+   Layout: mobile-first. The pill docks bottom-centre and the panel becomes a
+   bottom sheet below the shell's rail breakpoint; at 1024px (mirrors the
+   ConsoleShell.module.css rail media query) both anchor bottom-right.
+
+   Motion: entrances ride the motion tokens and are switched off entirely under
+   prefers-reduced-motion. Exits unmount immediately - a delayed-unmount state
+   machine purely to animate a close would be ceremony for a widget this small. */
+
+/* --- The collapsed pill ---------------------------------------------------- */
+
+.pill {
+  position: fixed;
+  z-index: 90;
+  inset-inline: var(--space-md);
+  inset-block-end: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-block-size: var(--min-touch-target);
+  padding: var(--space-sm) var(--space-xl);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  box-shadow: 0 8px 24px var(--shadow-color);
+  cursor: pointer;
+  animation: rise var(--motion-base) var(--easing);
+}
+
+.pill:hover {
+  border-color: var(--color-border-strong);
+}
+
+.pillCount {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- The mobile scrim ------------------------------------------------------ */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 89;
+  background: color-mix(in srgb, var(--shadow-color) 32%, transparent);
+  animation: fadeIn var(--motion-fast) var(--easing);
+}
+
+/* --- The expanded panel (bottom sheet below the breakpoint) ---------------- */
+
+.panel {
+  position: fixed;
+  z-index: 90;
+  inset-inline: 0;
+  inset-block-end: 0;
+  display: flex;
+  flex-direction: column;
+  max-block-size: 70dvh;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-block-end: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: 0 8px 24px var(--shadow-color);
+  padding-block-end: env(safe-area-inset-bottom, 0px);
+  animation: rise var(--motion-base) var(--easing);
+  outline: none;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.title {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.progress {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.collapseButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.collapseButton:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+/* Points DOWN: the panel collapses towards the bottom edge it sits on. */
+.chevron {
+  inline-size: 1rem;
+  block-size: 1rem;
+  stroke: currentColor;
+}
+
+/* The checklist scrolls INSIDE the panel; header and footer stay put. */
+.list {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: var(--space-xs) var(--space-lg);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-block: var(--space-sm);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.item:last-child {
+  border-block-end: none;
+}
+
+/* The tick circle: empty outline for "to do", filled green for "done". The
+   states are also spoken (visually-hidden "Done:"/"To do:" prefixes), so
+   colour is never the only carrier. */
+.tick,
+.tickDone {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.tick {
+  border: 2px solid var(--color-border-strong);
+}
+
+.tickDone {
+  border: 2px solid var(--status-success);
+  background: var(--status-success-surface);
+  color: var(--status-success);
+}
+
+.itemText {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.label {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.labelDone {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--color-text-muted);
+}
+
+.description {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.itemAction {
+  flex-shrink: 0;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  border-block-start: 1px solid var(--color-border);
+}
+
+/* The permanent hide earns only a quiet link, not a button's weight. */
+.hideLink {
+  padding: var(--space-xs) var(--space-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.hideLink:hover {
+  color: var(--color-text);
+}
+
+.confirmRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  inline-size: 100%;
+}
+
+.confirmText {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Visually hidden, still read by assistive tech. */
+.srOnly {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Desktop: both states anchor bottom-right ------------------------------ */
+
+@media (min-width: 1024px) {
+  .pill {
+    inset-inline: auto;
+    inset-inline-end: var(--space-xl);
+    inset-block-end: var(--space-xl);
+  }
+
+  .backdrop {
+    display: none;
+  }
+
+  .panel {
+    inset-inline: auto;
+    inset-inline-end: var(--space-xl);
+    inset-block-end: var(--space-xl);
+    inline-size: 22rem;
+    max-inline-size: calc(100vw - (2 * var(--space-xl)));
+    max-block-size: 70vh;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding-block-end: 0;
+  }
+}
+
+/* --- Motion ---------------------------------------------------------------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-sm));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill,
+  .panel,
+  .backdrop {
+    animation: none;
+  }
+}

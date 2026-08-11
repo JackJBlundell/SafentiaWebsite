@@ -1,9 +1,12 @@
 // ============================================================================
 // LoginRoute - /login, the console's front door (stories 1016/1017, brief 4.1).
 //
-// Email/password plus Google, mirroring the app's sign-in screen. There is NO
-// sign-up path on the web: users arrive by invitation, so offering registration
-// here would only manufacture accounts with no membership.
+// Email/password plus Google, mirroring the app's sign-in screen. This door
+// also opens the self-serve journey (Phase 3): the marketing site's "Get
+// started" lands here, and a session with no membership falls through to the
+// console's onboarding gates (org details -> plan -> payment -> setup). The
+// brand panel carries a quiet book-a-demonstration footnote for anyone who
+// wants the guided path first.
 //
 // Error copy comes pre-mapped from the AuthProvider (non-enumerating, no raw
 // Firebase codes), so this screen only decides where to put it, never what it

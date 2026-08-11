@@ -8,13 +8,25 @@
 // tabs on smaller screens. Same links, same DOM, two presentations.
 // ============================================================================
 
+import { lazy, Suspense } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthProvider';
 import { EmptyState } from '../ui/Page';
+import { Skeleton } from '../ui/Skeleton';
 import { OrganisationSettingsPage } from './OrganisationSettingsPage';
 import { RagSettingsPage } from './RagSettingsPage';
 import { NotificationSettingsPage } from './NotificationSettingsPage';
 import styles from './SettingsRoutes.module.css';
+
+// Code-split (CustomersRoutes precedent): the Billing page pulls in
+// @stripe/react-stripe-js, which must stay out of the pre-rendered console
+// chunk - the SSG build cannot carry Stripe.js weight for every visitor who
+// never opens Billing.
+const BillingSettingsPage = lazy(() =>
+  import('../billing/BillingSettingsPage').then((module) => ({
+    default: module.BillingSettingsPage,
+  })),
+);
 
 const SUB_NAV = [
   { to: '/app/settings', label: 'Organisation', end: true },
@@ -22,6 +34,7 @@ const SUB_NAV = [
   // The path stays /reminders (it is bookmarked and linked from email footers)
   // while the surface now covers every scheduled reminder, not reviews alone.
   { to: '/app/settings/reminders', label: 'Reminders', end: false },
+  { to: '/app/settings/billing', label: 'Billing', end: false },
 ] as const;
 
 export function SettingsRoutes() {
@@ -55,6 +68,14 @@ export function SettingsRoutes() {
           <Route index element={<OrganisationSettingsPage />} />
           <Route path="rag" element={<RagSettingsPage />} />
           <Route path="reminders" element={<NotificationSettingsPage />} />
+          <Route
+            path="billing"
+            element={
+              <Suspense fallback={<Skeleton height="8rem" />}>
+                <BillingSettingsPage />
+              </Suspense>
+            }
+          />
         </Routes>
       </div>
     </div>

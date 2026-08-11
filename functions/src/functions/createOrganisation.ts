@@ -1,52 +1,42 @@
 // ============================================================================
 // createOrganisation (callable, PLATFORM OPERATOR ONLY) - Phase 2 admin.
 //
-// Until Phase 3 self-serve onboarding (Stripe) arrives, organisations are
-// founded by the platform operator: the operator (superAdmin claim) creates the
-// org, becomes its first admin member, then invites the client's real
-// administrators via the normal staff invitations. Phase 3 replaces this gate
-// with self-serve onboarding; the provisioning below is already shaped for it.
-// The gate is the superAdmin CLAIM, not an org role - the operator is founding
-// a tenant, so no org claims exist yet. We:
+// Phase 3 self-serve onboarding (Stripe) provisions organisations from the
+// webhook; this operator path remains for operator-founded (grandfathered,
+// unlimited) tenants: the operator (superAdmin claim) creates the org, becomes
+// its first admin member, then invites the client's real administrators via the
+// normal staff invitations. The gate is the superAdmin CLAIM, not an org role -
+// the operator is founding a tenant, so no org claims exist yet. We:
 //   1. Enforce App Check + auth + the superAdmin claim, and rate limit.
 //   2. Validate the org name.
-//   3. Atomically write the profile (platform-default brand), the founder's
-//      admin membership, the /userOrgs login index AND the /activity entry in
-//      ONE multi-location update - the audit entry can never be skipped, which
-//      is why creation is a callable and not a rules-governed client write.
-//   4. Re-mint the caller's claims pointed at the new org (the same helper
-//      setActiveOrganisation uses) so they land in it immediately.
+//   3. Provision via lib/provisionOrganisation - the SAME atomic bootstrap the
+//      self-serve webhook path runs (profile with the platform-default brand,
+//      usage counters, the founder's admin membership, the /userOrgs login
+//      index AND the /activity entry in ONE multi-location update), passed an
+//      EMPTY subscription because operator orgs carry no Stripe fields (the
+//      entitlements module grandfathers them) - which also means the helper's
+//      per-subscription idempotency marker does not apply here.
+//   4. The helper re-mints the caller's claims pointed at the new org (the same
+//      path setActiveOrganisation uses) so they land in it immediately.
 // onMembershipChange also fires on the membership write and recomputes the same
 // claims - the explicit writeClaims just guarantees the ACTIVE org switches even
 // if the trigger lands late, and both compute from the same trusted record.
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
-import { auth, db } from '../admin';
+import { auth } from '../admin';
 import { callableOptions } from '../lib/callable';
 import { createLogger } from '../lib/logging';
 import { fail, runCallable } from '../lib/errors';
 import { assertAppCheck, assertAuth, assertSuperAdmin } from '../lib/guards';
-import { forEnv, envFromTestMode } from '../lib/paths';
+import { envFromTestMode } from '../lib/paths';
 import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
-import { computeClaims, writeClaims } from '../lib/claims';
-import { activityUpdate } from '../lib/events';
+import { provisionOrganisation } from '../lib/provisionOrganisation';
 import type {
   CreateOrganisationInput,
   CreateOrganisationResult,
-  OrgMember,
-  OrgProfile,
 } from '../shared/types';
-
-/** Platform-default brand for a fresh org. This mirrors DEFAULT_BRAND in the
- *  design system's palette and is not an independent choice: a new org has not
- *  branded itself yet, its console still says "Powered by Safentia", and the
- *  honest pre-branding state is the product's own accent. Pinning a colour the
- *  palette no longer contains would leave a stale copy behind instead.
- *  The admin re-brands via updateOrgProfile; a default means the themed report
- *  and portal are never left without valid colours. */
-const DEFAULT_BRAND = { primary: '#D9C554', secondary: '#1E3A8A' } as const;
 
 export const createOrganisation = onCall<CreateOrganisationInput>(
   callableOptions,
@@ -65,7 +55,6 @@ export const createOrganisation = onCall<CreateOrganisationInput>(
         await assertRateLimit(uid, 'createOrganisation');
         const testMode = request.auth?.token?.testMode === true;
         const env = envFromTestMode(testMode);
-        const paths = forEnv(env);
 
         // 2. Validate the org name.
         const input = assertObject(request.data);
@@ -81,36 +70,18 @@ export const createOrganisation = onCall<CreateOrganisationInput>(
           );
         }
 
-        // 3. Atomic bootstrap. push() mints the org id; the profile, the admin
-        // membership, the login index and the audit entry land together so the
-        // database is never left with a half-created organisation (brief 18.3).
-        const orgId = db.ref().push().key as string;
-        const profile: OrgProfile = { name, brand: { ...DEFAULT_BRAND } };
-        const member: OrgMember = {
-          roles: { admin: true },
-          name: userRecord.displayName ?? userRecord.email,
-          email: userRecord.email,
-          status: 'active',
-          // A test-env founder produces a test member, mirroring 4.8 (the marker
-          // is what onMembershipChange copies into the testMode claim).
-          ...(testMode ? { testMode: true as const } : {}),
-        };
-        const update: Record<string, unknown> = {
-          [paths.db.orgProfile(orgId)]: profile,
-          [paths.db.orgMember(orgId, uid)]: member,
-          [paths.db.userOrg(uid, orgId)]: true,
-          ...activityUpdate(paths, orgId, {
-            actorUid: uid,
-            action: 'organisation.created',
-            target: orgId,
-          }),
-        };
-        await db.ref().update(update);
-
-        // 4. Point the caller's ACTIVE org at the new tenant (same path as
-        // setActiveOrganisation); the client force-refreshes its token after.
-        const nextClaims = computeClaims(member, orgId);
-        await writeClaims(uid, nextClaims);
+        // 3+4. The shared atomic bootstrap + claims re-mint. Empty subscription:
+        // operator orgs are grandfathered/unlimited with no Stripe fields.
+        const { orgId } = await provisionOrganisation(
+          {
+            env,
+            uid,
+            email: userRecord.email,
+            orgName: name,
+            subscription: {},
+          },
+          createLogger({ fn: 'createOrganisation' }),
+        );
 
         const logger = createLogger({ fn: 'createOrganisation', orgId });
         logger.info('Organisation created', { founder: uid, env });

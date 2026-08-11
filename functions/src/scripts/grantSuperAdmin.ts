@@ -33,7 +33,14 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const user = await auth.getUserByEmail(email).catch(() => null);
+  // Only a genuine not-found means "no account": any other failure (bad
+  // credentials, wrong project, quota) must surface as itself, not be
+  // mistaken for a missing user (see grantTestMode for the war story).
+  const user = await auth.getUserByEmail(email).catch((error: unknown) => {
+    const code = (error as { code?: string }).code;
+    if (code === 'auth/user-not-found') return null;
+    throw error;
+  });
   if (!user) {
     console.error(`No account exists for ${email}. Nothing was changed.`);
     process.exit(1);

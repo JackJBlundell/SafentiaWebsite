@@ -8,12 +8,15 @@
 // route, while the signed-in console at /app/** stays a single-page app served
 // from its own pre-rendered shell (see firebase.json rewrites).
 //
-// There are deliberately NO external hosts anywhere in the built output: the
+// There are deliberately NO external hosts anywhere in the marketing pages: the
 // typeface is self-hosted via @fontsource-variable/inter rather than fetched
 // from the Google Fonts CDN, because the Agreement makes the Client the data
 // controller for personal data (clause 11.2) and a font CDN request discloses
 // visitor IP addresses to a third party we have not listed as a sub-processor
-// (clause 11.4).
+// (clause 11.4). The ONE exception is Stripe, a listed sub-processor for the
+// billing feature: the AUTHED billing surface (and only it) loads Stripe.js
+// from js.stripe.com via dynamic import (src/console/billing/stripeClient.ts).
+// No marketing page loads anything third-party.
 // ============================================================================
 
 import { defineConfig } from 'vitest/config';

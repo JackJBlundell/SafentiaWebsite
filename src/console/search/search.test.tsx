@@ -78,6 +78,18 @@ vi.mock('../admin/useSuperAdminClaim', () => ({
 
 vi.mock('../../seo/Seo', () => ({ Seo: () => null }));
 
+// The console ladder now waits on the caller's usersOnboarding read before
+// rendering the shell; these are search-placement tests, so the read settles
+// instantly with no journey in flight (the ladder itself is covered in
+// console.test.tsx).
+vi.mock('../billing/useOnboardingNode', () => ({
+  useOnboardingNode: () => ({
+    data: null,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 vi.mock('../lib/reportClientError', () => ({
   reportClientError: vi.fn(),
   initGlobalErrorReporting: vi.fn(),

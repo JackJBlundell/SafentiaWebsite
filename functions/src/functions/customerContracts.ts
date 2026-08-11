@@ -37,13 +37,11 @@ import { createLogger } from '../lib/logging';
 import { forEnv } from '../shared/paths';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import { sendNotification } from '../lib/notifications';
-import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
-import {
-  orgEmailBrand,
-  renderBrandedEmail,
-  type EmailBrand,
-} from '../lib/emailTemplates';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { orgEmailBrand, type EmailBrand } from '../lib/emailTemplates';
+import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
 import { portalAccessCascade } from '../lib/customerAccess';
+import { adjustCustomerCount } from '../lib/usageCounters';
 import { activityUpdate } from '../lib/events';
 import { utcDayNumber } from '../lib/reviewWindows';
 import { SYSTEM_ACTOR_UID } from '../shared/types';
@@ -55,6 +53,10 @@ import type {
 } from '../shared/types';
 
 const ENVIRONMENTS: Environment[] = ['live', 'test'];
+
+/** The per-org template resolution the seam returns, read once per org so the
+ *  admin fan-out below never re-resolves it. */
+type KindConfig = Awaited<ReturnType<typeof loadKindConfig>>;
 
 /** The contract end day, written the way a person reads a date. */
 function formatDate(millis: number): string {
@@ -94,6 +96,9 @@ export const customerContracts = onSchedule(
         let admins: Array<{ uid: string; email?: string }> | null = null;
         let orgName: string | null = null;
         let orgBrand: EmailBrand | null = null;
+        // The kind's resolved template, read once per org alongside the
+        // audience rather than once per customer or per admin.
+        let kindConfig: KindConfig | null = null;
 
         for (const [customerId, customer] of Object.entries(customers ?? {})) {
           const endDate = customer?.contractEndDate;
@@ -122,6 +127,12 @@ export const customerContracts = onSchedule(
           await db.ref().update(update);
           archived += 1;
 
+          // Usage accounting (Phase 3 brief 5.2): this archive is the same
+          // state change as an admin's, so it moves the same counter. The
+          // active-only guard above means it can never decrement twice for the
+          // one customer. Best-effort - the archive has already committed.
+          await adjustCustomerCount(paths, orgId, -1, logger);
+
           if (admins === null) {
             const membersSnap = await db.ref(paths.db.orgMembers(orgId)).get();
             const members =
@@ -136,37 +147,28 @@ export const customerContracts = onSchedule(
             const profile = profileSnap.val() as OrgProfile | null;
             orgName = profile?.name ?? 'Your organisation';
             orgBrand = orgEmailBrand(profile);
+            kindConfig = await loadKindConfig(
+              env,
+              orgId,
+              'contract-ended',
+              logger,
+            );
           }
 
           const customerName = customer.name ?? customerId;
           const body = `The contract with ${customerName} ended on ${formatDate(
             endDate,
           )}. They have been archived and their portal access has been withdrawn.`;
-          const subject = `Contract ended: ${customerName}`;
-          const html = renderBrandedEmail({
-            brand: orgBrand ?? undefined,
-            preheader: body,
-            heading: `${orgName}: a customer contract has ended`,
-            paragraphs: [
-              body,
-              'Their sites, buildings and assessment history are unchanged and stay in your records. Restore the customer if the contract has been renewed - that returns the portal access this withdrew.',
-            ],
-            detailRows: [
-              { label: 'Customer', value: customerName },
-              { label: 'Contract ended', value: formatDate(endDate) },
-            ],
-            cta: {
-              label: 'View the customer',
-              url: `${WEB_ORIGIN}/app/customers/${customerId}`,
-            },
-            footerNote: `You are receiving this because you are an administrator of ${orgName} on Safentia.`,
-          });
 
           for (const admin of admins) {
             // This is an account-state change the organisation MUST know about -
-            // access has been withdrawn on their behalf - so it is not one of
-            // the quietenable categories a member can switch off, in the same
-            // way the overdue review notice always sends.
+            // access has been withdrawn on their behalf - so no INDIVIDUAL can
+            // switch it off: it is not one of the quietenable categories a
+            // member's preferences cover, in the same way the overdue review
+            // notice always sends. The ORGANISATION, though, can now silence
+            // the email kind as a whole: sendKindEmail honours the org's
+            // 'contract-ended' toggle, which is an intended new capability of
+            // the templating seam, not a per-member preference.
             await sendNotification(
               paths,
               orgId,
@@ -175,11 +177,25 @@ export const customerContracts = onSchedule(
               logger,
             );
             if (admin.email) {
-              await dispatchEmail({ to: admin.email, subject, body, html }, logger, {
-                orgId,
-                env,
-                category: 'contract-ended',
-              });
+              await sendKindEmail(
+                {
+                  kind: 'contract-ended',
+                  env,
+                  orgId,
+                  to: admin.email,
+                  variables: {
+                    'org.name': orgName ?? 'Your organisation',
+                    'customer.name': customerName,
+                    'contract.endDate': formatDate(endDate),
+                  },
+                  // Guaranteed set alongside `admins`; the fallback is the
+                  // same Safentia default the renderer would choose.
+                  brand: orgBrand ?? orgEmailBrand(null),
+                  kindLink: `${WEB_ORIGIN}/app/customers/${customerId}`,
+                  config: kindConfig ?? undefined,
+                },
+                logger,
+              );
             }
           }
         }

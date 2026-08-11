@@ -46,6 +46,12 @@ import { activityUpdate } from '../lib/events';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { issueInvitation } from '../lib/invitations';
 import { portalAccessCascade } from '../lib/customerAccess';
+import { adjustCustomerCount } from '../lib/usageCounters';
+import { markOnboardingStep } from '../lib/onboardingMarks';
+import {
+  assertWithinCustomerLimit,
+  resolveCustomerLimitContext,
+} from '../lib/customerLimits';
 import type {
   Customer,
   CustomerContact,
@@ -240,6 +246,14 @@ export const manageCustomer = onCall<ManageCustomerInput>(
             };
           }
 
+          // Plan ceiling (Phase 3 §6): creates alone are metered - archive,
+          // restore and edit never consult the limit (§6.3, block-new-creates
+          // only). Checked after validation so a malformed payload still gets
+          // its precise validation error rather than a limit refusal.
+          assertWithinCustomerLimit(
+            await resolveCustomerLimitContext(paths, orgId),
+          );
+
           const customer: Customer = {
             name: fields.name,
             status: 'active',
@@ -303,6 +317,14 @@ export const manageCustomer = onCall<ManageCustomerInput>(
           // invitation must NOT fail the call: we log loudly and omit inviteId -
           // the UI offers a resend from the invitations list.
           const logger = createLogger({ fn: 'manageCustomer', orgId });
+
+          // Usage accounting (Phase 3 brief 5.2): the customer is real, so it
+          // counts. Best-effort - a counter failure never fails the creation.
+          await adjustCustomerCount(paths, orgId, 1, logger);
+
+          // Setup-wizard piggyback (Phase 3 §5.4): best-effort, never throws.
+          await markOnboardingStep(uid, orgId, 'customer', logger);
+
           let inviteId: string | undefined;
           if (primaryContact?.email && primaryContactId) {
             try {
@@ -351,6 +373,7 @@ export const manageCustomer = onCall<ManageCustomerInput>(
             field: 'customerId',
           });
         }
+        const existing = existingSnap.val() as Customer;
 
         const update: Record<string, unknown> = {};
         if (action === 'update') {
@@ -389,7 +412,6 @@ export const manageCustomer = onCall<ManageCustomerInput>(
           // Restore: the inverse flip. Only an archived customer can return to
           // active - restoring anything else is a client error, not a no-op,
           // so a stale UI learns its state is wrong.
-          const existing = existingSnap.val() as Customer;
           if (existing.status !== 'archived') {
             throw fail.invalidArgument(
               'Only an archived customer can be restored.',
@@ -429,9 +451,19 @@ export const manageCustomer = onCall<ManageCustomerInput>(
         );
         await db.ref().update(update);
 
-        createLogger({ fn: 'manageCustomer', orgId }).info(`Customer ${action}d`, {
-          customerId,
-        });
+        const logger = createLogger({ fn: 'manageCustomer', orgId });
+
+        // Usage accounting (Phase 3 brief 5.2): only a genuine boundary
+        // crossing moves the counter - re-archiving an already-archived
+        // customer changed nothing, so it must not decrement twice. Restore is
+        // guarded above (archived-only), so it always crosses back. Best-effort.
+        if (action === 'archive' && existing.status !== 'archived') {
+          await adjustCustomerCount(paths, orgId, -1, logger);
+        } else if (action === 'restore') {
+          await adjustCustomerCount(paths, orgId, 1, logger);
+        }
+
+        logger.info(`Customer ${action}d`, { customerId });
         return { customerId };
       },
     ),

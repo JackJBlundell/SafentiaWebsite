@@ -44,6 +44,7 @@ import {
 import { assertRateLimit } from '../lib/rateLimit';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { issueInvitation } from '../lib/invitations';
+import { markOnboardingStep } from '../lib/onboardingMarks';
 import type {
   CreateInvitationInput,
   CreateInvitationResult,
@@ -150,6 +151,9 @@ export const createInvitation = onCall<CreateInvitationInput>(
           contactId,
           logger,
         });
+
+        // Setup-wizard piggyback (Phase 3 §5.4): best-effort, never throws.
+        await markOnboardingStep(uid, claims.orgId, 'team', logger);
 
         // Audit: who invited (uid), without the recipient's email in the log.
         logger.info('Invitation created', {

@@ -1,0 +1,98 @@
+/* ConsoleTour - the spotlight overlay. The layer captures every pointer event
+ * (nothing behind it is clickable, including the highlighted control); the
+ * four shade panels and the ring are positioned inline from the measured
+ * target box, so this file carries only their appearance. z-index sits with
+ * the modal tier (ImageCropDialog is 100), above the sticky chrome (10) and
+ * menus (20-30). */
+
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.shade {
+  position: fixed;
+  background: var(--color-overlay);
+}
+
+/* The spotlight's outline. Reinforcement only - the un-dimmed gap is the
+ * signal; pointer events pass to the layer beneath, which blocks them. */
+.ring {
+  position: fixed;
+  border: 2px solid var(--brand-primary);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+}
+
+.card {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: min(340px, calc(100vw - 2 * var(--space-lg)));
+  padding: var(--space-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px var(--shadow-color);
+}
+
+/* Programmatic focus lands on the card itself each step; the dialog role and
+ * the moved focus carry the state, so no ring on the container. */
+.card:focus {
+  outline: none;
+}
+
+/* Steps without a target (welcome, done): centred over the full dim. */
+.cardCentred {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+.title {
+  font-size: 1.0625rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.body {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.buttonRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-block-start: var(--space-sm);
+}
+
+/* A quiet text control, set against the far edge from Back/Next. */
+.skip {
+  margin-inline-end: auto;
+  min-height: var(--min-touch-target);
+  padding-inline: var(--space-xs);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.skip:hover {
+  color: var(--color-text);
+}

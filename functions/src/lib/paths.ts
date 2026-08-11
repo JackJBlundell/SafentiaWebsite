@@ -20,13 +20,14 @@ import {
   platform as sharedPlatform,
   envFromTestMode,
   portalSpaceKey,
+  usersOnboarding,
   type EnvPaths,
   type RtdbPath,
 } from '../shared/paths';
 import type { Environment } from '../shared/types';
 
 /** Re-exported as-is so callers import everything paths-related from one place. */
-export { forEnv, envFromTestMode, portalSpaceKey };
+export { forEnv, envFromTestMode, portalSpaceKey, usersOnboarding };
 export type { EnvPaths, RtdbPath };
 
 /**
@@ -60,6 +61,36 @@ export const ops = {
     orgId: string,
     yyyyMm: string,
   ): RtdbPath => `ops/notificationCounts/${env}/${orgId}/${yyyyMm}`,
+  /** Per-env, per-org DAILY manual-email recipient counter (UTC date key), for
+   *  the spam-relay cap in lib/manualEmailLimits. */
+  manualEmailCount: (
+    env: Environment,
+    orgId: string,
+    yyyyMmDd: string,
+  ): RtdbPath => `ops/manualEmailCounts/${env}/${orgId}/${yyyyMmDd}`,
+  // ====
+  // Stripe billing plumbing (Phase 3, plan section 4.3). Both are server-only by
+  // definition: they exist to make the webhook idempotent and to resolve which
+  // org a Stripe customer belongs to, and neither is tenant data. Stripe IDs
+  // (cus_..., evt_...) are alphanumeric-plus-underscore, so they are safe RTDB
+  // path segments; env is the fixed enum.
+  // ====
+  /** Reverse index: Stripe customer id -> owning orgId, written at customer
+   *  creation so customer-level webhook events without org metadata resolve. */
+  stripeCustomer: (env: Environment, customerId: string): RtdbPath =>
+    `ops/stripeCustomers/${env}/${customerId}`,
+  /** Claim-before-act marker for one received Stripe webhook event. */
+  stripeEvent: (env: Environment, eventId: string): RtdbPath =>
+    `ops/stripeEvents/${env}/${eventId}`,
+  /** One env's whole claim-marker collection (the retention sweep's read root). */
+  stripeEvents: (env: Environment): RtdbPath => `ops/stripeEvents/${env}`,
+  /** Idempotency marker for self-serve org provisioning: one organisation per
+   *  Stripe subscription, stored as {orgId, at} so a webhook retry hands back
+   *  the org the first delivery created (lib/provisionOrganisation). Stripe
+   *  subscription ids (sub_...) are alphanumeric-plus-underscore, so they are
+   *  safe RTDB path segments. */
+  provisionedSub: (env: Environment, subscriptionId: string): RtdbPath =>
+    `ops/provisionedSubs/${env}/${subscriptionId}`,
 } as const;
 
 /** Grouped facade so a caller writes `paths.platform.plan(...)` or `paths.forEnv(env)`. */

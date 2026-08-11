@@ -19,6 +19,7 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { paths } from './paths';
 import type { EnvPaths } from './paths';
 import { resolveNotificationLimit } from './notificationLimits';
+import { mirrorNotificationsThisMonth } from './usageCounters';
 import type { Logger } from './logging';
 import type { Notification } from '../shared/types';
 
@@ -31,8 +32,9 @@ export interface NotificationInput {
   link?: string;
 }
 
-/** The YYYY-MM ledger bucket for "now", in UTC so months align across regions. */
-function currentLedgerMonth(): string {
+/** The YYYY-MM ledger bucket for "now", in UTC so months align across regions.
+ *  Exported so the usage backfill script buckets by the SAME key. */
+export function currentLedgerMonth(): string {
   const now = new Date();
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, '0');
@@ -90,25 +92,35 @@ export async function sendNotification(
   // one convenience notification. The per-month counter is advanced inside a
   // single transaction, so concurrent sends cannot overshoot the cap and an
   // over-cap send ABORTS (no increment, committed === false). No plan cap set =>
-  // unlimited, and the counter is skipped entirely.
+  // unlimited: the counter still advances - the month's total must stay true for
+  // every org, capped or not, because the usage mirror below displays it - but
+  // it can never abort.
   const monthlyLimit = await resolveNotificationLimit(env, orgId);
-  if (monthlyLimit !== undefined) {
-    const counterRef = db.ref(
-      paths.ops.notificationCount(env.env, orgId, month),
-    );
-    const tx = await counterRef.transaction((current: number | null) => {
-      const next = (current ?? 0) + 1;
-      return next > monthlyLimit ? undefined : next;
+  const counterRef = db.ref(paths.ops.notificationCount(env.env, orgId, month));
+  const tx = await counterRef.transaction((current: number | null) => {
+    const next = (current ?? 0) + 1;
+    return monthlyLimit !== undefined && next > monthlyLimit ? undefined : next;
+  });
+  if (!tx.committed) {
+    logger.warn('Monthly notification quota reached; skipping notification', {
+      orgId,
+      type: input.type,
+      limit: monthlyLimit,
     });
-    if (!tx.committed) {
-      logger.warn('Monthly notification quota reached; skipping notification', {
-        orgId,
-        type: input.type,
-        limit: monthlyLimit,
-      });
-      return;
-    }
+    return;
   }
+
+  // Mirror the total the transaction just committed onto the org's usage node
+  // (Phase 3 brief 5.2). DISPLAY ONLY - the month-keyed ledger counter above
+  // stays the enforcement truth; setting the committed value means the first
+  // send of a new month naturally overwrites last month's stale figure. The
+  // helper is best-effort, so a mirror failure never fails the notification.
+  await mirrorNotificationsThisMonth(
+    env,
+    orgId,
+    tx.snapshot.val() as number,
+    logger,
+  );
 
   const record: Notification = {
     type: input.type,

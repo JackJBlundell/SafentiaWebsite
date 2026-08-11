@@ -20,6 +20,7 @@
 import { db, storage } from '../admin';
 import type { EnvPaths } from '../lib/paths';
 import type { Logger } from '../lib/logging';
+import { applyBrandingEntitlement, resolvePlanContext } from '../lib/planContext';
 import { resolveResponsibleParty } from '../lib/responsibleParty';
 import { SEVERITIES } from '../shared/types';
 import type {
@@ -922,10 +923,29 @@ export async function assembleReport(
 
   // The org profile drives branding; if it is somehow missing we still produce a
   // report under a neutral default rather than failing (brief 18.3).
-  const profile: OrgProfile = orgProfile ?? {
+  const storedProfile: OrgProfile = orgProfile ?? {
     name: 'Fire Risk Assessment',
     brand: { primary: '#1F2937', secondary: '#6B7280' },
   };
+
+  // Branding is a plan feature (Phase 3 §6): without it the stored logo,
+  // colours, cover image and font are retained in RTDB but NOT applied
+  // (§6.3), so the report renders under the platform defaults - the same
+  // single choke point the email path applies in lib/templatedEmail. Resolved
+  // here, before the image fetches below, so a gated logo/cover is never even
+  // downloaded. A failed billing read degrades to the profile as stored (the
+  // grandfather posture): a report must never lose its branding over a
+  // billing-node hiccup.
+  let profile = storedProfile;
+  try {
+    const { entitlements } = await resolvePlanContext(paths, orgId);
+    profile = applyBrandingEntitlement(storedProfile, entitlements);
+  } catch (error) {
+    logger.warn('Plan context read failed; report renders the stored branding', {
+      orgId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   // 5. Resolve embedded images (logo, cover image, building photo) and the
   // owning customer concurrently. Every one of them degrades to a placeholder:

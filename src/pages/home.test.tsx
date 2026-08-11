@@ -3,8 +3,9 @@
 //
 // These are the rules the marketing pages must never drift from:
 //   - exactly one h1 per page (document outline and SEO both depend on it);
-//   - the two calls to action point at /contact and /login, matching the
-//     header (there is no public sign-up);
+//   - the primary call to action is the self-serve journey at /login ("Get
+//     started"), with the demonstration demoted to the secondary path at
+//     /contact, matching the header;
 //   - a page ships only the <img> elements it is ALLOWED (see PAGES), every one
 //     of them a real product screen in a place where a visitor is deciding
 //     whether this is real software, and every other visual drawn in CSS or
@@ -62,21 +63,21 @@ describe.each(PAGES)('$name page', ({ Page, path, images }) => {
     expect(container.querySelectorAll('h1')).toHaveLength(1);
   });
 
-  it('points the primary call to action at /contact', () => {
+  it('points the primary call to action at /login', () => {
+    const { getAllByRole } = renderPage(Page, path);
+    const startLinks = getAllByRole('link', { name: /get started/i });
+    expect(startLinks.length).toBeGreaterThan(0);
+    for (const link of startLinks) {
+      expect(link).toHaveAttribute('href', '/login');
+    }
+  });
+
+  it('keeps the demonstration as the secondary call to action at /contact', () => {
     const { getAllByRole } = renderPage(Page, path);
     const demoLinks = getAllByRole('link', { name: /book a demonstration/i });
     expect(demoLinks.length).toBeGreaterThan(0);
     for (const link of demoLinks) {
       expect(link).toHaveAttribute('href', '/contact');
-    }
-  });
-
-  it('points the secondary call to action at /login', () => {
-    const { getAllByRole } = renderPage(Page, path);
-    const signInLinks = getAllByRole('link', { name: /sign in/i });
-    expect(signInLinks.length).toBeGreaterThan(0);
-    for (const link of signInLinks) {
-      expect(link).toHaveAttribute('href', '/login');
     }
   });
 

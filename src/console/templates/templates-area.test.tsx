@@ -59,6 +59,10 @@ vi.mock('firebase/database', () => ({
   remove: vi.fn(async (target: { path: string }) => {
     mocks.removeCalls.push(target.path);
   }),
+  // TemplatesList's mount effect records the Getting Started templates tick
+  // via update(); swallowed here so the write-payload assertions (setCalls)
+  // stay about the behaviour under test.
+  update: vi.fn(async () => {}),
 }));
 
 import { TemplatesRoutes } from './TemplatesRoutes';

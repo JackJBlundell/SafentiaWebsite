@@ -22,8 +22,9 @@ import { logTriggerError } from '../lib/errors';
 import { paths } from '../lib/paths';
 import { appendActivity, activityUpdate, logBookUpdate } from '../lib/events';
 import { sendNotification } from '../lib/notifications';
-import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
-import { orgEmailBrand, renderBrandedEmail } from '../lib/emailTemplates';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { orgEmailBrand } from '../lib/emailTemplates';
+import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import type { EnvPaths } from '../lib/paths';
 import {
@@ -474,32 +475,26 @@ export const onAssessmentStageChange = onValueWritten(
             const assessorName =
               members[assessment.conductedBy]?.name ?? 'An assessor';
             const submittedAt = assessment.workflow?.submittedAt;
-            const subject = 'An assessment is awaiting validation';
-            const body = `${assessorName} has submitted a fire risk assessment of ${buildingName} for validation.`;
-            const html = renderBrandedEmail({
-              brand,
-              preheader: body,
-              heading: subject,
-              paragraphs: [
-                body,
-                'Please review it in the validation queue and accept it or request further information.',
-              ],
-              detailRows: [
-                { label: 'Building', value: buildingName },
-                { label: 'Assessor', value: assessorName },
-                ...(submittedAt !== undefined
-                  ? [{ label: 'Submitted', value: formatWhen(submittedAt) }]
-                  : []),
-              ],
-              // Straight into THIS assessment's review screen, the exact place
-              // the auditor accepts it or requests more information.
-              cta: {
-                label: 'Review the assessment',
-                url: `${WEB_ORIGIN}/app/validation/${assessmentId}`,
-              },
-              footerNote:
-                'You are receiving this because you are an auditor on Safentia.',
-            });
+            // The seam owns the rendering now; the message is identical for
+            // every auditor, so the org's kind config is loaded once and the
+            // variables and rows are computed once for the whole fan-out.
+            const awaitingConfig = await loadKindConfig(
+              envPaths.env,
+              orgId,
+              'awaiting-validation',
+              logger,
+            );
+            const awaitingVariables = {
+              'building.name': buildingName,
+              'assessor.name': assessorName,
+            };
+            const awaitingRows = [
+              { label: 'Building', value: buildingName },
+              { label: 'Assessor', value: assessorName },
+              ...(submittedAt !== undefined
+                ? [{ label: 'Submitted', value: formatWhen(submittedAt) }]
+                : []),
+            ];
             for (const member of Object.values(members)) {
               if (
                 member?.status === 'active' &&
@@ -507,11 +502,22 @@ export const onAssessmentStageChange = onValueWritten(
                 member.email &&
                 member.emailPreferences?.awaitingValidation !== false
               ) {
-                await dispatchEmail({ to: member.email, subject, body, html }, logger, {
-                  orgId,
-                  env: envPaths.env,
-                  category: 'awaiting-validation',
-                });
+                await sendKindEmail(
+                  {
+                    kind: 'awaiting-validation',
+                    env: envPaths.env,
+                    orgId,
+                    to: member.email,
+                    variables: awaitingVariables,
+                    brand,
+                    // Straight into THIS assessment's review screen, the exact place
+                    // the auditor accepts it or requests more information.
+                    kindLink: `${WEB_ORIGIN}/app/validation/${assessmentId}`,
+                    kindRows: awaitingRows,
+                    config: awaitingConfig,
+                  },
+                  logger,
+                );
               }
             }
           }
@@ -519,26 +525,19 @@ export const onAssessmentStageChange = onValueWritten(
           if (after === 'released') {
             // (b) Story 2065: active admins who have not quietened the released
             // category hear the report is out...
-            const subject = `A new fire risk assessment report is available for ${buildingName}`;
-            const body = `The fire risk assessment of ${buildingName} has been validated and released, and its report is now available.`;
-            const adminHtml = renderBrandedEmail({
-              brand,
-              preheader: body,
-              heading: 'Assessment released',
-              paragraphs: [body],
-              detailRows: [
-                { label: 'Building', value: buildingName },
-                { label: 'Released', value: formatWhen(Date.now()) },
-              ],
-              // The released assessment's own screen, which carries the report
-              // download - closer to the point than the reports index.
-              cta: {
-                label: 'View the assessment',
-                url: `${WEB_ORIGIN}/app/validation/${assessmentId}`,
-              },
-              footerNote:
-                'You are receiving this because you are an administrator on Safentia.',
-            });
+            // The seam owns the rendering now; the message is identical for
+            // every admin, so the org's kind config and the variables are
+            // resolved once for the whole fan-out.
+            const adminConfig = await loadKindConfig(
+              envPaths.env,
+              orgId,
+              'released-admin',
+              logger,
+            );
+            const adminVariables = {
+              'building.name': buildingName,
+              'assessment.releasedAt': formatWhen(Date.now()),
+            };
             for (const member of Object.values(members)) {
               if (
                 member?.status === 'active' &&
@@ -547,10 +546,20 @@ export const onAssessmentStageChange = onValueWritten(
                 member.emailPreferences?.released !== false
               ) {
                 emailedAdmins.add(member.email.trim().toLowerCase());
-                await dispatchEmail(
-                  { to: member.email, subject, body, html: adminHtml },
+                await sendKindEmail(
+                  {
+                    kind: 'released-admin',
+                    env: envPaths.env,
+                    orgId,
+                    to: member.email,
+                    variables: adminVariables,
+                    brand,
+                    // The released assessment's own screen, which carries the report
+                    // download - closer to the point than the reports index.
+                    kindLink: `${WEB_ORIGIN}/app/validation/${assessmentId}`,
+                    config: adminConfig,
+                  },
                   logger,
-                  { orgId, env: envPaths.env, category: 'released' },
                 );
               }
             }
@@ -571,49 +580,57 @@ export const onAssessmentStageChange = onValueWritten(
                   building.customerId,
                 );
               if (contactEmails.length > 0) {
-                const customerHtml = renderBrandedEmail({
-                  brand,
-                  preheader: body,
-                  heading: subject,
-                  paragraphs: [
-                    body,
+                // The seam owns the rendering now; the org's kind config, the
+                // variables and the link are resolved once for the fan-out.
+                const contactConfig = await loadKindConfig(
+                  envPaths.env,
+                  orgId,
+                  'released-contact',
+                  logger,
+                );
+                const contactVariables = {
+                  'building.name': buildingName,
+                  // The portal instruction sentences, exactly as computed for
+                  // the accept-flow and no-report cases (the catalogue's
+                  // report.accessInstruction contract).
+                  'report.accessInstruction':
                     releasedReportId && siteId
                       ? 'Sign in to your Safentia portal to read and accept the report. You will be asked to type your name to sign it off, and the report is available to download straight afterwards.'
                       : 'You can view the assessment and download the report from your Safentia portal. The report is a secure, authenticated download - sign in to open it.',
-                  ],
-                  detailRows: [{ label: 'Building', value: buildingName }],
-                  // A secure CTA into the portal, never the PDF as an attachment:
-                  // the report is sensitive and email attachments leak. The link
-                  // deep-links at THIS report's acceptance screen behind the
-                  // contact's own authenticated session - there is no bearer token
-                  // in the URL, so a forwarded email grants nobody access. It
-                  // carries the RTDB push key the /reports record is stored under,
-                  // NOT the Storage object uuid (generateAndStore mints the two
-                  // separately); the push key is what the portal route and the
-                  // acceptReport callable address.
-                  cta:
-                    releasedReportId && siteId
-                      ? {
-                          label: 'Accept & Sign Off',
-                          url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}/reports/${releasedReportId}`,
-                        }
-                    : {
-                        // No report id yet: the building's own portal page still
-                        // beats the portal home, which the recipient would only
-                        // have to navigate away from. It is known here whenever
-                        // the building was located, which this branch requires.
-                        label: 'View your report in the portal',
-                        url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}`,
-                      },
-                  footerNote: `You are receiving this because you are a contact for ${buildingName} on Safentia.`,
-                });
-                // Best-effort per recipient: dispatchEmail never throws, so one
+                };
+                // A secure CTA into the portal, never the PDF as an attachment:
+                // the report is sensitive and email attachments leak. The link
+                // deep-links at THIS report's acceptance screen behind the
+                // contact's own authenticated session - there is no bearer token
+                // in the URL, so a forwarded email grants nobody access. It
+                // carries the RTDB push key the /reports record is stored under,
+                // NOT the Storage object uuid (generateAndStore mints the two
+                // separately); the push key is what the portal route and the
+                // acceptReport callable address. In the no-report fallback the
+                // building's own portal page still beats the portal home, which
+                // the recipient would only have to navigate away from; it is
+                // known here whenever the building was located, which this
+                // branch requires. The catalogue models the one accept-flow CTA
+                // label ('Accept & Sign Off') for both cases - see its comment.
+                const contactLink =
+                  releasedReportId && siteId
+                    ? `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}/reports/${releasedReportId}`
+                    : `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}`;
+                // Best-effort per recipient: sendKindEmail never throws, so one
                 // contact's provider failure cannot stop the rest being told.
                 for (const contactEmail of contactEmails) {
-                  await dispatchEmail(
-                    { to: contactEmail, subject, body, html: customerHtml },
+                  await sendKindEmail(
+                    {
+                      kind: 'released-contact',
+                      env: envPaths.env,
+                      orgId,
+                      to: contactEmail,
+                      variables: contactVariables,
+                      brand,
+                      kindLink: contactLink,
+                      config: contactConfig,
+                    },
                     logger,
-                    { orgId, env: envPaths.env, category: 'released' },
                   );
                 }
               } else if (optedOut > 0) {
@@ -690,63 +707,56 @@ export const onAssessmentStageChange = onValueWritten(
               const customerName = (customerSnap.val() as Customer | null)?.name;
 
               const accepted = after === 'readyForRelease';
-              const subject = accepted
-                ? `Your assessment of ${buildingName} has been accepted`
-                : `Your assessment of ${buildingName} has been released`;
               const by = actedByName ? ` by ${actedByName}` : '';
               const body = accepted
                 ? `Your fire risk assessment of ${buildingName} has been reviewed and accepted${by}. It is cleared for release.`
                 : `Your fire risk assessment of ${buildingName} has been released${by}, and its report has gone to the customer.`;
-              await dispatchEmail(
+              // One kind covers both verdicts, with the sentences supplied
+              // exactly as computed here (the catalogue's outcome variables).
+              // The log entry now carries the catalogue's unified 'released'
+              // category for BOTH verdicts, where this site used to log
+              // 'assessment-accepted' / 'assessment-released' - intended: the
+              // kindId is the precise identifier now, and the log UI tolerates
+              // any category string.
+              await sendKindEmail(
                 {
+                  kind: 'released-assessor',
+                  env: envPaths.env,
+                  orgId,
                   to: assessorEmail,
-                  subject,
-                  body,
-                  html: renderBrandedEmail({
-                    brand,
-                    preheader: body,
-                    heading: accepted
-                      ? 'Assessment accepted'
-                      : 'Assessment released',
-                    paragraphs: [
-                      body,
-                      accepted
-                        ? 'Nothing further is needed from you. You will hear again when it is released.'
-                        : 'This assessment is now complete. Its report stays on the job record if you need to refer back to it.',
-                    ],
-                    detailRows: [
-                      { label: 'Building', value: buildingName },
-                      ...(customerName
-                        ? [{ label: 'Customer', value: customerName }]
-                        : []),
-                      { label: 'Stage', value: stageLabel },
-                      ...(actedByName
-                        ? [
-                            {
-                              label: accepted ? 'Accepted by' : 'Released by',
-                              value: actedByName,
-                            },
-                          ]
-                        : []),
-                      { label: 'When', value: formatWhen(Date.now()) },
-                    ],
-                    // The job is the assessor's own view of this work (/app/validation
-                    // is the auditors' queue, which an assessor has no business landing
-                    // in) - the requestInfo precedent.
-                    cta: {
-                      label: 'Open the job',
-                      url: `${WEB_ORIGIN}/app/jobs/${assessment.jobId}`,
-                    },
-                    footerNote:
-                      'You are receiving this because you are the assessor on this job. You can turn these emails off in your Safentia account settings.',
-                  }),
+                  variables: {
+                    'building.name': buildingName,
+                    'assessment.outcomePhrase': accepted
+                      ? 'accepted'
+                      : 'released',
+                    'assessment.outcomeSummary': body,
+                    'assessment.outcomeDetail': accepted
+                      ? 'Nothing further is needed from you. You will hear again when it is released.'
+                      : 'This assessment is now complete. Its report stays on the job record if you need to refer back to it.',
+                  },
+                  brand,
+                  // The job is the assessor's own view of this work (/app/validation
+                  // is the auditors' queue, which an assessor has no business landing
+                  // in) - the requestInfo precedent.
+                  kindLink: `${WEB_ORIGIN}/app/jobs/${assessment.jobId}`,
+                  kindRows: [
+                    { label: 'Building', value: buildingName },
+                    ...(customerName
+                      ? [{ label: 'Customer', value: customerName }]
+                      : []),
+                    { label: 'Stage', value: stageLabel },
+                    ...(actedByName
+                      ? [
+                          {
+                            label: accepted ? 'Accepted by' : 'Released by',
+                            value: actedByName,
+                          },
+                        ]
+                      : []),
+                    { label: 'When', value: formatWhen(Date.now()) },
+                  ],
                 },
                 logger,
-                {
-                  orgId,
-                  env: envPaths.env,
-                  category: accepted ? 'assessment-accepted' : 'assessment-released',
-                },
               );
             }
           }

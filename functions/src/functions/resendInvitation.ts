@@ -28,12 +28,10 @@ import {
 import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
-import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
-import { orgEmailBrand, renderBrandedEmail } from '../lib/emailTemplates';
-import { INVITATION_TTL_MS } from '../lib/invitations';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { INVITATION_TTL_MS, sendInvitationEmail } from '../lib/invitations';
 import type {
   Invitation,
-  OrgProfile,
   ResendInvitationInput,
   ResendInvitationResult,
 } from '../shared/types';
@@ -99,43 +97,24 @@ export const resendInvitation = onCall<ResendInvitationInput>(
         };
         await db.ref().update(update);
 
-        // 5. Re-send the branded email exactly as createInvitation does. A
-        // failed/skipped send never rolls back the rotation - the old link is
-        // already dead and the admin can resend again.
-        const acceptLink = `safentia://invite?token=${encodeURIComponent(
-          token,
-        )}&env=${env}`;
+        // 5. Re-send the branded email exactly as createInvitation does - the
+        // SAME sendInvitationEmail seam, so the resend now carries the
+        // catalogue's 'invitation' copy (web accept link primary, app deep
+        // link secondary). This deliberately retires the resend path's old
+        // app-first wording: the one accepted copy change of the templating
+        // refactor, unifying the two sends on one template. A failed/skipped
+        // send never rolls back the rotation - the old link is already dead
+        // and the admin can resend again.
         const logger = createLogger({ fn: 'resendInvitation', orgId });
-        // The resend carries the inviting organisation's own brand (name +
-        // accent), falling back to the Safentia brand when the org has not set
-        // a valid one.
-        const profileSnap = await db.ref(paths.db.orgProfile(orgId)).get();
-        const brand = orgEmailBrand(profileSnap.val() as OrgProfile | null);
-        await dispatchEmail(
-          {
-            to: invitation.email,
-            subject: 'You have been invited to Safentia',
-            body:
-              'You have been invited to join an organisation on Safentia. ' +
-              'Open the app and use this link to accept: ' +
-              acceptLink,
-            html: renderBrandedEmail({
-              brand,
-              preheader: 'Accept your invitation to join your organisation on Safentia.',
-              heading: 'You have been invited to Safentia',
-              paragraphs: [
-                'Your organisation has invited you to join it on Safentia, the fire risk assessment platform.',
-                'Accept the invitation on the device with the Safentia app installed. The link below opens the app and sets up your account in a couple of taps.',
-                'The invitation is personal to you, works once, and expires after seven days.',
-              ],
-              cta: { label: 'Accept your invitation', url: acceptLink },
-              footerNote:
-                'You are receiving this because an administrator at your organisation invited this email address to Safentia. If you were not expecting it, you can safely ignore this email.',
-            }),
-          },
+        await sendInvitationEmail({
+          env,
+          paths,
+          orgId,
+          email: invitation.email,
+          token,
+          expiresAt,
           logger,
-          { orgId, env, category: 'invitation' },
-        );
+        });
 
         // Audit log: the invite id only - never the token or recipient email.
         logger.info('Invitation resent', { inviteId });

@@ -1,5 +1,6 @@
 // ============================================================================
-// Contact - the book-a-demonstration form, the site's one conversion point.
+// Contact - the book-a-demonstration form, the site's secondary conversion
+// path (the primary is the self-serve "Get started" journey at /login).
 //
 // Firebase is imported LAZILY inside the submit handler and nowhere else. The
 // marketing bundle must stay Firebase-free (a visitor who never submits never

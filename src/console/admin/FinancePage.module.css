@@ -1,0 +1,314 @@
+/* FinancePage - the super-admin Finance tab. All colour comes from tokens, so
+   light and dark are both first-class. Both charts follow the console's chart
+   precedents exactly: the single data hue is --status-info (informational,
+   never a RAG colour - revenue is money, not a safety judgement), and every
+   piece of text wears ink tokens, never the data colour. */
+
+/* --- Charts (the GrowthChart/ReleasesChart clone styles) ------------------ */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.line {
+  fill: none;
+  stroke: var(--status-info);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.area {
+  fill: var(--status-info-surface);
+  stroke: none;
+}
+
+.marker {
+  fill: var(--status-info);
+  stroke: var(--color-surface);
+  stroke-width: 2;
+}
+
+.bar {
+  fill: var(--status-info);
+}
+
+.baseline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+/* Per-point / per-bar values: small, tabular, secondary ink. */
+.value {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  fill: var(--color-text-secondary);
+}
+
+/* Axis labels: the quietest text on the chart. */
+.axis {
+  font-size: 11px;
+  fill: var(--color-text-muted);
+}
+
+/* The accessible table view of the same numbers, beneath each chart. */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.caption {
+  text-align: start;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-block-end: var(--space-sm);
+}
+
+.table th,
+.table td {
+  text-align: start;
+  padding: var(--space-xs) var(--space-sm);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.table tbody th {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.table td {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.empty {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+}
+
+/* --- Page layout ---------------------------------------------------------- */
+
+/* The FilterBar takes the toolbar's leading room, so its expanded panel opens
+   full width beneath the row while the export buttons keep the trailing end. */
+.filters {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+/* The two chart cards sit side by side where there is room, stacking on
+   narrower screens (the PlatformDashboard grid idiom). */
+.chartsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+}
+
+@media (min-width: 1024px) {
+  .chartsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* --- Status chips and tone vocabulary ------------------------------------- */
+
+/* Worded chips: the word carries the meaning, the tint reinforces it. The
+   neutral chip deliberately reads as recessive ink on the sunken surface. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-sunken);
+}
+
+.chip.tone-success {
+  color: var(--status-success);
+  background: var(--status-success-surface);
+}
+
+.chip.tone-info {
+  color: var(--status-info);
+  background: var(--status-info-surface);
+}
+
+.chip.tone-warning {
+  color: var(--status-warning);
+  background: var(--status-warning-surface);
+}
+
+.chip.tone-error {
+  color: var(--status-error);
+  background: var(--status-error-surface);
+}
+
+/* --- Health table cells ---------------------------------------------------- */
+
+.planCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The scheduled downgrade, under the current plan name: quiet, because it is
+   a footnote to the plan until period end actually arrives. */
+.planChange {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.mrrCell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Links ---------------------------------------------------------------- */
+
+.viewLink,
+.orgLink,
+.stripeLink {
+  color: var(--brand-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* The card-header action: a standalone control, so it clears the touch
+   target the way the dashboard's tableLink does. */
+.viewLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+}
+
+.viewLink:hover,
+.viewLink:focus-visible,
+.orgLink:hover,
+.orgLink:focus-visible,
+.stripeLink:hover,
+.stripeLink:focus-visible {
+  text-decoration: underline;
+}
+
+.stripeLink {
+  white-space: nowrap;
+}
+
+/* --- Billing activity feed (the aside, grouped by day) --------------------- */
+
+.feedGroups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Day headings: the table-caption voice - small caps, muted, unmissable as a
+   divider without competing with the entries beneath. */
+.feedDay {
+  margin: 0 0 var(--space-xs);
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.feedRow {
+  display: flex;
+  align-items: first baseline;
+  gap: var(--space-sm);
+  padding-block: var(--space-sm);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.feedRow:last-child {
+  border-block-end: none;
+}
+
+/* The type dot: reinforcement only - the phrase beside it carries the meaning
+   in words, so colour is never the sole carrier. */
+.feedDot {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-text-muted);
+  /* Optically centre on the first text line rather than the row box. */
+  transform: translateY(-1px);
+}
+
+.feedDot.tone-success { background: var(--status-success); }
+.feedDot.tone-info    { background: var(--status-info); }
+.feedDot.tone-warning { background: var(--status-warning); }
+.feedDot.tone-error   { background: var(--status-error); }
+.feedDot.tone-neutral { background: var(--color-text-muted); }
+
+/* Phrase over org+time: two quiet lines, so a narrow aside never shuffles the
+   amount off its right edge. */
+.feedMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.feedPhrase {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.feedOrg {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+}
+
+.feedAmount {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.feedWhen {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* The truncation note under a full window: honest about what the list holds. */
+.feedNote {
+  margin: var(--space-md) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}

@@ -35,6 +35,11 @@ import {
 } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
+import { adjustStaffCount } from '../lib/usageCounters';
+import {
+  assertWithinInviteLimit,
+  resolveInviteLimitContext,
+} from '../lib/inviteLimits';
 import { MEMBER_STATUSES } from '../shared/types';
 import type {
   MemberStatus,
@@ -80,6 +85,23 @@ export const updateMember = onCall<UpdateMemberInput>(callableOptions, (request)
         });
       }
 
+      // 3b. Plan ceiling on REINSTATEMENT (Phase 3 §6): unarchiving re-claims a
+      // staff seat exactly as an invitation does, so it passes the same gate -
+      // otherwise archive-then-reinstate would mint seats past the plan limit,
+      // and a suspended org (zero-create floor) could re-grow its staff. Only
+      // the archived -> non-archived transition is a seat claim: role edits,
+      // locks and archivals never consult the limit (§6.3 block-new-creates
+      // only). Checked against the pre-transaction snapshot - the same
+      // read-then-act posture createInvitation takes.
+      const memberBefore = memberSnap.val() as OrgMember;
+      if (
+        status !== undefined &&
+        status !== 'archived' &&
+        memberBefore.status === 'archived'
+      ) {
+        assertWithinInviteLimit(await resolveInviteLimitContext(paths, orgId));
+      }
+
       // 4+5. LAST-ADMIN guard and the write, as ONE TRANSACTION on the member
       // list. A read-then-write guard here is a TOCTOU hole: two concurrent
       // demotions of the two remaining admins would each pass their own stale
@@ -90,6 +112,12 @@ export const updateMember = onCall<UpdateMemberInput>(callableOptions, (request)
       const changed: string[] = [];
       if (roles !== undefined) changed.push('roles');
       if (status !== undefined) changed.push('status');
+
+      // The status the change was applied OVER, captured from inside the
+      // transaction so the seat accounting below reasons about the exact state
+      // the committed write replaced (a retried transaction re-assigns it, so
+      // the final run's value is the one that stands).
+      let previousStatus: MemberStatus | undefined;
 
       const result = await db
         .ref(paths.db.orgMembers(orgId))
@@ -107,6 +135,7 @@ export const updateMember = onCall<UpdateMemberInput>(callableOptions, (request)
             // The member vanished between the earlier existence check and now.
             return undefined;
           }
+          previousStatus = all[memberUid].status;
           const next: Record<string, OrgMember> = {
             ...all,
             [memberUid]: {
@@ -154,6 +183,20 @@ export const updateMember = onCall<UpdateMemberInput>(callableOptions, (request)
         );
 
       const logger = createLogger({ fn: 'updateMember', orgId });
+
+      // Seat accounting (Phase 3 brief 5.2): staffCount counts NON-ARCHIVED
+      // members (a locked member still holds their seat - lock is a sign-in
+      // block, not a departure), so only a transition across the archived
+      // boundary moves the counter: -1 into archived, +1 back out on
+      // reinstatement. Best-effort - the membership write has committed.
+      if (status !== undefined && previousStatus !== undefined) {
+        const wasArchived = previousStatus === 'archived';
+        const nowArchived = status === 'archived';
+        if (wasArchived !== nowArchived) {
+          await adjustStaffCount(paths, orgId, nowArchived ? -1 : 1, logger);
+        }
+      }
+
       logger.info('Member updated', { memberUid, changed });
       return { updated: true };
     },

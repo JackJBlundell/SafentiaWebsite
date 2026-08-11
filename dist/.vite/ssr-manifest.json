@@ -15,22 +15,22 @@
     "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
   ],
   "node_modules/@firebase/app-check/dist/esm/index.esm.js": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "node_modules/@firebase/app/dist/esm/index.esm.js": [
     "/assets/index.esm-FNMukJA7.js"
   ],
   "node_modules/@firebase/auth/dist/esm/index-d90d2ee5.js": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "node_modules/@firebase/auth/dist/esm/index.js": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "node_modules/@firebase/component/dist/esm/index.esm.js": [
     "/assets/index.esm-FNMukJA7.js"
   ],
   "node_modules/@firebase/database/dist/index.esm.js": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "node_modules/@firebase/functions/dist/esm/index.esm.js": [
     "/assets/index.esm-FNMukJA7.js"
@@ -39,7 +39,7 @@
     "/assets/index.esm-FNMukJA7.js"
   ],
   "node_modules/@firebase/storage/dist/index.esm.js": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "node_modules/@firebase/util/dist/index.esm.js": [
     "/assets/index.esm-FNMukJA7.js"
@@ -48,106 +48,115 @@
     "/assets/index.esm-FNMukJA7.js"
   ],
   "node_modules/@remix-run/router/dist/router.js": [
-    "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
-    "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
+    "/assets/dist-Ducpb61W.js"
+  ],
+  "node_modules/@stripe/react-stripe-js/dist/react-stripe.esm.mjs": [
+    "/assets/SubscribePlanPage-DPNCU0Wh.js",
+    "/assets/SubscribePlanPage-CgkoCfLJ.css"
+  ],
+  "node_modules/@stripe/stripe-js/dist/index.mjs": [
+    "/assets/lib-Bd4dedte.js"
+  ],
+  "node_modules/@stripe/stripe-js/lib/index.mjs": [
+    "/assets/lib-Bd4dedte.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/environmentManager.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/focusManager.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/infiniteQueryBehavior.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/mutation.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/mutationCache.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/notifyManager.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/onlineManager.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/query.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/queryCache.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/queryClient.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/queryObserver.js": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "node_modules/@tanstack/query-core/build/modern/removable.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/retryer.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/subscribable.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/thenable.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/timeoutManager.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/query-core/build/modern/utils.js": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "node_modules/@tanstack/react-query/build/modern/IsRestoringProvider.js": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "node_modules/@tanstack/react-query/build/modern/QueryErrorResetBoundary.js": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "node_modules/@tanstack/react-query/build/modern/errorBoundaryUtils.js": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "node_modules/@tanstack/react-query/build/modern/suspense.js": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "node_modules/@tanstack/react-query/build/modern/useBaseQuery.js": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "node_modules/@tanstack/react-query/build/modern/useQuery.js": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "node_modules/firebase/app-check/dist/esm/index.esm.js": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "node_modules/firebase/app/dist/esm/index.esm.js": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "node_modules/firebase/auth/dist/esm/index.esm.js": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "node_modules/firebase/database/dist/esm/index.esm.js": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "node_modules/firebase/functions/dist/esm/index.esm.js": [
     "/assets/index.esm-FNMukJA7.js"
   ],
   "node_modules/firebase/storage/dist/esm/index.esm.js": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "node_modules/idb/build/index.js": [
     "/assets/index.esm-FNMukJA7.js"
@@ -160,7 +169,7 @@
     "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
   ],
   "node_modules/mapbox-gl/dist/mapbox-gl.js": [
-    "/assets/mapbox-gl-D_qstIU3.js"
+    "/assets/mapbox-gl-TJ_R6rlr.js"
   ],
   "node_modules/prop-types/factoryWithThrowingShims.js": [
     "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
@@ -175,18 +184,16 @@
     "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
   ],
   "node_modules/react-dom/cjs/react-dom-client.production.js": [
-    "/assets/client-9ICe8Sg6.js"
+    "/assets/client-DhdpT-3J.js"
   ],
   "node_modules/react-dom/cjs/react-dom.production.js": [
-    "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
-    "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
+    "/assets/react-dom-B3sP1daK.js"
   ],
   "node_modules/react-dom/client.js": [
-    "/assets/client-9ICe8Sg6.js"
+    "/assets/client-DhdpT-3J.js"
   ],
   "node_modules/react-dom/index.js": [
-    "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
-    "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
+    "/assets/react-dom-B3sP1daK.js"
   ],
   "node_modules/react-fast-compare/index.js": [
     "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
@@ -197,34 +204,28 @@
     "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
   ],
   "node_modules/react-router-dom/dist/index.js": [
-    "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
-    "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
+    "/assets/dist-Ducpb61W.js"
   ],
   "node_modules/react-router/dist/index.js": [
-    "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
-    "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
+    "/assets/dist-Ducpb61W.js"
   ],
   "node_modules/react/cjs/react-jsx-runtime.production.js": [
-    "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
-    "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
+    "/assets/dist-Ducpb61W.js"
   ],
   "node_modules/react/cjs/react.production.js": [
-    "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
-    "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
+    "/assets/react-dom-B3sP1daK.js"
   ],
   "node_modules/react/index.js": [
-    "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
-    "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
+    "/assets/react-dom-B3sP1daK.js"
   ],
   "node_modules/react/jsx-runtime.js": [
-    "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
-    "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
+    "/assets/dist-Ducpb61W.js"
   ],
   "node_modules/scheduler/cjs/scheduler.production.js": [
-    "/assets/client-9ICe8Sg6.js"
+    "/assets/client-DhdpT-3J.js"
   ],
   "node_modules/scheduler/index.js": [
-    "/assets/client-9ICe8Sg6.js"
+    "/assets/client-DhdpT-3J.js"
   ],
   "node_modules/shallowequal/index.js": [
     "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
@@ -251,23 +252,23 @@
     "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
   ],
   "src/auth/AuthProvider.tsx": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "src/auth/activateSpace.ts": [
-    "/assets/useCallable-Bj1TxMbP.js"
+    "/assets/useCallable-C8JPuGVe.js"
   ],
   "src/auth/claims.ts": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "src/auth/errors.ts": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "src/auth/spaceChoice.ts": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "src/auth/useUserSpaces.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/components/Button.module.css": [
     "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
@@ -362,914 +363,1114 @@
     "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
   ],
   "src/console/AccountPage.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/AccountPage.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ConsoleHome.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ConsoleHome.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ConsoleRoute.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ConsoleShell.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ConsoleShell.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/CreateOrganisationDialog.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/CreateOrganisationDialog.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/EmailVerificationScreen.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/HoldingScreen.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConfirmingScreen-BOc1v9-0.js",
+    "/assets/ConfirmingScreen-BXpLxQdW.css"
   ],
   "src/console/HoldingScreen.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/SubscribeGate-LyhuS0_A.js",
+    "/assets/SubscribeGate-CZ9M1f0g.css"
   ],
   "src/console/OrgSwitcher.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/OrgSwitcher.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/SpaceMark.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/SpaceMark.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/SpacePicker.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/SpacePicker.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/activity/ActivityPage.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/activity/ActivityPage.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
-  ],
-  "src/console/activity/ActivityRoutes.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/activity/ActivityRoutes.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
-  ],
-  "src/console/activity/EmailLogPanel.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
-  ],
-  "src/console/activity/EmailLogPanel.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/activity/LogBookPanel.module.css": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/activity/LogBookPanel.tsx": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/admin/AdminRoutes.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/admin/FinancePage.module.css": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/admin/FinancePage.tsx": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/GrowthChart.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/GrowthChart.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/OrgBuildingDetail.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/OrgBuildingDetail.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/OrgCustomerDetail.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/OrgCustomerDetail.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/OrgDetail.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/OrgsOverview.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/OrgsOverview.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/PlatformActivity.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/PlatformActivity.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/PlatformBuildings.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/PlatformBuildings.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/PlatformCustomers.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/PlatformCustomers.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/PlatformDashboard.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/PlatformDashboard.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/PlatformMembers.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/PlatformMembers.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
-  ],
-  "src/console/admin/RevenuePreview.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
-  ],
-  "src/console/admin/RevenuePreview.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/admin.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/admin/financeMetrics.ts": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/platformEnv.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/useRecordPlatformAccess.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/admin/useSuperAdminClaim.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/billing/BillingBanner.module.css": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/billing/BillingBanner.tsx": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/billing/BillingSettingsPage.module.css": [
+    "/assets/BillingSettingsPage-JIFK0d8G.js",
+    "/assets/BillingSettingsPage-Dn9km3SF.css"
+  ],
+  "src/console/billing/BillingSettingsPage.tsx": [
+    "/assets/BillingSettingsPage-JIFK0d8G.js",
+    "/assets/BillingSettingsPage-Dn9km3SF.css"
+  ],
+  "src/console/billing/ConfirmingScreen.module.css": [
+    "/assets/ConfirmingScreen.module-B0_hjrjA.js",
+    "/assets/ConfirmingScreen-CgveNdhQ.css"
+  ],
+  "src/console/billing/ConfirmingScreen.tsx": [
+    "/assets/ConfirmingScreen-BOc1v9-0.js",
+    "/assets/ConfirmingScreen-BXpLxQdW.css"
+  ],
+  "src/console/billing/OrgDetailsPage.module.css": [
+    "/assets/SubscribeGate-LyhuS0_A.js",
+    "/assets/SubscribeGate-CZ9M1f0g.css"
+  ],
+  "src/console/billing/OrgDetailsPage.tsx": [
+    "/assets/SubscribeGate-LyhuS0_A.js",
+    "/assets/SubscribeGate-CZ9M1f0g.css"
+  ],
+  "src/console/billing/SetupCompleteScreen.module.css": [
+    "/assets/SetupCompleteScreen-SfNaNAhT.js",
+    "/assets/SetupCompleteScreen-B_71vAWK.css"
+  ],
+  "src/console/billing/SetupCompleteScreen.tsx": [
+    "/assets/SetupCompleteScreen-SfNaNAhT.js",
+    "/assets/SetupCompleteScreen-B_71vAWK.css"
+  ],
+  "src/console/billing/SetupGate.tsx": [
+    "/assets/SetupGate-_0K4KrqE.js"
+  ],
+  "src/console/billing/SetupWizard.module.css": [
+    "/assets/SetupWizard-Ct9DB4x9.js",
+    "/assets/SetupWizard-CPpsHDSz.css"
+  ],
+  "src/console/billing/SetupWizard.tsx": [
+    "/assets/SetupWizard-Ct9DB4x9.js",
+    "/assets/SetupWizard-CPpsHDSz.css"
+  ],
+  "src/console/billing/SubscribeChrome.module.css": [
+    "/assets/SubscribePlanPage-DPNCU0Wh.js",
+    "/assets/SubscribePlanPage-CgkoCfLJ.css"
+  ],
+  "src/console/billing/SubscribeChrome.tsx": [
+    "/assets/SubscribePlanPage-DPNCU0Wh.js",
+    "/assets/SubscribePlanPage-CgkoCfLJ.css"
+  ],
+  "src/console/billing/SubscribeGate.tsx": [
+    "/assets/SubscribeGate-LyhuS0_A.js",
+    "/assets/SubscribeGate-CZ9M1f0g.css"
+  ],
+  "src/console/billing/SubscribePaymentPage.module.css": [
+    "/assets/SubscribeGate-LyhuS0_A.js",
+    "/assets/SubscribeGate-CZ9M1f0g.css"
+  ],
+  "src/console/billing/SubscribePaymentPage.tsx": [
+    "/assets/SubscribeGate-LyhuS0_A.js",
+    "/assets/SubscribeGate-CZ9M1f0g.css"
+  ],
+  "src/console/billing/SubscribePlanPage.module.css": [
+    "/assets/SubscribePlanPage-DPNCU0Wh.js",
+    "/assets/SubscribePlanPage-CgkoCfLJ.css"
+  ],
+  "src/console/billing/SubscribePlanPage.tsx": [
+    "/assets/SubscribePlanPage-DPNCU0Wh.js",
+    "/assets/SubscribePlanPage-CgkoCfLJ.css"
+  ],
+  "src/console/billing/UpsellNotice.module.css": [
+    "/assets/UpsellNotice-BdGwCWMe.js",
+    "/assets/UpsellNotice-DEs6SRj-.css"
+  ],
+  "src/console/billing/UpsellNotice.tsx": [
+    "/assets/UpsellNotice-BdGwCWMe.js",
+    "/assets/UpsellNotice-DEs6SRj-.css"
+  ],
+  "src/console/billing/entitlements.ts": [
+    "/assets/useEntitlements-VwPssnRg.js"
+  ],
+  "src/console/billing/gating.ts": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/billing/stripeClient.ts": [
+    "/assets/SubscribePlanPage-DPNCU0Wh.js",
+    "/assets/SubscribePlanPage-CgkoCfLJ.css"
+  ],
+  "src/console/billing/useEntitlements.ts": [
+    "/assets/useEntitlements-VwPssnRg.js"
+  ],
+  "src/console/billing/useOnboardingNode.ts": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/buildings/ActionsPanel.module.css": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/ActionsPanel.tsx": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/AssessmentHistoryPanel.module.css": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/AssessmentHistoryPanel.tsx": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/DocumentsPanel.module.css": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/DocumentsPanel.tsx": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/FloorPlansPanel.module.css": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/FloorPlansPanel.tsx": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/Lightbox.module.css": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/Lightbox.tsx": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/ServiceSchedulePanel.module.css": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/ServiceSchedulePanel.tsx": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/SignOffDialog.module.css": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/buildings/SignOffDialog.tsx": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/customers/BuildingDetail.module.css": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/customers/BuildingDetail.tsx": [
-    "/assets/BuildingDetail-L8JzvXvz.js",
+    "/assets/BuildingDetail-Cin3mJS7.js",
     "/assets/BuildingDetail-BGNYOP0Q.css"
   ],
   "src/console/customers/BuildingForm.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/BuildingForm.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/BuildingWizard.module.css": [
-    "/assets/BuildingWizard-CrLJRJHA.js",
+    "/assets/BuildingWizard-B4AYZU6K.js",
     "/assets/BuildingWizard-B1q508MJ.css"
   ],
   "src/console/customers/BuildingWizard.tsx": [
-    "/assets/BuildingWizard-CrLJRJHA.js",
+    "/assets/BuildingWizard-B4AYZU6K.js",
     "/assets/BuildingWizard-B1q508MJ.css"
   ],
   "src/console/customers/ContactCreateDialog.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/ContactCreateDialog.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/ContactPicker.module.css": [
-    "/assets/ContactPicker-C4tdx-1r.js",
-    "/assets/ContactPicker-nJr8GCmY.css"
+    "/assets/ContactPicker-Cmo8MKwj.js",
+    "/assets/ContactPicker-Bjb3k0YT.css"
   ],
   "src/console/customers/ContactPicker.tsx": [
-    "/assets/ContactPicker-C4tdx-1r.js",
-    "/assets/ContactPicker-nJr8GCmY.css"
+    "/assets/ContactPicker-Cmo8MKwj.js",
+    "/assets/ContactPicker-Bjb3k0YT.css"
   ],
   "src/console/customers/ContactsPanel.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/ContactsPanel.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomerDetail.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomerDetail.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomerForm.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomerForm.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomerImageField.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomerImageField.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomerWizard.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomerWizard.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomersList.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomersList.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/CustomersRoutes.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/ImportDialog.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/ImportDialog.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/RagSummary.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/RagSummary.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/SiteDetail.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/SiteDetail.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/SiteForm.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/SiteForm.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/SiteWizard.module.css": [
-    "/assets/SiteWizard-DIIXSOA7.js",
+    "/assets/SiteWizard-BgI4wRe2.js",
     "/assets/SiteWizard-VAUtZeR9.css"
   ],
   "src/console/customers/SiteWizard.tsx": [
-    "/assets/SiteWizard-DIIXSOA7.js",
+    "/assets/SiteWizard-BgI4wRe2.js",
     "/assets/SiteWizard-VAUtZeR9.css"
   ],
   "src/console/customers/importModel.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/customers/shared.module.css": [
-    "/assets/ContactPicker-C4tdx-1r.js",
-    "/assets/ContactPicker-nJr8GCmY.css"
+    "/assets/shared-Cyn-gjdJ.js",
+    "/assets/shared-COI7yNHD.css"
   ],
   "src/console/customers/shared.tsx": [
-    "/assets/ContactPicker-C4tdx-1r.js",
-    "/assets/ContactPicker-nJr8GCmY.css"
+    "/assets/shared-Cyn-gjdJ.js",
+    "/assets/shared-COI7yNHD.css"
   ],
   "src/console/customers/useUnsavedGuard.ts": [
-    "/assets/useUnsavedGuard-DcL0DXFR.js",
-    "/assets/useUnsavedGuard-Cgt33UBd.css"
+    "/assets/useUnsavedGuard-Bvl0Ls_5.js",
+    "/assets/useUnsavedGuard-Deh6RtDz.css"
+  ],
+  "src/console/emails/ComposePage.module.css": [
+    "/assets/ComposePage-BUigDVji.js",
+    "/assets/ComposePage-GIw2Fazr.css"
+  ],
+  "src/console/emails/ComposePage.tsx": [
+    "/assets/ComposePage-BUigDVji.js",
+    "/assets/ComposePage-GIw2Fazr.css"
+  ],
+  "src/console/emails/EmailTemplateEditor.module.css": [
+    "/assets/EmailTemplateEditor-Dg0iVwR7.js",
+    "/assets/EmailTemplateEditor-Daa2s7B0.css"
+  ],
+  "src/console/emails/EmailTemplateEditor.tsx": [
+    "/assets/EmailTemplateEditor-Dg0iVwR7.js",
+    "/assets/EmailTemplateEditor-Daa2s7B0.css"
+  ],
+  "src/console/emails/EmailTemplatesPage.module.css": [
+    "/assets/EmailTemplatesPage-DWsvGXbx.js",
+    "/assets/EmailTemplatesPage-BHeiZi4_.css"
+  ],
+  "src/console/emails/EmailTemplatesPage.tsx": [
+    "/assets/EmailTemplatesPage-DWsvGXbx.js",
+    "/assets/EmailTemplatesPage-BHeiZi4_.css"
+  ],
+  "src/console/emails/EmailTypesPage.module.css": [
+    "/assets/EmailTypesPage-CRDs9hnL.js",
+    "/assets/EmailTypesPage-D3_Mhj3Q.css"
+  ],
+  "src/console/emails/EmailTypesPage.tsx": [
+    "/assets/EmailTypesPage-CRDs9hnL.js",
+    "/assets/EmailTypesPage-D3_Mhj3Q.css"
+  ],
+  "src/console/emails/EmailsDialog.module.css": [
+    "/assets/EmailsDialog-BAr6zQbA.js",
+    "/assets/EmailsDialog-BXoduthE.css"
+  ],
+  "src/console/emails/EmailsDialog.tsx": [
+    "/assets/EmailsDialog-BAr6zQbA.js",
+    "/assets/EmailsDialog-BXoduthE.css"
+  ],
+  "src/console/emails/EmailsRoutes.module.css": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/emails/EmailsRoutes.tsx": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/emails/SentEmailsPage.module.css": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/emails/SentEmailsPage.tsx": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/emails/emailEditorModel.ts": [
+    "/assets/emailEditorModel-wV_3RN7A.js"
+  ],
+  "src/console/emails/emailHtml.ts": [
+    "/assets/emailHtml-BuHBwtEG.js"
+  ],
+  "src/console/emails/emailKindCatalogue.ts": [
+    "/assets/emailKindCatalogue-BUXDnaca.js"
+  ],
+  "src/console/emails/emailVariableEngine.ts": [
+    "/assets/emailVariableEngine-DO2rm8QE.js"
+  ],
+  "src/console/emails/useDragReorder.ts": [
+    "/assets/EmailTemplateEditor-Dg0iVwR7.js",
+    "/assets/EmailTemplateEditor-Daa2s7B0.css"
+  ],
+  "src/console/emails/useOrgEmailBrand.ts": [
+    "/assets/useOrgEmailBrand-C9-k5Nuw.js"
+  ],
+  "src/console/home/FloatingGettingStarted.module.css": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/home/FloatingGettingStarted.tsx": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/jobs/JobDetail.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/jobs/JobDetail.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/jobs/JobWizard.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/jobs/JobWizard.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/jobs/JobsBoard.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/jobs/JobsBoard.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/jobs/JobsRoutes.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/jobs/ScheduleTimeline.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/jobs/ScheduleTimeline.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/jobs/shared.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/lib/actorName.ts": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/lib/calendarEvent.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/lib/csv.ts": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/lib/dateInput.ts": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/lib/humaniseActivity.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/lib/reportClientError.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/lib/upload.ts": [
-    "/assets/upload-DY7OZXs8.js"
+    "/assets/upload-DRXXt-2h.js"
   ],
   "src/console/portal/PortalBuilding.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/PortalBuilding.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/PortalHome.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/PortalHome.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/PortalReport.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/PortalReport.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/PortalShell.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/PortalShell.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/PortalTeam.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/PortalTeam.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/shared.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/portal/shared.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/reports/ReleasesChart.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/reports/ReleasesChart.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/reports/ReportsPage.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/reports/ReportsPage.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/reports/ReportsRoutes.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/reports/RoleGate.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/reports/orgMetrics.ts": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/search/GlobalSearch.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/search/GlobalSearch.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/search/searchModel.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/BrandingPreview.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/BrandingPreview.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/NotificationSettingsPage.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/NotificationSettingsPage.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/OrganisationSettingsPage.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/OrganisationSettingsPage.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/RagSettingsPage.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/RagSettingsPage.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/SettingsRoutes.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/SettingsRoutes.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/settings/ragDerivation.ts": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/settings/reminderSchedules.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/staff/InviteStaffPage.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/staff/InviteStaffPage.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/staff/StaffDirectory.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/staff/StaffDirectory.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/staff/StaffProfile.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/staff/StaffProfile.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/staff/StaffRoutes.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/staff/shared.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/shared-DsYaawMl.js",
+    "/assets/shared-BYP58-rA.css"
   ],
   "src/console/staff/shared.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/shared-DsYaawMl.js",
+    "/assets/shared-BYP58-rA.css"
   ],
   "src/console/templates/CertificatePanel.tsx": [
-    "/assets/TemplateBuilder-DLjHxFYp.js",
+    "/assets/TemplateBuilder-DI7R3FXU.js",
     "/assets/TemplateBuilder-C-JP5ThT.css"
   ],
   "src/console/templates/ParagraphLibrary.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/templates/ParagraphLibrary.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/templates/QuestionEditor.tsx": [
-    "/assets/TemplateBuilder-DLjHxFYp.js",
+    "/assets/TemplateBuilder-DI7R3FXU.js",
     "/assets/TemplateBuilder-C-JP5ThT.css"
   ],
   "src/console/templates/SectionEditor.tsx": [
-    "/assets/TemplateBuilder-DLjHxFYp.js",
+    "/assets/TemplateBuilder-DI7R3FXU.js",
     "/assets/TemplateBuilder-C-JP5ThT.css"
   ],
   "src/console/templates/TemplateBuilder.module.css": [
-    "/assets/TemplateBuilder-DLjHxFYp.js",
+    "/assets/TemplateBuilder-DI7R3FXU.js",
     "/assets/TemplateBuilder-C-JP5ThT.css"
   ],
   "src/console/templates/TemplateBuilder.tsx": [
-    "/assets/TemplateBuilder-DLjHxFYp.js",
+    "/assets/TemplateBuilder-DI7R3FXU.js",
     "/assets/TemplateBuilder-C-JP5ThT.css"
   ],
   "src/console/templates/TemplateVersions.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/templates/TemplateVersions.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/templates/TemplatesList.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/templates/TemplatesList.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/templates/TemplatesRoutes.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/templates/builderModel.ts": [
-    "/assets/TemplateBuilder-DLjHxFYp.js",
+    "/assets/TemplateBuilder-DI7R3FXU.js",
     "/assets/TemplateBuilder-C-JP5ThT.css"
   ],
   "src/console/templates/shared.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/tour/ConsoleTour.module.css": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/tour/ConsoleTour.tsx": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/tour/tourSteps.ts": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/tour/tourStorage.ts": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
+  ],
+  "src/console/tour/useTourTrigger.ts": [
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/AddToCalendar.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/AddToCalendar.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/AddressField.module.css": [
-    "/assets/useUnsavedGuard-DcL0DXFR.js",
-    "/assets/useUnsavedGuard-Cgt33UBd.css"
+    "/assets/useUnsavedGuard-Bvl0Ls_5.js",
+    "/assets/useUnsavedGuard-Deh6RtDz.css"
   ],
   "src/console/ui/AddressField.tsx": [
-    "/assets/useUnsavedGuard-DcL0DXFR.js",
-    "/assets/useUnsavedGuard-Cgt33UBd.css"
+    "/assets/useUnsavedGuard-Bvl0Ls_5.js",
+    "/assets/useUnsavedGuard-Deh6RtDz.css"
   ],
   "src/console/ui/AddressSearch.module.css": [
-    "/assets/useUnsavedGuard-DcL0DXFR.js",
-    "/assets/useUnsavedGuard-Cgt33UBd.css"
+    "/assets/useUnsavedGuard-Bvl0Ls_5.js",
+    "/assets/useUnsavedGuard-Deh6RtDz.css"
   ],
   "src/console/ui/AddressSearch.tsx": [
-    "/assets/useUnsavedGuard-DcL0DXFR.js",
-    "/assets/useUnsavedGuard-Cgt33UBd.css"
+    "/assets/useUnsavedGuard-Bvl0Ls_5.js",
+    "/assets/useUnsavedGuard-Deh6RtDz.css"
   ],
   "src/console/ui/Card.module.css": [
-    "/assets/Grid-C4ajZWHU.js",
-    "/assets/Grid-DXfysjhd.css"
+    "/assets/Card-DjhyyXWE.js",
+    "/assets/Card-CQR3ken9.css"
   ],
   "src/console/ui/Card.tsx": [
-    "/assets/Grid-C4ajZWHU.js",
-    "/assets/Grid-DXfysjhd.css"
+    "/assets/Card-DjhyyXWE.js",
+    "/assets/Card-CQR3ken9.css"
   ],
   "src/console/ui/ComplianceGlance.module.css": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/ui/ComplianceGlance.tsx": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/ui/DataTable.module.css": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/DataTable-BIp0HNrq.js",
+    "/assets/DataTable-B_112HGd.css"
   ],
   "src/console/ui/DataTable.tsx": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/DataTable-BIp0HNrq.js",
+    "/assets/DataTable-B_112HGd.css"
   ],
   "src/console/ui/DownloadIcon.tsx": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/ui/ErrorBoundary.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/ErrorBoundary.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/FilterBar.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/FilterBar.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/FontSelect.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/FontSelect.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/Grid.module.css": [
-    "/assets/Grid-C4ajZWHU.js",
-    "/assets/Grid-DXfysjhd.css"
+    "/assets/Grid-Ljhixg9q.js",
+    "/assets/Grid-BQwcS3a2.css"
   ],
   "src/console/ui/Grid.tsx": [
-    "/assets/Grid-C4ajZWHU.js",
-    "/assets/Grid-DXfysjhd.css"
+    "/assets/Grid-Ljhixg9q.js",
+    "/assets/Grid-BQwcS3a2.css"
   ],
   "src/console/ui/ImageCropDialog.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/ImageCropDialog.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/LocationPicker.module.css": [
-    "/assets/useUnsavedGuard-DcL0DXFR.js",
-    "/assets/useUnsavedGuard-Cgt33UBd.css"
+    "/assets/useUnsavedGuard-Bvl0Ls_5.js",
+    "/assets/useUnsavedGuard-Deh6RtDz.css"
   ],
   "src/console/ui/LocationPicker.tsx": [
-    "/assets/useUnsavedGuard-DcL0DXFR.js",
-    "/assets/useUnsavedGuard-Cgt33UBd.css"
+    "/assets/useUnsavedGuard-Bvl0Ls_5.js",
+    "/assets/useUnsavedGuard-Deh6RtDz.css"
   ],
   "src/console/ui/Page.module.css": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "src/console/ui/Page.tsx": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "src/console/ui/RiskExplanation.module.css": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/ui/RiskExplanation.tsx": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/ui/SearchField.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/SearchField.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/ui/Skeleton.module.css": [
-    "/assets/Grid-C4ajZWHU.js",
-    "/assets/Grid-DXfysjhd.css"
+    "/assets/Skeleton-CwumgXm-.js",
+    "/assets/Skeleton-C7GXRExv.css"
   ],
   "src/console/ui/Skeleton.tsx": [
-    "/assets/Grid-C4ajZWHU.js",
-    "/assets/Grid-DXfysjhd.css"
+    "/assets/Skeleton-CwumgXm-.js",
+    "/assets/Skeleton-C7GXRExv.css"
   ],
   "src/console/ui/Stepper.module.css": [
-    "/assets/useUnsavedGuard-DcL0DXFR.js",
-    "/assets/useUnsavedGuard-Cgt33UBd.css"
+    "/assets/Stepper-BjuEmCDf.js",
+    "/assets/Stepper-g2wYewcR.css"
   ],
   "src/console/ui/Stepper.tsx": [
-    "/assets/useUnsavedGuard-DcL0DXFR.js",
-    "/assets/useUnsavedGuard-Cgt33UBd.css"
+    "/assets/Stepper-BjuEmCDf.js",
+    "/assets/Stepper-g2wYewcR.css"
   ],
   "src/console/ui/geocode.ts": [
-    "/assets/useUnsavedGuard-DcL0DXFR.js",
-    "/assets/useUnsavedGuard-Cgt33UBd.css"
+    "/assets/useUnsavedGuard-Bvl0Ls_5.js",
+    "/assets/useUnsavedGuard-Deh6RtDz.css"
   ],
   "src/console/ui/riskReasons.ts": [
-    "/assets/riskReasons-U39pd2A5.js",
-    "/assets/riskReasons-w1ejQugR.css"
+    "/assets/riskReasons-D5rmTfMK.js",
+    "/assets/riskReasons-BCjWNl6X.css"
   ],
   "src/console/ui/useCallable.ts": [
-    "/assets/useCallable-Bj1TxMbP.js"
+    "/assets/useCallable-C8JPuGVe.js"
   ],
   "src/console/useImageFailed.ts": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/AnswerCard.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/AnswerCard.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/AssessmentReview.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/AssessmentReview.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/ReleasedList.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/ReleasedList.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/ValidationQueue.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/ValidationQueue.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/ValidationRoutes.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/ValidationRoutes.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/releaseShared.module.css": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/console/validation/releaseShared.tsx": [
-    "/assets/ConsoleRoute-Bh9NP4UN.js",
-    "/assets/ConsoleRoute-DhLi0oxn.css"
+    "/assets/ConsoleRoute-BOzTbvC_.js",
+    "/assets/ConsoleRoute-Dp0LOsBu.css"
   ],
   "src/content/news.ts": [
     "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
@@ -1292,8 +1493,8 @@
     "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
   ],
   "src/design/rag.ts": [
-    "/assets/ContactPicker-C4tdx-1r.js",
-    "/assets/ContactPicker-nJr8GCmY.css"
+    "/assets/shared-Cyn-gjdJ.js",
+    "/assets/shared-COI7yNHD.css"
   ],
   "src/design/theme.ts": [
     "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
@@ -1316,24 +1517,24 @@
     "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
   ],
   "src/features/auth/AuthLayout.module.css": [
-    "/assets/AuthLayout-DwkSvQhW.js",
-    "/assets/AuthLayout-D-_LfUU3.css"
+    "/assets/AuthLayout-W5VL-K4m.js",
+    "/assets/AuthLayout-BrBNmv0S.css"
   ],
   "src/features/auth/AuthLayout.tsx": [
-    "/assets/AuthLayout-DwkSvQhW.js",
-    "/assets/AuthLayout-D-_LfUU3.css"
+    "/assets/AuthLayout-W5VL-K4m.js",
+    "/assets/AuthLayout-BrBNmv0S.css"
   ],
   "src/features/auth/ForgotPasswordRoute.tsx": [
-    "/assets/ForgotPasswordRoute-Csr9LzFx.js"
+    "/assets/ForgotPasswordRoute-B6863zvk.js"
   ],
   "src/features/auth/LoginRoute.tsx": [
-    "/assets/LoginRoute-CdDZqTiZ.js"
+    "/assets/LoginRoute-COryMhgK.js"
   ],
   "src/features/invite/InviteRoute.tsx": [
-    "/assets/InviteRoute-C9reiRUQ.js"
+    "/assets/InviteRoute-D6a6t6rp.js"
   ],
   "src/firebase/index.ts": [
-    "/assets/firebase-DymV9kDE.js"
+    "/assets/firebase-DKMJU5Hm.js"
   ],
   "src/layouts/PublicLayout.module.css": [
     "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
@@ -1440,17 +1641,17 @@
     "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
   ],
   "src/paths/index.ts": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "src/query/keys.ts": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "src/query/queryClient.ts": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ],
   "src/query/useRtdbQuery.ts": [
-    "/assets/Page-Cm9PN55p.js",
+    "/assets/Page-14S43EDK.js",
     "/assets/Page-0NiEpAUJ.css"
   ],
   "src/routes.tsx": [
@@ -1462,6 +1663,6 @@
     "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2"
   ],
   "src/types/index.ts": [
-    "/assets/AuthProvider-0UW3wm8I.js"
+    "/assets/AuthProvider-BhqV5JrR.js"
   ]
 }

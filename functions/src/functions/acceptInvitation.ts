@@ -48,6 +48,7 @@ import { assertRateLimit } from '../lib/rateLimit';
 import { rateLimitKeyFor } from './registerInterest';
 import { locateInviteByToken } from '../lib/invitations';
 import { paths, portalSpaceKey } from '../lib/paths';
+import { adjustStaffCount } from '../lib/usageCounters';
 import {
   assertObject,
   requireString,
@@ -359,6 +360,13 @@ export const acceptInvitation = onCall<AcceptInvitationInput>(
           orgId: invitation.orgId,
           env,
         });
+        // Seat accounting (Phase 3 brief 5.2): a STAFF join created an orgMember
+        // above, so it occupies a plan seat - portal joins land in
+        // /customerMembers and never count. Best-effort by construction: the
+        // membership is real by now, so a counter failure only logs.
+        if (!invitation.customerId) {
+          await adjustStaffCount(envPaths, invitation.orgId, 1, logger);
+        }
         logger.info('Invitation accepted', {
           uid,
           // A portal invite is issued with an EMPTY org role set (its portal

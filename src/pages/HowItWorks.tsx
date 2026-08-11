@@ -314,7 +314,7 @@ export function HowItWorksPage() {
           <div className={styles.faqTeaser}>
             <div>
               <h2 id="hiw-faq-title" className={styles.faqTitle}>
-                Questions before a demonstration?
+                Questions before you start?
               </h2>
               <p className={styles.lead}>
                 Offline behaviour, roles and permissions, data isolation, what

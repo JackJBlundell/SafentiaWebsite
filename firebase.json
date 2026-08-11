@@ -42,7 +42,7 @@
         ]
       },
       {
-        "comment": "Baseline security headers. The site loads no third-party origins at all (self-hosted font, no analytics, no CDN), so frame-ancestors 'none' and a tight referrer policy cost nothing and close off clickjacking and referrer leakage. HSTS is set by Firebase Hosting on custom domains.",
+        "comment": "Baseline security headers. The marketing pages load no third-party origins (self-hosted font, no analytics, no CDN). The ONE deliberate exception is Stripe on the authed billing surface: js.stripe.com (script + frames, for the Payment Element and 3DS) and api.stripe.com (XHR), loaded only by the console's billing pages - Stripe is a listed sub-processor for the billing feature. frame-ancestors 'none' and a tight referrer policy cost nothing and close off clickjacking and referrer leakage; if a fuller CSP is ever added, those Stripe origins must be allowed. HSTS is set by Firebase Hosting on custom domains.",
         "source": "**",
         "headers": [
           { "key": "X-Content-Type-Options", "value": "nosniff" },

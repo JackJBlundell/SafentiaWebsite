@@ -17,19 +17,26 @@
 // Every contact of the customer with an address hears about the booking, the
 // move and the cancellation, in duty-holder language rather than diary language.
 //
+// The COPY no longer lives here: each change is an EmailKindId whose default
+// wording sits in lib/emailKindCatalogue (verbatim what this module used to
+// hardcode), and lib/templatedEmail resolves the org's assigned template over
+// that default, renders it and dispatches. This module supplies the FACTS -
+// the catalogue-declared {{variables}}, the detail rows and the per-recipient
+// CTA link - and the recipient plumbing (preferences, de-duplication, portal
+// accounts) that no template can know.
+//
 // Everything here is BEST-EFFORT, deliberately: three of the four senders run
 // from a callable's request path AFTER the business write has committed, so a
 // slow provider or a missing customer record must not turn a successful
-// reschedule into an error the admin will retry (dispatchEmail never throws by
+// reschedule into an error the admin will retry (sendKindEmail never throws by
 // contract; the reads around it are wrapped to hold the same promise).
 // ============================================================================
 
 import { db } from '../admin';
 import { WEB_ORIGIN } from './webOrigin';
-import { dispatchEmail } from './email';
+import { loadKindConfig, sendKindEmail } from './templatedEmail';
 import {
   orgEmailBrand,
-  renderBrandedEmail,
   type EmailBrand,
   type EmailDetailRow,
 } from './emailTemplates';
@@ -39,6 +46,7 @@ import type {
   Customer,
   CustomerContact,
   CustomerMember,
+  EmailKindId,
   OrgMember,
   OrgProfile,
   Site,
@@ -131,8 +139,8 @@ export async function jobEmailRecipient(
   };
 }
 
-/** One visit's worth of email: what changed, and the visit it changed. */
-export interface JobChangeEmail {
+/** The facts every diary email carries, whatever changed. */
+interface JobChangeEmailBase {
   jobId: string;
   buildingName: string;
   /** Resolved to the customer's name here, so the three senders need not each
@@ -140,14 +148,68 @@ export interface JobChangeEmail {
   customerId?: string;
   scheduledFor: number;
   scheduledUntil?: number;
-  subject: string;
-  heading: string;
-  /** The lead sentence: plain-text body, inbox preheader and first paragraph. */
-  body: string;
-  /** Anything to add after the lead, e.g. the admin's cancellation reason. */
-  extraParagraphs?: string[];
   /** The date row's label. A cancelled visit was scheduled; it no longer is. */
   dateLabel?: string;
+}
+
+/**
+ * One visit's worth of email: which kind of change, and the phrases the
+ * catalogue declares that kind's send site supplies (the variance the caller
+ * alone can compute - today-vs-future, moved-vs-reassigned). Everything else
+ * about the wording lives in the kind's template.
+ */
+export type JobChangeEmail =
+  | (JobChangeEmailBase & {
+      kind: 'job-assigned';
+      /** 'New job today' or 'New job assigned'. */
+      subjectPhrase: string;
+      /** 'A new job in your diary today' or 'A new job in your diary'. */
+      headingPhrase: string;
+    })
+  | (JobChangeEmailBase & {
+      kind: 'job-rescheduled';
+      /** 'Job rescheduled', 'Job moved to today', 'Job assigned to you' or
+       *  'Job reassigned'. */
+      subjectPhrase: string;
+      /** 'Your job has been rescheduled', 'A job has moved to your diary' or
+       *  'A job has left your diary'. */
+      headingPhrase: string;
+      /** The whole lead sentence, exactly as the caller computes it for the
+       *  variant being sent (moved, reassigned to, reassigned away). */
+      changeSummary: string;
+    })
+  | (JobChangeEmailBase & {
+      kind: 'job-cancelled';
+      /** The admin's own words, when any were given. */
+      cancellationReason?: string;
+    });
+
+/** The catalogue-declared {{variables}} for a diary email, from the facts the
+ *  caller supplied. Each arm mirrors its EMAIL_KINDS entry exactly. */
+function jobChangeVariables(message: JobChangeEmail): Record<string, string> {
+  switch (message.kind) {
+    case 'job-assigned':
+      return {
+        'building.name': message.buildingName,
+        'job.subjectPhrase': message.subjectPhrase,
+        'job.headingPhrase': message.headingPhrase,
+        'visit.date': formatVisitDate(message.scheduledFor, message.scheduledUntil),
+      };
+    case 'job-rescheduled':
+      return {
+        'building.name': message.buildingName,
+        'job.subjectPhrase': message.subjectPhrase,
+        'job.headingPhrase': message.headingPhrase,
+        'job.changeSummary': message.changeSummary,
+      };
+    case 'job-cancelled':
+      return {
+        'building.name': message.buildingName,
+        // The reason travels as an omit-if-empty paragraph, so 'no reason
+        // given' is the empty string rather than a missing variable.
+        'job.cancellationReason': message.cancellationReason ?? '',
+      };
+  }
 }
 
 /**
@@ -189,29 +251,21 @@ export async function sendJobChangeEmail(
       value: formatVisitDate(message.scheduledFor, message.scheduledUntil),
     });
 
-    await dispatchEmail(
+    await sendKindEmail(
       {
+        kind: message.kind,
+        env: paths.env,
+        orgId,
         to: recipient.email,
-        subject: message.subject,
-        body: message.body,
-        html: renderBrandedEmail({
-          brand: recipient.brand,
-          preheader: message.body,
-          heading: message.heading,
-          paragraphs: [message.body, ...(message.extraParagraphs ?? [])],
-          detailRows,
-          // The console's job page: the assessor's own view of this work, and
-          // the one route that works on whatever device the email is opened on
-          // (the notification carries the safentia:// deep link for phones).
-          cta: {
-            label: 'Open the job',
-            url: `${WEB_ORIGIN}/app/jobs/${message.jobId}`,
-          },
-          footerNote: JOB_EMAIL_FOOTER,
-        }),
+        variables: jobChangeVariables(message),
+        brand: recipient.brand,
+        // The console's job page: the assessor's own view of this work, and
+        // the one route that works on whatever device the email is opened on
+        // (the notification carries the safentia:// deep link for phones).
+        kindLink: `${WEB_ORIGIN}/app/jobs/${message.jobId}`,
+        kindRows: detailRows,
       },
       logger,
-      { orgId, env: paths.env, category: 'job-scheduled' },
     );
   } catch (error) {
     logger.warn('Job email failed', {
@@ -225,10 +279,10 @@ export async function sendJobChangeEmail(
 // The customer's half: telling the duty-holder about their own visit.
 // ----------------------------------------------------------------------------
 
-/** Which change the customer is being told about. The wording, the date row's
- *  label and the send category all follow from it, so the three callables pass
- *  the facts and none of the copy - which is what stops the duty-holder voice
- *  drifting into three subtly different versions of itself. */
+/** Which change the customer is being told about. The kind's template, the date
+ *  row's label and the send category all follow from it, so the three callables
+ *  pass the facts and none of the copy - which is what stops the duty-holder
+ *  voice drifting into three subtly different versions of itself. */
 export type VisitChangeKind =
   | 'scheduled'
   | 'rescheduled'
@@ -236,6 +290,15 @@ export type VisitChangeKind =
    *  changed, which is the only part of a reassignment a customer can see. */
   | 'reassigned'
   | 'cancelled';
+
+/** The detail card's date-row label per change: a cancelled visit was
+ *  scheduled, a rescheduled one is NOW scheduled. */
+const VISIT_DATE_LABEL: Record<VisitChangeKind, string> = {
+  scheduled: 'Scheduled for',
+  rescheduled: 'Now scheduled for',
+  reassigned: 'Scheduled for',
+  cancelled: 'Was scheduled for',
+};
 
 /** One visit's worth of customer email: the visit, and what happened to it. */
 export interface VisitCustomerEmail {
@@ -277,79 +340,6 @@ export function formatVisitWindow(
  *  could not be read simply drops out rather than printing an id at anyone. */
 function visitPlace(buildingName: string, siteName?: string): string {
   return siteName ? `${buildingName}, ${siteName}` : buildingName;
-}
-
-interface VisitCopy {
-  subject: string;
-  heading: string;
-  paragraphs: string[];
-  dateLabel: string;
-}
-
-/**
- * The duty-holder's version of the news. Deliberately NOT the assessor's: it
- * names the building rather than the diary, says plainly what the reader has to
- * do (almost always nothing beyond providing access), and points at the
- * organisation - not the console - when the date does not suit.
- */
-function visitCustomerCopy(
-  message: VisitCustomerEmail,
-  orgName: string,
-  place: string,
-  when: string,
-): VisitCopy {
-  // The one line worth repeating: a contact's actual obligation on the day.
-  const access =
-    'There is nothing you need to do, other than making sure the assessor can get in and reach the areas being assessed.';
-  const rearrange = `If the date does not suit, please contact ${orgName} and another can be arranged.`;
-
-  switch (message.kind) {
-    case 'scheduled':
-      return {
-        subject: `Visit scheduled: ${message.buildingName}`,
-        heading: 'A visit has been scheduled',
-        paragraphs: [
-          `${orgName} will be visiting ${place} on ${when} to carry out a fire risk assessment.`,
-          access,
-          rearrange,
-        ],
-        dateLabel: 'Scheduled for',
-      };
-    case 'rescheduled':
-      return {
-        subject: `Visit rescheduled: ${message.buildingName}`,
-        heading: 'Your visit has been rescheduled',
-        paragraphs: [
-          `The visit to ${place} by ${orgName} has been rescheduled. It is now planned for ${when}.`,
-          access,
-          rearrange,
-        ],
-        dateLabel: 'Now scheduled for',
-      };
-    case 'reassigned':
-      return {
-        subject: `Visit update: ${message.buildingName}`,
-        heading: 'A different assessor will attend your visit',
-        paragraphs: [
-          `The visit to ${place} by ${orgName} is going ahead as planned on ${when}, but a different assessor will now be attending.`,
-          access,
-        ],
-        dateLabel: 'Scheduled for',
-      };
-    case 'cancelled':
-      return {
-        subject: `Visit cancelled: ${message.buildingName}`,
-        heading: 'Your visit has been cancelled',
-        paragraphs: [
-          `The visit to ${place} by ${orgName}, scheduled for ${when}, has been cancelled. Nobody will be attending, and there is nothing you need to do.`,
-          // The admin's own words, kept as their own paragraph so they read as
-          // the explanation they are rather than part of the standard copy.
-          ...(message.reason ? [`Reason given: ${message.reason}`] : []),
-          `${orgName} will be in touch if the visit needs to be rearranged.`,
-        ],
-        dateLabel: 'Was scheduled for',
-      };
-  }
 }
 
 /**
@@ -463,13 +453,18 @@ export async function sendVisitCustomerEmails(
         ? assessorValue
         : undefined;
 
-    const place = visitPlace(message.buildingName, siteName);
-    const copy = visitCustomerCopy(
-      message,
-      orgName,
-      place,
-      formatVisitDate(message.scheduledFor, message.scheduledUntil),
-    );
+    // The catalogue-declared {{variables}} for the visit kinds. The reason is
+    // an omit-if-empty paragraph, so 'no reason given' is the empty string.
+    const kind: EmailKindId = `visit-${message.kind}`;
+    const variables: Record<string, string> = {
+      'org.name': orgName,
+      'building.name': message.buildingName,
+      'visit.place': visitPlace(message.buildingName, siteName),
+      'visit.date': formatVisitDate(message.scheduledFor, message.scheduledUntil),
+      ...(message.kind === 'cancelled'
+        ? { 'visit.cancellationReason': message.reason ?? '' }
+        : {}),
+    };
 
     const detailRows: EmailDetailRow[] = [
       { label: 'Building', value: message.buildingName },
@@ -478,7 +473,7 @@ export async function sendVisitCustomerEmails(
       detailRows.push({ label: 'Site', value: siteName });
     }
     detailRows.push({
-      label: copy.dateLabel,
+      label: VISIT_DATE_LABEL[message.kind],
       value: formatVisitWindow(message.scheduledFor, message.scheduledUntil),
     });
     // Who to expect at reception - the assessor's NAME and nothing else. A
@@ -487,12 +482,12 @@ export async function sendVisitCustomerEmails(
       detailRows.push({ label: 'Assessor', value: assessorName });
     }
 
-    // 4. The portal CTA is per-recipient, so it is rendered twice at most: a
-    // contact with a live portal account gets the button, and one without gets
-    // no button at all rather than a link that walls them at a sign-in they
-    // cannot pass. `uid` is set when a contact accepts their portal invitation;
-    // their account must also still be active, since a locked one hits the same
-    // wall (an archived customer never reaches here - step 1 stopped it).
+    // 4. The portal CTA is per-recipient: a contact with a live portal account
+    // gets the button, and one without gets no button at all rather than a
+    // link that walls them at a sign-in they cannot pass. `uid` is set when a
+    // contact accepts their portal invitation; their account must also still
+    // be active, since a locked one hits the same wall (an archived customer
+    // never reaches here - step 1 stopped it).
     const portalUids = recipients
       .map((recipient) => recipient.uid)
       .filter((uid): uid is string => Boolean(uid));
@@ -508,52 +503,32 @@ export async function sendVisitCustomerEmails(
       );
     }
 
-    const body = copy.paragraphs.join('\n\n');
-    const footerNote = `You are receiving this because you are listed as a contact for ${message.buildingName} on Safentia. This is a service message about a visit to your building.`;
-    // The document is identical apart from the button, so each variant is
-    // rendered at most once however many contacts share it.
-    const htmlCache = new Map<boolean, string>();
-    const htmlFor = (withCta: boolean): string => {
-      const cached = htmlCache.get(withCta);
-      if (cached !== undefined) {
-        return cached;
-      }
-      const html = renderBrandedEmail({
-        brand,
-        preheader: copy.paragraphs[0],
-        heading: copy.heading,
-        paragraphs: copy.paragraphs,
-        detailRows,
-        ...(withCta
-          ? {
-              // The customer's own portal building page, never the staff
-              // console - the console would only show them a permission wall.
-              cta: {
-                label: 'View your building',
-                url: `${WEB_ORIGIN}/app/sites/${message.siteId}/buildings/${message.buildingId}`,
-              },
-            }
-          : {}),
-        footerNote,
-      });
-      htmlCache.set(withCta, html);
-      return html;
-    };
-
-    // 5. Send. Best-effort per recipient: dispatchEmail never throws, so one
-    // contact's provider failure cannot cost the others their notice.
+    // 5. Send. The template is resolved ONCE for the whole batch and handed to
+    // each send; best-effort per recipient (sendKindEmail never throws), so
+    // one contact's provider failure cannot cost the others their notice.
+    const config = await loadKindConfig(paths.env, orgId, kind, logger);
     for (const recipient of recipients) {
       const hasPortal =
         recipient.uid !== undefined && activePortalUids.has(recipient.uid);
-      await dispatchEmail(
+      await sendKindEmail(
         {
+          kind,
+          env: paths.env,
+          orgId,
           to: recipient.email,
-          subject: copy.subject,
-          body,
-          html: htmlFor(hasPortal),
+          variables,
+          brand,
+          ...(hasPortal
+            ? {
+                // The customer's own portal building page, never the staff
+                // console - the console would only show them a permission wall.
+                kindLink: `${WEB_ORIGIN}/app/sites/${message.siteId}/buildings/${message.buildingId}`,
+              }
+            : {}),
+          kindRows: detailRows,
+          config,
         },
         logger,
-        { orgId, env: paths.env, category: `visit-${message.kind}` },
       );
     }
     logger.info('Visit emails dispatched to customer contacts', {

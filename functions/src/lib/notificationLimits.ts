@@ -10,30 +10,27 @@
 // "what is the cap?".
 // ============================================================================
 
-import { db } from '../admin';
 import type { EnvPaths } from './paths';
-import { platform } from './paths';
-import type { PlanLimits } from '../shared/types';
+import { resolvePlanContext } from './planContext';
 
 /**
  * The org's monthly notification cap, or undefined when there is no enforced
- * limit (no plan, or a plan with no notificationsPerMonth). Any missing link in
- * the chain resolves to unlimited - the documented default before a plan is set.
+ * limit (no plan, or a plan with no notificationsPerMonth). Resolved through
+ * the shared plan context so this gate judges from the SAME entitlements the
+ * mirrored module shows the console (Phase 3 §6.3): the grandfather chain
+ * still resolves every missing link to unlimited, a plan cap passes through
+ * as-is, and a SUSPENDED subscription (unpaid/canceled/incomplete, or an
+ * expired dunning grace window) resolves to the zero-create floor - so a
+ * suspended org's notifications stop exactly as the entitlements it renders
+ * (SUSPENDED_LIMITS.notificationsPerMonth = 0) say they do. The skip is
+ * best-effort by sendNotification's own contract: the calling business op
+ * still succeeds, and nothing stored is touched.
  */
 export async function resolveNotificationLimit(
   env: EnvPaths,
   orgId: string,
 ): Promise<number | undefined> {
-  const subSnap = await db.ref(env.db.orgSubscription(orgId)).get();
-  const planId = (subSnap.val() as { planId?: string } | null)?.planId;
-  if (!planId) {
-    return undefined;
-  }
-
-  // /platform/plans is global (not env-scoped). A plan may carry no limits block.
-  const planSnap = await db.ref(platform.plan(planId)).get();
-  const limits = (planSnap.val() as { limits?: PlanLimits } | null)?.limits;
-  return typeof limits?.notificationsPerMonth === 'number'
-    ? limits.notificationsPerMonth
-    : undefined;
+  const { entitlements } = await resolvePlanContext(env, orgId);
+  const limit = entitlements.limits.notificationsPerMonth;
+  return limit === -1 ? undefined : limit;
 }

@@ -4,10 +4,11 @@
 // Two rules this component enforces, because they are the ones that rot:
 //   1. Every entry in NAV_LINKS points at a route that exists in routes.tsx.
 //      There are no dead links and no unfinished entries.
-//   2. "Sign in" is the only account action. There is no public sign-up: staff
-//      and customers arrive by invitation (Schedule 1 groups 1 and 2), and
-//      self-serve registration is Phase 3 work. The home page's call to action
-//      routes to /contact, not to a registration form that does not exist.
+//   2. "Get started" is the primary account action: self-serve sign-up is live
+//      (Phase 3), so the door to the console at /login is where a new
+//      organisation begins the subscribe journey. "Sign in" stays alongside it
+//      for returning users; booking a demonstration lives on the pages as the
+//      quieter guided path, not in the header.
 //
 // The mobile menu is a plain disclosure, not a modal: focus stays in document
 // order, Escape closes it, and it never traps a keyboard user.
@@ -84,8 +85,8 @@ export function SiteHeader() {
             </Button>
           </span>
           <span className={styles.desktopOnly}>
-            <Button to="/contact" variant="primary">
-              Book a demonstration
+            <Button to="/login" variant="primary">
+              Get started
             </Button>
           </span>
 
@@ -125,8 +126,8 @@ export function SiteHeader() {
           <Button to="/login" variant="secondary" block>
             Sign in
           </Button>
-          <Button to="/contact" variant="primary" block>
-            Book a demonstration
+          <Button to="/login" variant="primary" block>
+            Get started
           </Button>
         </div>
       </div>

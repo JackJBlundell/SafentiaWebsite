@@ -52,9 +52,10 @@ import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import { deriveRiskLevel, RAG_CONFIG_DEFAULTS } from '../lib/ragDerivation';
-import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { WEB_ORIGIN } from '../lib/webOrigin';
-import { orgEmailBrand, renderBrandedEmail } from '../lib/emailTemplates';
+import { orgEmailBrand } from '../lib/emailTemplates';
+import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
 import { resolveResponsibleAssignment } from '../lib/responsibleParty';
 import { SEVERITIES } from '../shared/types';
 import type { EnvPaths } from '../shared/paths';
@@ -122,7 +123,7 @@ function formatDueDate(millis: number): string {
  * at the report, exactly as review reminders and visit notices do.
  *
  * Best-effort throughout: the release has already landed, so nothing here may
- * throw (the dispatchEmail contract, extended to the reads around it).
+ * throw (the sendKindEmail contract, extended to the reads around it).
  */
 async function emailReleaseDigests(
   paths: EnvPaths,
@@ -166,6 +167,15 @@ async function emailReleaseDigests(
     const profileSnap = await db.ref(paths.db.orgProfile(orgId)).get();
     const brand = orgEmailBrand(profileSnap.val() as OrgProfile | null);
 
+    // The seam owns the rendering now; the org's kind config is loaded once
+    // and reused across every contact in the fan-out.
+    const digestConfig = await loadKindConfig(
+      paths.env,
+      orgId,
+      'release-digest',
+      logger,
+    );
+
     for (const [contactId, actions] of byContact) {
       const contact = directory[contactId];
       if (!contact) {
@@ -196,38 +206,33 @@ async function emailReleaseDigests(
         dueDates.length > 0 ? Math.min(...dueDates) : undefined;
 
       const count = actions.length;
-      const subject = `${count} ${count === 1 ? 'action' : 'actions'} from the released assessment of ${building.name}`;
-      const body = `A fire risk assessment of ${building.name} has been released with ${count} ${count === 1 ? 'action' : 'actions'} recorded against you.`;
-      const html = renderBrandedEmail({
-        brand,
-        preheader: body,
-        heading: subject,
-        paragraphs: [
-          body,
-          'Please review the action plan and arrange the remedial work before the due dates pass.',
-        ],
-        detailRows: [
-          { label: 'Building', value: building.name },
-          { label: 'Actions', value: String(count) },
-          { label: 'Top severity', value: SEVERITY_LABELS[topSeverity] },
-          ...(earliestDue !== undefined
-            ? [{ label: 'Earliest due', value: formatDueDate(earliestDue) }]
-            : []),
-        ],
-        // Straight to the building in the customer's own portal, where the new
-        // action plan and the released report both live. The staff console
-        // would only show this recipient a permission wall.
-        cta: {
-          label: 'View the action plan',
-          url: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
+      await sendKindEmail(
+        {
+          kind: 'release-digest',
+          env: paths.env,
+          orgId,
+          to: contact.email,
+          variables: {
+            'building.name': building.name,
+            'actions.countPhrase': `${count} ${count === 1 ? 'action' : 'actions'}`,
+          },
+          brand,
+          // Straight to the building in the customer's own portal, where the new
+          // action plan and the released report both live. The staff console
+          // would only show this recipient a permission wall.
+          kindLink: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
+          kindRows: [
+            { label: 'Building', value: building.name },
+            { label: 'Actions', value: String(count) },
+            { label: 'Top severity', value: SEVERITY_LABELS[topSeverity] },
+            ...(earliestDue !== undefined
+              ? [{ label: 'Earliest due', value: formatDueDate(earliestDue) }]
+              : []),
+          ],
+          config: digestConfig,
         },
-        footerNote: `You are receiving this because you are recorded as responsible for these actions at ${building.name} on Safentia.`,
-      });
-      await dispatchEmail({ to: contact.email, subject, body, html }, logger, {
-        orgId,
-        env: paths.env,
-        category: 'release-digest',
-      });
+        logger,
+      );
     }
   } catch (error) {
     // The release already landed; a failed courtesy digest must not undo it.

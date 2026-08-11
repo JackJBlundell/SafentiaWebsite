@@ -7,7 +7,8 @@
 // ("You have 4 jobs scheduled today.") - in-app plus a best-effort push - via
 // the shared sendNotification helper (which also accounts the org's monthly
 // notification quota and targets the user's registered devices), and ONE branded
-// email listing the day (lib/jobEmails), never one email per job: a morning of
+// email listing the day (recipient resolved by lib/jobEmails, rendered through
+// lib/templatedEmail), never one email per job: a morning of
 // five separate messages is how a digest becomes noise. The email is additional
 // and honours the member's own `jobScheduled` preference; the notification is
 // unconditional.
@@ -32,18 +33,18 @@ import { createLogger } from '../lib/logging';
 import { forEnv } from '../shared/paths';
 import { sendNotification } from '../lib/notifications';
 import { WEB_ORIGIN } from '../lib/webOrigin';
-import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
-import { renderBrandedEmail, type EmailDetailRow } from '../lib/emailTemplates';
-import {
-  jobEmailRecipient,
-  formatVisitTime,
-  JOB_EMAIL_FOOTER,
-} from '../lib/jobEmails';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
+import { jobEmailRecipient, formatVisitTime } from '../lib/jobEmails';
 import { ukDay } from '../lib/ukCalendar';
 import type { EnvPaths } from '../shared/paths';
 import type { Building, Customer, Environment, Job } from '../shared/types';
 
 const ENVIRONMENTS: Environment[] = ['live', 'test'];
+
+/** The per-org template resolution the seam returns, read once per org so the
+ *  assessor fan-out below never re-resolves it. */
+type KindConfig = Awaited<ReturnType<typeof loadKindConfig>>;
 
 /** A job needs the assessor ON SITE today only while it is scheduled or in
  *  progress. Once it is awaiting validation/release (assessor's work done),
@@ -126,6 +127,9 @@ export const dailyJobReminders = onSchedule(
         // Resolved on the first digest this org actually sends (see
         // loadOrgDirectory), then reused for its other assessors.
         let directory: Awaited<ReturnType<typeof loadOrgDirectory>> | null = null;
+        // Likewise the kind's resolved template: once per org, never per
+        // assessor.
+        let kindConfig: KindConfig | null = null;
 
         for (const [assessorUid, visits] of Object.entries(diaries)) {
           const count = visits.length;
@@ -174,6 +178,14 @@ export const dailyJobReminders = onSchedule(
               if (directory === null) {
                 directory = await loadOrgDirectory(paths, orgId);
               }
+              if (kindConfig === null) {
+                kindConfig = await loadKindConfig(
+                  env,
+                  orgId,
+                  'job-reminder',
+                  logger,
+                );
+              }
               const names = directory;
               // Earliest first: the digest is read as the day's running order.
               const ordered = [...visits].sort(
@@ -188,8 +200,7 @@ export const dailyJobReminders = onSchedule(
                   customerName,
                 };
               });
-              const lead = `You have ${count} job${count === 1 ? '' : 's'} scheduled today.`;
-              const detailRows: EmailDetailRow[] = lines.map((line) => ({
+              const detailRows = lines.map((line) => ({
                 label: line.time,
                 // The customer sits under the building on its own line; the
                 // template turns the newline into a <br>.
@@ -197,39 +208,25 @@ export const dailyJobReminders = onSchedule(
                   ? `${line.buildingName}\n${line.customerName}`
                   : line.buildingName,
               }));
-              const body = [
-                lead,
-                '',
-                ...lines.map(
-                  (line) =>
-                    `${line.time} - ${line.buildingName}${line.customerName ? ` (${line.customerName})` : ''}`,
-                ),
-              ].join('\n');
 
-              await dispatchEmail(
+              await sendKindEmail(
                 {
+                  kind: 'job-reminder',
+                  env,
+                  orgId,
                   to: recipient.email,
-                  subject: `Your jobs today: ${count} visit${count === 1 ? '' : 's'}`,
-                  body,
-                  html: renderBrandedEmail({
-                    brand: recipient.brand,
-                    preheader: lead,
-                    heading: 'Your jobs today',
-                    paragraphs: [
-                      lead,
-                      'This is your diary as it stood at 07:00. Anything booked, moved or cancelled after that is sent to you on its own.',
-                    ],
-                    detailRows,
-                    // The list, not a single job: the digest is the day.
-                    cta: {
-                      label: 'Open your jobs',
-                      url: `${WEB_ORIGIN}/app/jobs`,
-                    },
-                    footerNote: JOB_EMAIL_FOOTER,
-                  }),
+                  variables: {
+                    'jobs.visitCountPhrase': `${count} visit${count === 1 ? '' : 's'}`,
+                    'jobs.countPhrase': `${count} job${count === 1 ? '' : 's'}`,
+                  },
+                  brand: recipient.brand,
+                  // The list, not a single job: the digest is the day.
+                  kindLink: `${WEB_ORIGIN}/app/jobs`,
+                  // The day's visits in running order.
+                  kindRows: detailRows,
+                  config: kindConfig,
                 },
                 logger,
-                { orgId, env, category: 'job-reminder' },
               );
             }
           } catch (error) {

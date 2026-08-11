@@ -25,6 +25,7 @@ export interface RateLimitRule {
 }
 
 const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
 
 /**
  * Per-action allowances. Keyed by a stable action name (also the RTDB child key),
@@ -130,11 +131,53 @@ export const RATE_LIMITS = {
   // backstop against a stuck client - generous enough never to drop a genuine
   // crash report, tight enough to cap a runaway loop.
   reportClientError: { limit: 20, windowMs: MINUTE },
+  // A manual send can address fifty EXTERNAL recipients per call from the
+  // platform's verified sending domain, so the scarce resource here is domain
+  // reputation, not compute: at the old 10/minute a single admin account was a
+  // ~720k-emails/day relay. Five an HOUR still covers every honest use (an
+  // admin composes deliberately, batch by batch, with a corrected re-send to
+  // spare) while making the endpoint worthless as a spam pipe. The per-org
+  // daily recipient cap (lib/manualEmailLimits) backstops this per-user rate.
+  sendManualEmail: { limit: 5, windowMs: HOUR },
   // A super admin opening a tenant drill-down (recordPlatformAccess). A single
   // navigation through an org, a customer and a building fires it three times,
   // and the pages guard against StrictMode double-fire, so sixty a minute is
   // ample for genuine oversight browsing while capping a stuck client.
   recordPlatformAccess: { limit: 60, windowMs: MINUTE },
+  // Billing (Phase 3). Starting a subscription creates real Stripe objects
+  // (customer + incomplete subscription), so the window is hourly and small: a
+  // genuine subscriber does this once - but the payment page calls it on
+  // EVERY mount (the resume path returns the same secret), so a buyer
+  // deliberating between tiers legitimately burns several calls in minutes.
+  // Twelve an hour absorbs that comparison shopping; the persisted attempt
+  // nonce means every extra call resumes rather than duplicates, so the
+  // marginal cost of a higher ceiling is one idempotent Stripe read.
+  createSubscription: { limit: 12, windowMs: HOUR },
+  // The pre-plan details form: a human fills it once and maybe edits it a few
+  // times on the way to payment; thirty a minute absorbs a fiddly address
+  // correction without allowing a write loop against the onboarding node.
+  saveOnboardingDetails: { limit: 30, windowMs: MINUTE },
+  // Reading billing state fires on gate mounts and payment-confirmation polls,
+  // so it is generous like the other read paths, while still capping a client
+  // stuck in a refresh loop against the Stripe API behind it.
+  getBillingState: { limit: 30, windowMs: MINUTE },
+  // Skip/finish taps in the setup wizard: a human clicks through a handful of
+  // steps once; thirty a minute absorbs indecision without allowing a loop.
+  advanceOnboarding: { limit: 30, windowMs: MINUTE },
+  // Plan changes and cancellations are deliberate, rare acts - six an hour
+  // absorbs a change of heart while stopping a scripted loop against Stripe.
+  changeSubscription: { limit: 6, windowMs: HOUR },
+  cancelSubscription: { limit: 6, windowMs: HOUR },
+  // Restarting a dead subscription creates a real Stripe subscription, so it
+  // matches createSubscription's posture: a genuine restart happens once, and
+  // the dead-subscription-derived idempotency key makes retries resume rather
+  // than duplicate.
+  resubscribe: { limit: 5, windowMs: HOUR },
+  // A card update mints a SetupIntent against Stripe; ten an hour covers a
+  // fumbled card number several times over.
+  createCardUpdateIntent: { limit: 10, windowMs: HOUR },
+  // Invoice history is a read, paged by the Billing tab.
+  listInvoices: { limit: 30, windowMs: MINUTE },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitedAction = keyof typeof RATE_LIMITS;

@@ -1,0 +1,158 @@
+/* SubscribePaymentPage - the checkout body inside the shared SubscribeChrome:
+ * a proper order-summary block above Stripe's Payment Element. */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  width: 100%;
+}
+
+.notice {
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  width: 100%;
+}
+
+/* Order summary above the payment form: a checkout block, not a text line. */
+.summary {
+  width: 100%;
+  padding: var(--space-xl);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  text-align: left;
+}
+
+.summaryTitle {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.summaryRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.summaryPlan {
+  color: var(--color-text);
+  font-weight: 650;
+}
+
+.summaryPrice {
+  color: var(--color-text);
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.summaryPeriod {
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+  font-weight: 400;
+}
+
+.summaryFoot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-md);
+}
+
+.summaryVat {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+/* A button styled as a link: it swaps the view rather than navigating. */
+.changePlanLink {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.changePlanLink:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.formSlot {
+  width: 100%;
+}
+
+/* The Payment Element brings its own field chrome; ours just spaces it. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  text-align: left;
+}
+
+.terms {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.terms input {
+  margin-top: 3px;
+}
+
+.terms a {
+  color: var(--color-text);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* Text-only trust cue: no badge, no external asset. */
+.trustLine {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+/* A button styled as a link: it swaps the view rather than navigating. */
+.backLink {
+  background: none;
+  border: none;
+  padding: var(--space-sm);
+  font: inherit;
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.backLink:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}

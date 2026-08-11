@@ -428,6 +428,9 @@ export function ConsoleHome() {
         lede={ledeParts || 'An overview of your organisation on Safentia.'}
       />
 
+      {/* The onboarding checklist now floats bottom-right from the ConsoleShell
+          (home/FloatingGettingStarted), so it follows the admin across every
+          console page rather than living only on this dashboard. */}
       <PageGrid
         aside={
           <>

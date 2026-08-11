@@ -375,17 +375,45 @@ describe('PlatformDashboard', () => {
     expect(screen.queryByText(/users over time/i)).not.toBeInTheDocument();
   });
 
-  it('shows the revenue preview as an honest, tagged preview', async () => {
+  it('shows LIVE revenue figures - the Finance tab summary, not a preview', async () => {
     mocks.tokenClaims = { superAdmin: true };
-    mocks.rtdbByPath = { 'live/organisations': {} };
+    mocks.rtdbByPath = {
+      // Two subscribed orgs, but only the active one counts toward revenue:
+      // MRR £29, one active subscription, so ARPO is £29 too.
+      'live/organisations': {
+        'org-a': {
+          profile: { name: 'Alpha Fire Ltd' },
+          subscription: { planId: 'bronze', status: 'active' },
+        },
+        'org-b': {
+          profile: { name: 'Bravo Safety' },
+          subscription: { planId: 'bronze', status: 'canceled' },
+        },
+      },
+      'platform/plans/live': {
+        bronze: { name: 'Bronze', priceMonthlyPence: 2900, order: 1 },
+      },
+    };
     renderDashboard();
 
-    expect(await screen.findByText('Preview')).toBeInTheDocument();
+    // The three headline tiles carry real derived figures (financeMetrics),
+    // and the card links through to the full Finance tab.
+    await waitFor(() =>
+      expect(
+        tile('Monthly recurring revenue').getByText('£29'),
+      ).toBeInTheDocument(),
+    );
+    expect(tile('Active subscriptions').getByText('1')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Billing is not yet active. These figures are illustrative and populate once subscriptions go live in a later phase.',
-      ),
+      tile('Average revenue per organisation').getByText('£29'),
     ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View finance' })).toHaveAttribute(
+      'href',
+      '/app/admin/finance',
+    );
+    // The Phase 2 illustrative preview is gone: no tag, no disclaimer.
+    expect(screen.queryByText('Preview')).not.toBeInTheDocument();
+    expect(screen.queryByText(/illustrative/i)).not.toBeInTheDocument();
   });
 
   it('switches the reads when the shared platform environment changes', async () => {
@@ -825,6 +853,139 @@ describe('PlatformCustomers', () => {
     renderAdmin('/customers');
     expect(
       await screen.findByText('No customers found in this environment.'),
+    ).toBeInTheDocument();
+  });
+});
+
+// --- FinancePage (the redesigned Finance tab) ---------------------------------
+
+describe('FinancePage', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const PLANS = {
+    bronze: { name: 'Bronze', priceMonthlyPence: 4900, order: 1 },
+    silver: { name: 'Silver', priceMonthlyPence: 9900, order: 2 },
+  };
+  // Midday UTC, so the rendered date is the same in any test timezone.
+  const PERIOD_END = Date.UTC(2026, 8, 12, 12);
+
+  it('renders the health table with the deferred billing detail: pending downgrade, cancelling and suspended chips', async () => {
+    mocks.tokenClaims = { superAdmin: true };
+    mocks.rtdbByPath = {
+      'live/organisations': {
+        // Suspended (webhook mirror) outranks the raw lifecycle word.
+        'org-a': {
+          profile: { name: 'Alpha Fire', suspended: true },
+          subscription: { planId: 'silver', status: 'unpaid' },
+        },
+        // Scheduled downgrade (§3.2): the plan cell says where it lands, when.
+        'org-b': {
+          profile: { name: 'Bravo Safety' },
+          subscription: {
+            planId: 'silver',
+            status: 'active',
+            pendingPlanId: 'bronze',
+            currentPeriodEnd: PERIOD_END,
+          },
+        },
+        // Scheduled cancellation: a DISTINCT worded state, not just "Active".
+        'org-c': {
+          profile: { name: 'Charlie Compliance' },
+          subscription: {
+            planId: 'bronze',
+            status: 'active',
+            cancelAtPeriodEnd: true,
+            currentPeriodEnd: PERIOD_END,
+          },
+        },
+      },
+      'platform/plans/live': PLANS,
+      'platform/financeEvents/live': {},
+    };
+    renderAdmin('/finance');
+
+    expect(
+      await screen.findByText('Silver → Bronze at 12 Sept 2026'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Ends 12 Sept 2026')).toBeInTheDocument();
+    expect(screen.getByText('Suspended')).toBeInTheDocument();
+    // The fourth headline tile, and the stated (not faked) sort order.
+    expect(screen.getByText('Past due')).toBeInTheDocument();
+    expect(
+      screen.getByText(/sorted by monthly contribution, largest first/i),
+    ).toBeInTheDocument();
+    // The two accounting exports sit in the toolbar, enabled once loaded.
+    expect(
+      screen.getByRole('button', { name: 'Export for QuickBooks (CSV)' }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Export all activity (CSV)' }),
+    ).toBeEnabled();
+  });
+
+  it('groups the billing feed by day, words every entry and signs refunds negative', async () => {
+    const now = Date.now();
+    mocks.tokenClaims = { superAdmin: true };
+    mocks.rtdbByPath = {
+      'live/organisations': {},
+      'platform/plans/live': PLANS,
+      'platform/financeEvents/live': {
+        e1: {
+          at: now - 2 * 60 * 60 * 1000,
+          type: 'payment',
+          orgId: 'org-a',
+          orgName: 'Alpha Fire',
+          planId: 'bronze',
+          amountPence: 4900,
+          stripeEventId: 'evt_1',
+        },
+        e2: {
+          at: now - 3 * DAY_MS,
+          type: 'refund',
+          orgId: 'org-b',
+          orgName: 'Bravo Safety',
+          planId: 'silver',
+          amountPence: 2450,
+          stripeEventId: 'evt_2',
+        },
+        e3: {
+          at: now - 3 * DAY_MS - 60_000,
+          type: 'subscription_started',
+          orgId: 'org-b',
+          orgName: 'Bravo Safety',
+          planId: 'silver',
+          stripeEventId: 'evt_3',
+        },
+      },
+    };
+    renderAdmin('/finance');
+
+    // Worded entries with org links; the refund amount carries its minus.
+    expect(await screen.findByText('Payment received')).toBeInTheDocument();
+    expect(screen.getByText('Refund issued')).toBeInTheDocument();
+    expect(screen.getByText('Subscription started')).toBeInTheDocument();
+    expect(screen.getByText('-£24.50')).toBeInTheDocument();
+    expect(screen.getByText('£49')).toBeInTheDocument();
+    // Day-group headings (h3, UTC): the two distinct days both appear.
+    expect(
+      screen.getAllByRole('heading', { level: 3 }).length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it('shows honest empty states when the environment has no billing yet', async () => {
+    mocks.tokenClaims = { superAdmin: true };
+    mocks.rtdbByPath = {
+      'live/organisations': {},
+      'platform/plans/live': PLANS,
+      'platform/financeEvents/live': null,
+    };
+    renderAdmin('/finance');
+
+    expect(await screen.findByText('No subscriptions yet')).toBeInTheDocument();
+    expect(
+      screen.getByText(/No billing events were recorded in this environment/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/No payments or refunds were recorded/),
     ).toBeInTheDocument();
   });
 });

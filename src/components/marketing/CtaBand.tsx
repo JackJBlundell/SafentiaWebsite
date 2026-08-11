@@ -1,7 +1,8 @@
 // ============================================================================
 // CtaBand - the closing call to action, one per page, on the ink band. The two
-// actions mirror the header exactly: a demonstration or a sign-in. There is no
-// public sign-up (SiteHeader header comment), so no third path is invented.
+// actions mirror the header exactly: the self-serve journey first (create an
+// account at /login, subscribe, and the console provisions the organisation),
+// with a demonstration kept as the quieter guided path.
 // ============================================================================
 
 import { Container, Section } from '../Layout';
@@ -15,7 +16,7 @@ export interface CtaBandProps {
 
 export function CtaBand({
   title = 'See it on your own buildings.',
-  body = 'Book a demonstration and we will walk through the field app, the validation lifecycle and a released report, end to end.',
+  body = 'Create your account and choose a plan to start today - or book a demonstration and we will walk through the field app, the validation lifecycle and a released report, end to end.',
 }: CtaBandProps) {
   return (
     <Section tone="ink" spacing="base" labelledBy="cta-band-title">
@@ -28,11 +29,11 @@ export function CtaBand({
             <p className={styles.body}>{body}</p>
           </div>
           <div className={styles.actions}>
-            <Button to="/contact" variant="primary" size="lg">
-              Book a demonstration
+            <Button to="/login" variant="primary" size="lg">
+              Get started
             </Button>
-            <Button to="/login" variant="secondary" size="lg">
-              Sign in
+            <Button to="/contact" variant="secondary" size="lg">
+              or book a demonstration
             </Button>
           </div>
         </div>

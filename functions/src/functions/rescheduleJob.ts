@@ -221,23 +221,24 @@ export const rescheduleJob = onCall<RescheduleJobInput>(
         orgId,
         assessorUid,
         {
+          kind: 'job-rescheduled',
           jobId,
           buildingName: where,
           customerId: job.customerId,
           scheduledFor,
           scheduledUntil,
-          subject: assessorChanged
-            ? `Job assigned to you: ${where}`
+          subjectPhrase: assessorChanged
+            ? 'Job assigned to you'
             : today
-              ? `Job moved to today: ${where}`
-              : `Job rescheduled: ${where}`,
-          heading: assessorChanged
+              ? 'Job moved to today'
+              : 'Job rescheduled',
+          headingPhrase: assessorChanged
             ? 'A job has moved to your diary'
             : 'Your job has been rescheduled',
           // The email names the DATE where the notification says 'today': it is
           // read hours or days after it lands, by which time a relative phrase
           // would be a lie.
-          body: assessorChanged
+          changeSummary: assessorChanged
             ? `The assessment at ${where} has been reassigned to you, scheduled for ${formatVisitDate(scheduledFor, scheduledUntil)}.`
             : `Your assessment at ${where} has been rescheduled to ${formatVisitDate(scheduledFor, scheduledUntil)}.`,
         },
@@ -266,14 +267,15 @@ export const rescheduleJob = onCall<RescheduleJobInput>(
           orgId,
           job.assessorUid,
           {
+            kind: 'job-rescheduled',
             jobId,
             buildingName: where,
             customerId: job.customerId,
             scheduledFor: job.scheduledFor,
             scheduledUntil: job.scheduledUntil,
-            subject: `Job reassigned: ${where}`,
-            heading: 'A job has left your diary',
-            body: `The assessment at ${where} has been reassigned to another assessor, so it is no longer yours to attend.`,
+            subjectPhrase: 'Job reassigned',
+            headingPhrase: 'A job has left your diary',
+            changeSummary: `The assessment at ${where} has been reassigned to another assessor, so it is no longer yours to attend.`,
             dateLabel: 'Was scheduled for',
           },
           logger,

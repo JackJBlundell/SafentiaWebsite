@@ -92,6 +92,15 @@ export function callableErrorMessage(error: unknown): string {
 
 export interface CallableState<TInput, TResult> {
   call: (input: TInput) => Promise<TResult | null>;
+  /** Like `call`, but resolves with the structured outcome as a value. Exists
+   *  for sequential batch senders (the setup wizard's list builders) that must
+   *  attribute each failure to its own row: the hook's `failure` STATE cannot
+   *  serve them, because inside an awaited loop the closure only ever sees the
+   *  render it was created in. The state still updates identically, so a lone
+   *  ErrorNotice consumer and a per-row consumer never disagree. */
+  callWithFailure: (
+    input: TInput,
+  ) => Promise<{ data: TResult | null; failure: CallableFailure | null }>;
   pending: boolean;
   /** The last failure's user-safe copy; cleared on the next call. */
   error: string | null;
@@ -117,10 +126,12 @@ export function useCallable<TInput, TResult>(
   // must not fire the mutation twice.
   const inFlight = useRef(false);
 
-  const call = useCallback(
-    async (input: TInput): Promise<TResult | null> => {
+  const callWithFailure = useCallback(
+    async (
+      input: TInput,
+    ): Promise<{ data: TResult | null; failure: CallableFailure | null }> => {
       if (inFlight.current) {
-        return null;
+        return { data: null, failure: null };
       }
       inFlight.current = true;
       setPending(true);
@@ -128,10 +139,11 @@ export function useCallable<TInput, TResult>(
       try {
         const fn = httpsCallable<TInput, TResult>(firebase.functions(), name);
         const response = await fn(input);
-        return response.data;
+        return { data: response.data, failure: null };
       } catch (caught) {
-        setFailure(callableErrorInfo(caught));
-        return null;
+        const info = callableErrorInfo(caught);
+        setFailure(info);
+        return { data: null, failure: info };
       } finally {
         inFlight.current = false;
         setPending(false);
@@ -140,7 +152,20 @@ export function useCallable<TInput, TResult>(
     [name],
   );
 
+  const call = useCallback(
+    async (input: TInput): Promise<TResult | null> =>
+      (await callWithFailure(input)).data,
+    [callWithFailure],
+  );
+
   const clearError = useCallback(() => setFailure(null), []);
 
-  return { call, pending, error: failure?.message ?? null, failure, clearError };
+  return {
+    call,
+    callWithFailure,
+    pending,
+    error: failure?.message ?? null,
+    failure,
+    clearError,
+  };
 }

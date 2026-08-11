@@ -160,7 +160,58 @@ export const keys = {
   emailLog: (orgId: string, windowSize: number) =>
     ['emailLog', orgId, 'window', windowSize] as const,
 
+  /** Org-authored email templates (the Emails area, section 6b). One template
+   *  shares the node prefix (the `jobs`/`job` pattern) so invalidating
+   *  ['emailTemplates', orgId] covers every per-template entry too. */
+  emailTemplates: (orgId: string) => ['emailTemplates', orgId] as const,
+  emailTemplate: (orgId: string, templateId: string) =>
+    ['emailTemplates', orgId, templateId] as const,
+  /** Per-kind email settings (enabled toggle + assigned template). Absent
+   *  node = enabled with the built-in default copy. */
+  emailKindSettings: (orgId: string) => ['emailKindSettings', orgId] as const,
+
   notifications: (uid: string) => ['notifications', uid] as const,
+
+  /** The org's billing block (Phase 3). Admin-read by rules: non-admin sessions
+   *  never attach this subscription (see useEntitlements). */
+  orgSubscription: (orgId: string) => ['orgSubscription', orgId] as const,
+  /** Server-maintained usage counters (staff/customers/notifications). */
+  orgUsage: (orgId: string) => ['orgUsage', orgId] as const,
+  /** The whole env-nested plan catalogue (Phase 3 §5.3) - the Finance tab and
+   *  the subscribe matrix read every plan at once. Prefix-parent of
+   *  `platformPlan`, so invalidating ['platformPlans', env] covers both. */
+  platformPlans: (env: string) => ['platformPlans', env] as const,
+  /** One plan document from the env-nested catalogue (Phase 3 §5.3). Shares the
+   *  'platformPlans' prefix so the whole-catalogue read above and this entry
+   *  are covered by the same prefix invalidation. */
+  platformPlan: (env: string, planId: string) =>
+    ['platformPlans', env, planId] as const,
+  /** A bounded window of the super-admin billing feed (Phase 3 §5.5), read via
+   *  orderByChild('at') + limitToLast. The window size is PART of the key for
+   *  the same reason as `logBookWindow`: widening the window must mint a new
+   *  key so the bridge re-subscribes. Env in the key because test-mode Stripe
+   *  events must never repaint a live view from cache. */
+  platformFinanceEvents: (env: string, windowSize: number) =>
+    ['platformFinanceEvents', env, 'window', windowSize] as const,
+
+  /** The caller's own self-serve onboarding node at usersOnboarding/{uid}
+   *  (Phase 3 §5.4, owner-read). Keyed by uid, not orgId, because the node
+   *  exists before any organisation does - it IS the journey towards one. */
+  userOnboarding: (uid: string) => ['userOnboarding', uid] as const,
+
+  /** The caller's own console UI state at consoleState/{uid} (Phase 3 §5.6,
+   *  owner read/write): Getting Started dismissal/ticks and tour-done flags.
+   *  Keyed by uid, not orgId - it is per-person presentation state. */
+  consoleState: (uid: string) => ['consoleState', uid] as const,
+
+  /** A one-record presence probe (limitToFirst(1)) over an org node, used by
+   *  the Getting Started checklist to answer "has this org EVER added one?"
+   *  without subscribing to the whole node. The discriminator keeps it from
+   *  clobbering any full read of the same node; the node-name prefix keeps it
+   *  covered by that prefix's invalidation. */
+  customersPresence: (orgId: string) =>
+    ['customers', orgId, 'presence'] as const,
+  jobsPresence: (orgId: string) => ['jobs', orgId, 'presence'] as const,
 
   /** Global client config for the force-update gate (story 1080). */
   clientConfig: () => ['clientConfig'] as const,

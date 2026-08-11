@@ -156,7 +156,7 @@ export function AboutPage() {
 
       <CtaBand
         title="See what the work looks like in one system."
-        body="Book a demonstration and we will walk through a real assessment, from the first question on site to the released report."
+        body="Create your account and start today - or book a demonstration and we will walk through a real assessment, from the first question on site to the released report."
       />
     </>
   );

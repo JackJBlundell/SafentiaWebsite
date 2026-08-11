@@ -17,8 +17,8 @@
 
 import { db } from '../admin';
 import { generateToken } from './callable';
-import { dispatchEmail } from './email';
-import { orgEmailBrand, renderBrandedEmail } from './emailTemplates';
+import { orgEmailBrand } from './emailTemplates';
+import { sendKindEmail } from './templatedEmail';
 import { WEB_ORIGIN } from './webOrigin';
 import { paths, type EnvPaths } from './paths';
 import type { Logger } from './logging';
@@ -55,6 +55,78 @@ export interface IssueInvitationArgs {
 export interface IssuedInvitation {
   inviteId: string;
   expiresAt: number;
+}
+
+/** The invitation expiry rendered for the {{invite.expiry}} template variable,
+ *  UK-local so it names the day the recipient's own calendar shows. */
+function formatExpiryDate(millis: number): string {
+  return new Date(millis).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Europe/London',
+  });
+}
+
+export interface SendInvitationEmailArgs {
+  env: Environment;
+  paths: EnvPaths;
+  orgId: string;
+  /** The recipient - the invited address the token was minted for. */
+  email: string;
+  /** The CURRENT bearer token; it travels only inside the accept links. */
+  token: string;
+  expiresAt: number;
+  logger: Logger;
+}
+
+/**
+ * Dispatch the branded invitation email through the templating seam (kind
+ * 'invitation'). The token travels in the accept link. The PRIMARY link is the
+ * web acceptance page at /invite, which works on any device with a browser;
+ * acceptInvitation locates the token across both env roots server-side, so the
+ * web link needs no env parameter. The app deep link rides along as a secondary
+ * option (it carries the env so the app lands in the right data root, 4.8).
+ *
+ * Shared by issueInvitation and resendInvitation so the first send and every
+ * rotation carry the same copy - the catalogue's 'invitation' default (or the
+ * org's own template where one is saved).
+ */
+export async function sendInvitationEmail({
+  env,
+  paths,
+  orgId,
+  email,
+  token,
+  expiresAt,
+  logger,
+}: SendInvitationEmailArgs): Promise<void> {
+  const acceptLink = `${WEB_ORIGIN}/invite?token=${encodeURIComponent(token)}`;
+  const appLink = `safentia://invite?token=${encodeURIComponent(
+    token,
+  )}&env=${env}`;
+  // The invite carries the inviting organisation's own brand (name + accent),
+  // falling back to the Safentia brand when the org has not set a valid one.
+  const profileSnap = await db.ref(paths.db.orgProfile(orgId)).get();
+  const brand = orgEmailBrand(profileSnap.val() as OrgProfile | null);
+  await sendKindEmail(
+    {
+      kind: 'invitation',
+      env,
+      orgId,
+      to: email,
+      variables: {
+        'org.name': brand.name,
+        'recipient.email': email,
+        'invite.url': acceptLink,
+        'invite.expiry': formatExpiryDate(expiresAt),
+        'invite.appUrl': appLink,
+      },
+      brand,
+      kindLink: acceptLink,
+    },
+    logger,
+  );
 }
 
 /**
@@ -112,49 +184,10 @@ export async function issueInvitation({
     [paths.db.orgInvitation(orgId, inviteId)]: summary,
   });
 
-  // Email dispatch through the seam. The token travels in the accept link.
-  // The PRIMARY link is the web acceptance page at /invite, which works on any
-  // device with a browser; acceptInvitation locates the token across both env
-  // roots server-side, so the web link needs no env parameter. The app deep
-  // link rides along as a secondary option (it carries the env so the app
-  // lands in the right data root, 4.8).
-  const acceptLink = `${WEB_ORIGIN}/invite?token=${encodeURIComponent(token)}`;
-  const appLink = `safentia://invite?token=${encodeURIComponent(
-    token,
-  )}&env=${env}`;
-  // The invite carries the inviting organisation's own brand (name + accent),
-  // falling back to the Safentia brand when the org has not set a valid one.
-  const profileSnap = await db.ref(paths.db.orgProfile(orgId)).get();
-  const brand = orgEmailBrand(profileSnap.val() as OrgProfile | null);
-  await dispatchEmail(
-    {
-      to: email,
-      subject: 'You have been invited to Safentia',
-      body:
-        'You have been invited to join an organisation on Safentia. ' +
-        'Use this link to accept and set up your account: ' +
-        acceptLink +
-        ' On your phone with the Safentia app installed? ' +
-        'Use the app link instead: ' +
-        appLink,
-      html: renderBrandedEmail({
-        brand,
-        preheader: 'Accept your invitation to join your organisation on Safentia.',
-        heading: 'You have been invited to Safentia',
-        paragraphs: [
-          'Your organisation has invited you to join it on Safentia, the fire risk assessment platform.',
-          'The button below opens a page where you choose a password and your account is set up in under a minute.',
-          'The invitation is personal to you, works once, and expires after seven days.',
-          `On your phone with the Safentia app installed? Use the app link instead: ${appLink}`,
-        ],
-        cta: { label: 'Accept your invitation', url: acceptLink },
-        footerNote:
-          'You are receiving this because an administrator at your organisation invited this email address to Safentia. If you were not expecting it, you can safely ignore this email.',
-      }),
-    },
-    logger,
-    { orgId, env, category: 'invitation' },
-  );
+  // Email dispatch through the templating seam (see sendInvitationEmail for
+  // the link discipline). Best-effort by the seam's own contract, so a failed
+  // send never rolls back the record above.
+  await sendInvitationEmail({ env, paths, orgId, email, token, expiresAt, logger });
 
   return { inviteId, expiresAt };
 }

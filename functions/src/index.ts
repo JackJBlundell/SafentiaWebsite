@@ -103,6 +103,12 @@ export { acceptAssessment } from './functions/acceptAssessment';
 // derive the building's RAG (shared lib/ragDerivation) and release - atomically.
 export { releaseAssessment } from './functions/releaseAssessment';
 
+// --- Emails -------------------------------------------------------------------
+// Explicit one-off send of an org template (admin; up to fifty recipients,
+// resolved server-side and returned redacted). The automated kinds send from
+// their own triggers/crons - this is the only hand-composed dispatch.
+export { sendManualEmail } from './functions/sendManualEmail';
+
 // --- Customer portal ----------------------------------------------------------
 // The contact's manual sign-off of a released report: records the typed name
 // against the report, with the uid and timestamp taken from the session.
@@ -143,6 +149,45 @@ export { registerInterest } from './functions/registerInterest';
 // RTDB write, no node). Alerting is configured on the logging side.
 export { reportClientError } from './functions/reportClientError';
 
+// --- Billing (Phase 3) --------------------------------------------------------
+// The Stripe event receiver: the codebase's FIRST v2 onRequest (signature-
+// verified over req.rawBody - deliberately outside App Check/callableOptions).
+// One URL serves both Stripe modes via ?mode=test|live; writes subscription
+// snapshots, dunning state, the finance feed and drives first-subscribe
+// organisation provisioning.
+export { stripeWebhook } from './functions/stripeWebhook';
+// Self-serve subscribe (verified-email user, no org yet): creates the Stripe
+// Customer + incomplete subscription and returns the Payment Element secret;
+// the org itself is provisioned by the webhook when payment lands.
+export { createSubscription } from './functions/createSubscription';
+// Step ZERO of self-serve: the organisation's details (name, address, phone,
+// website), collected BEFORE plan choice and saved to the caller's own
+// usersOnboarding node - the journey's resume point.
+export { saveOnboardingDetails } from './functions/saveOnboardingDetails';
+// Billing read model: onboarding resume state (no orgId) or the org admin's
+// subscription snapshot (orgId), each with a pending-payment client secret
+// when a payment still needs finishing.
+export { getBillingState } from './functions/getBillingState';
+// Setup-wizard skip/finish on the caller's own usersOnboarding node; the
+// substantive wizard steps are marked done by the callables that perform them.
+export { advanceOnboarding } from './functions/advanceOnboarding';
+// Plan management by the org admin. Upgrades invoice the proration immediately;
+// downgrades land at period end via a subscription schedule. The webhook stays
+// the single writer of Stripe-derived state - these return what changed.
+export { changeSubscription } from './functions/changeSubscription';
+// Period-end cancel with one-click resume until the date passes; immediate
+// cancellation is deliberately not offered (refunds go through support).
+export { cancelSubscription } from './functions/cancelSubscription';
+// The way back from a dead (canceled/expired) subscription: a NEW subscription
+// on the org's existing Stripe customer, returning the Payment Element secret;
+// the webhook lands the snapshot when payment confirms.
+export { resubscribe } from './functions/resubscribe';
+// Mints the SetupIntent for the Billing tab's card-update Payment Element; the
+// webhook's setup_intent.succeeded handler performs the default-card swap.
+export { createCardUpdateIntent } from './functions/createCardUpdateIntent';
+// Invoice history for the Billing tab, read straight from Stripe (paged).
+export { listInvoices } from './functions/listInvoices';
+
 // --- Scheduled ---------------------------------------------------------------
 // A daily 07:00 UK reminder to each assessor with jobs scheduled that day
 // ("You have 4 jobs scheduled today."), in-app plus best-effort push.
@@ -161,3 +206,7 @@ export { cleanupLeads } from './functions/cleanupLeads';
 // Nightly 02:30 UK whole-database JSON export (live/test/platform roots) to the
 // client-inaccessible backups/** prefix in the default bucket.
 export { exportBackups } from './functions/exportBackups';
+// Nightly 03:45 UK billing-retention sweep, both envs: Stripe webhook
+// idempotency done-markers older than 30 days and finance-feed entries older
+// than 12 months.
+export { cleanupBilling } from './functions/cleanupBilling';

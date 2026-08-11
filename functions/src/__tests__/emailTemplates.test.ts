@@ -10,6 +10,15 @@
 // ============================================================================
 
 import { renderBrandedEmail } from '../lib/emailTemplates';
+import { renderBrandedEmail as renderBrandedEmailFromMirror } from '../lib/emailHtml';
+
+describe('emailTemplates wrapper', () => {
+  test('re-exports the mirrored renderer itself, not a copy', () => {
+    // emailTemplates is a thin wrapper over the mirrored pure module; the
+    // re-export must be the SAME function so previews and sends cannot drift.
+    expect(renderBrandedEmail).toBe(renderBrandedEmailFromMirror);
+  });
+});
 
 describe('renderBrandedEmail - CTA', () => {
   test('carries the CTA label and url through into the HTML', () => {

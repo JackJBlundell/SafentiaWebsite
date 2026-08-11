@@ -53,6 +53,9 @@ const mocks = vi.hoisted(() => {
     // deterministically rather than round-tripping getIdTokenResult.
     superAdmin: 'denied' as string,
     rtdbData: undefined as unknown,
+    // The caller's usersOnboarding node, as the mocked useOnboardingNode
+    // delivers it. Null (the settled absence) is the overwhelming default.
+    onboarding: null as unknown,
     callable: vi.fn(async (_name: string, _input: unknown) => ({}) as unknown),
   };
 });
@@ -85,6 +88,34 @@ vi.mock('./admin/useSuperAdminClaim', () => ({
 vi.mock('../query/useRtdbQuery', () => ({
   useRtdbQuery: () => ({ data: mocks.rtdbData }),
   subscribeToQuery: vi.fn(() => () => undefined),
+}));
+
+// The onboarding read settles instantly in tests: these are ladder tests, and
+// the read-posture mechanics live behind the hook's own module boundary.
+vi.mock('./billing/useOnboardingNode', () => ({
+  useOnboardingNode: () => ({
+    data: mocks.onboarding,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
+// The two lazy billing gates are stubbed to markers: the ladder's job is to
+// pick a gate, and each gate's own behaviour is covered in subscribe.test.tsx
+// (SetupWizard's suite covers the wizard).
+vi.mock('./billing/SubscribeGate', () => ({
+  default: () => <div data-testid="subscribe-gate" />,
+}));
+vi.mock('./billing/SetupGate', () => ({
+  default: () => <div data-testid="setup-gate" />,
+}));
+
+// The floating Getting Started widget mounts in the shell but has its own
+// suite (home/gettingStarted.test.tsx); stubbed to nothing here so the shell
+// tests exercise the chrome, not the widget's data-derived states (the shared
+// rtdbData mock would otherwise feed all six of its sources the same value).
+vi.mock('./home/FloatingGettingStarted', () => ({
+  FloatingGettingStarted: () => null,
 }));
 
 vi.mock('../seo/Seo', () => ({
@@ -160,6 +191,7 @@ beforeEach(() => {
   mocks.userSpaces.hasMultiple = false;
   mocks.superAdmin = 'denied';
   mocks.rtdbData = undefined;
+  mocks.onboarding = null;
   window.sessionStorage.clear();
   vi.clearAllMocks();
 });
@@ -184,25 +216,56 @@ describe('ConsoleGate', () => {
     );
   });
 
-  it('shows the holding screen for a user with no organisation membership', () => {
+  it('shows the subscribe gate for a user with no organisation membership', async () => {
+    // Phase 3 self-serve: the subscribe pitch is the default for a
+    // membership-less session (the invitation-wait holding screen is the
+    // gate's own secondary action, covered in subscribe.test.tsx).
     setAuth({ status: 'noMembership', user: testUser });
     renderConsoleAt('/app');
+    expect(await screen.findByTestId('subscribe-gate')).toBeInTheDocument();
+  });
+
+  it('shows the confirming wait when a paid journey is awaiting provisioning', () => {
+    setAuth({ status: 'noMembership', user: testUser });
+    mocks.onboarding = { step: 'setup', orgId: 'org-9', createdAt: 1 };
+    renderConsoleAt('/app');
     expect(
-      screen.getByRole('heading', {
-        name: 'You are signed in, but not a member of an organisation yet',
-      }),
-    ).toBeInTheDocument();
-    // The signed-in email is shown so a "wrong account" mistake is obvious.
-    expect(screen.getByText('jane@example.com')).toBeInTheDocument();
-    // Invitation-only: organisations are founded by the platform operator
-    // until Phase 3 self-serve, so there is no create entry here.
-    expect(
-      screen.getByText(/an administrator needs to invite you/),
+      screen.getByText(/Confirming your subscription/),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Create an organisation' }),
+      screen.getByText(/setting up your organisation/),
+    ).toBeInTheDocument();
+  });
+
+  it('holds a freshly-provisioned admin in the setup gate until the wizard is done', async () => {
+    setAuth({
+      status: 'authenticated',
+      user: testUser,
+      claims: testClaims,
+      paths: forEnv('test'),
+    });
+    mocks.onboarding = { step: 'setup', orgId: 'org-1', createdAt: 1 };
+    renderConsoleAt('/app');
+    expect(await screen.findByTestId('setup-gate')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Hello, Jane' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+  });
+
+  it("ignores another organisation's leftover setup node and shows the shell", () => {
+    setAuth({
+      status: 'authenticated',
+      user: testUser,
+      claims: testClaims,
+      paths: forEnv('test'),
+    });
+    // Onboarded org-9 once, since invited into org-1: no gate applies.
+    mocks.onboarding = { step: 'setup', orgId: 'org-9', createdAt: 1 };
+    renderConsoleAt('/app');
+    expect(
+      screen.getByRole('heading', { name: 'Hello, Jane' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('setup-gate')).not.toBeInTheDocument();
   });
 
   it('shows the console shell once authenticated', () => {

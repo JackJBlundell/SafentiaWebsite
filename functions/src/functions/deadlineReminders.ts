@@ -60,12 +60,9 @@ import { createLogger } from '../lib/logging';
 import { forEnv } from '../shared/paths';
 import type { EnvPaths } from '../lib/paths';
 import { sendNotification } from '../lib/notifications';
-import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
-import {
-  orgEmailBrand,
-  renderBrandedEmail,
-  type EmailBrand,
-} from '../lib/emailTemplates';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { orgEmailBrand, type EmailBrand } from '../lib/emailTemplates';
+import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import {
   deadlineReminderStage,
@@ -94,6 +91,10 @@ import type {
 } from '../shared/types';
 
 const ENVIRONMENTS: Environment[] = ['live', 'test'];
+
+/** The per-org template resolution the seam returns, read once per (org, kind)
+ *  so the fan-outs below never re-resolve it. */
+type KindConfig = Awaited<ReturnType<typeof loadKindConfig>>;
 
 /** Human severity wording for recipient-facing copy, matching manageAction's
  *  assignment email so an action reads the same however it reaches someone. */
@@ -202,6 +203,9 @@ async function sweepInfoRequests(
 
   for (const [orgId, assessments] of Object.entries(byOrg)) {
     let audience: OrgAudience | null = null;
+    // The kind's resolved template, read once per org alongside the audience
+    // rather than once per assessment.
+    let kindConfig: KindConfig | null = null;
 
     // The configured ladder decides WHICH deadlines match today, so unlike the
     // audience it cannot be read lazily on first match - it is needed before the
@@ -260,6 +264,12 @@ async function sweepInfoRequests(
 
       if (audience === null) {
         audience = await loadOrgAudience(paths, orgId);
+        kindConfig = await loadKindConfig(
+          env,
+          orgId,
+          'deadline-info-assessor',
+          logger,
+        );
       }
       // Only an ACTIVE member is reminded: a suspended or removed assessor is
       // no longer the person to chase (the dailyJobReminders guard).
@@ -292,41 +302,28 @@ async function sweepInfoRequests(
       );
 
       if (member.email && member.emailPreferences?.deadlineReminder !== false) {
-        const subject =
-          stage === 'lapsed'
-            ? 'An information request is overdue'
-            : `An information request is ${stagePhrase(stage)}`;
-        await dispatchEmail(
+        await sendKindEmail(
           {
+            kind: 'deadline-info-assessor',
+            env,
+            orgId,
             to: member.email,
-            subject,
-            body,
-            html: renderBrandedEmail({
-              brand: audience.brand,
-              preheader: body,
-              heading: 'Information still required',
-              paragraphs: [
-                body,
-                'Open the job, answer each flagged question and resubmit the assessment. It returns to the validation queue once you do.',
-              ],
-              detailRows: [
-                { label: 'Questions outstanding', value: questions },
-                { label: 'Response due by', value: formatDueDate(dueBy) },
-                {
-                  label: 'Status',
-                  value: stage === 'lapsed' ? 'Overdue' : stagePhrase(stage),
-                },
-              ],
-              cta: {
-                label: 'Open the job',
-                url: `${WEB_ORIGIN}/app/jobs/${assessment.jobId}`,
-              },
-              footerNote:
-                'You are receiving this because you are the assessor on this job. You can turn these emails off in your Safentia account settings.',
-            }),
+            variables: {
+              // The subject drops the 'now' the body carries when lapsed, as
+              // it always has.
+              'info.subjectStagePhrase':
+                stage === 'lapsed' ? 'overdue' : stagePhrase(stage),
+              'info.stagePhrase': stagePhrase(stage),
+              'info.questionsPhrase': questions,
+              'info.dueDate': formatDueDate(dueBy),
+              'info.statusLabel':
+                stage === 'lapsed' ? 'Overdue' : stagePhrase(stage),
+            },
+            brand: audience.brand,
+            kindLink: `${WEB_ORIGIN}/app/jobs/${assessment.jobId}`,
+            config: kindConfig ?? undefined,
           },
           logger,
-          { orgId, env, category: 'deadline-reminder' },
         );
       }
       sent += 1;
@@ -368,6 +365,9 @@ async function sweepActions(
   for (const [orgId, buildings] of Object.entries(byOrg)) {
     let audience: OrgAudience | null = null;
     let estate: Record<string, Record<string, Building>> | null = null;
+    // The responsible-party kind's resolved template, read once per org
+    // alongside the audience rather than once per action.
+    let contactConfig: KindConfig | null = null;
     // Read before the estate walk for the same reason as the information-request
     // sweep: the ladder decides what matches, so it cannot wait for a match.
     const settingsSnap = await db.ref(paths.db.orgSettings(orgId)).get();
@@ -413,6 +413,12 @@ async function sweepActions(
 
         if (audience === null) {
           audience = await loadOrgAudience(paths, orgId);
+          contactConfig = await loadKindConfig(
+            env,
+            orgId,
+            'deadline-action-contact',
+            logger,
+          );
         }
         if (estate === null) {
           const estateSnap = await db.ref(paths.db.buildingsRoot(orgId)).get();
@@ -429,7 +435,6 @@ async function sweepActions(
           action.observation.length > 200
             ? `${action.observation.slice(0, 200)}...`
             : action.observation;
-        const body = `A ${SEVERITY_LABELS[action.severity].toLowerCase()} fire-safety action at ${buildingName} is ${stagePhrase(stage)}.`;
         const detailRows = [
           { label: 'Building', value: buildingName },
           { label: 'Observation', value: excerpt },
@@ -515,35 +520,32 @@ async function sweepActions(
               },
             );
           } else {
-            await dispatchEmail(
+            await sendKindEmail(
               {
+                kind: 'deadline-action-contact',
+                env,
+                orgId,
                 to: contact.email,
-                subject:
-                  stage === 'lapsed'
-                    ? `An action assigned to you is overdue: ${buildingName}`
-                    : `An action assigned to you is ${stagePhrase(stage)}: ${buildingName}`,
-                body,
-                html: renderBrandedEmail({
-                  brand: audience.brand,
-                  preheader: body,
-                  heading: 'A fire-safety action needs your attention',
-                  paragraphs: [
-                    body,
-                    'Please arrange the remedial work. Your provider signs the action off once it is complete.',
-                  ],
-                  detailRows,
-                  // The portal, not the staff console: a customer contact has
-                  // no access to /app/customers, so that link would only ever
-                  // show them a permission wall.
-                  cta: {
-                    label: 'View your building',
-                    url: `${WEB_ORIGIN}/app/sites/${located.siteId}/buildings/${buildingId}`,
-                  },
-                  footerNote: `You are receiving this because you are recorded as responsible for this action at ${buildingName} on Safentia.`,
-                }),
+                variables: {
+                  'building.name': buildingName,
+                  // The subject drops the 'now' the body carries when lapsed,
+                  // as it always has.
+                  'action.subjectStagePhrase':
+                    stage === 'lapsed' ? 'overdue' : stagePhrase(stage),
+                  'action.stagePhrase': stagePhrase(stage),
+                  'action.severityLower':
+                    SEVERITY_LABELS[action.severity].toLowerCase(),
+                },
+                brand: audience.brand,
+                // The portal, not the staff console: a customer contact has
+                // no access to /app/customers, so that link would only ever
+                // show them a permission wall.
+                kindLink: `${WEB_ORIGIN}/app/sites/${located.siteId}/buildings/${buildingId}`,
+                // The detail card as built above, conditional rows included.
+                kindRows: detailRows,
+                config: contactConfig ?? undefined,
               },
               logger,
-              { orgId, env, category: 'deadline-reminder' },
             );
           }
         }
@@ -584,23 +586,19 @@ async function sweepActions(
             label: item.buildingName,
             value: `${SEVERITY_LABELS[item.severity]} severity, ${stagePhrase(item.stage)} (${formatDueDate(item.dueBy)})`,
           }));
-    const html = renderBrandedEmail({
-      brand: audience.brand,
-      preheader: summary,
-      heading: `${audience.name}: action plan`,
-      paragraphs: [
-        summary,
-        'Please check the remedial work is arranged, and sign each action off once it is complete.',
-      ],
-      detailRows: digestRows,
-      // A single match deep-links to its own building; a digest can only point
-      // at the customer list, which is where the reader picks one.
-      cta:
-        matched.length === 1
-          ? { label: 'View the action plan', url: matched[0].url }
-          : { label: 'View your customers', url: `${WEB_ORIGIN}/app/customers` },
-      footerNote: `You are receiving this because you are an administrator of ${audience.name} on Safentia.`,
-    });
+    // A single match deep-links to its own building; a digest can only point
+    // at the customer list, which is where the reader picks one.
+    const digestLink =
+      matched.length === 1 ? matched[0].url : `${WEB_ORIGIN}/app/customers`;
+    const digestCtaLabel =
+      matched.length === 1 ? 'View the action plan' : 'View your customers';
+    // Once per org, however many admins hear the digest.
+    const digestConfig = await loadKindConfig(
+      env,
+      orgId,
+      'deadline-admin-digest',
+      logger,
+    );
     for (const admin of audience.admins) {
       await sendNotification(
         paths,
@@ -618,10 +616,24 @@ async function sweepActions(
         logger,
       );
       if (admin.email && admin.emailDeadlines) {
-        await dispatchEmail(
-          { to: admin.email, subject, body: summary, html },
+        await sendKindEmail(
+          {
+            kind: 'deadline-admin-digest',
+            env,
+            orgId,
+            to: admin.email,
+            variables: {
+              'org.name': audience.name,
+              'digest.subjectText': subject,
+              'digest.summaryText': summary,
+              'digest.ctaLabel': digestCtaLabel,
+            },
+            brand: audience.brand,
+            kindLink: digestLink,
+            kindRows: digestRows,
+            config: digestConfig,
+          },
           logger,
-          { orgId, env, category: 'deadline-reminder' },
         );
       }
     }

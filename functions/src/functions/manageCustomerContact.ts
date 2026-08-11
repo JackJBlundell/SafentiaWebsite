@@ -73,8 +73,9 @@ import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import { sendNotification } from '../lib/notifications';
 import { issueInvitation } from '../lib/invitations';
-import { dispatchEmail, EMAIL_PROVIDER_SECRETS } from '../lib/email';
-import { orgEmailBrand, renderBrandedEmail } from '../lib/emailTemplates';
+import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
+import { orgEmailBrand } from '../lib/emailTemplates';
+import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import type { Logger } from '../lib/logging';
 import type { EnvPaths } from '../shared/paths';
@@ -296,53 +297,42 @@ async function notifyAdminsOfFieldContact({
     const assessorName = members[actorUid]?.name ?? 'An assessor';
     const orgName = profile?.name ?? 'Your organisation';
 
+    // The in-app notification's body; the EMAIL copy itself now lives in the
+    // 'field-contact-added' catalogue entry (or the org's own saved template).
     const body = `${assessorName} added ${contact.name} as a contact for ${customerName} while on site. They can now be named as a responsible party and emailed about reports and actions.`;
-    const subject = `New contact added on site: ${contact.name} (${customerName})`;
-    // The invitation is the decision awaiting the admin, so the copy names it
-    // and says what an assessor could and could not do - otherwise "added a
-    // contact" reads as though access has already been granted.
-    const html = renderBrandedEmail({
-      brand: orgEmailBrand(profile),
-      preheader: body,
-      heading: `${orgName}: a contact was added from the field`,
-      paragraphs: [
-        body,
-        'Assessors can record who a person is, but not grant them access. If this person should be able to sign in and read their reports and action plan, invite them to the portal from the customer record.',
-      ],
-      detailRows: [
-        { label: 'Contact', value: contact.name },
-        ...(contact.jobTitle
-          ? [{ label: 'Role', value: contact.jobTitle }]
-          : []),
-        {
-          label: 'Email',
-          // Named honestly: without an address the platform cannot tell this
-          // person anything, which is the admin's to put right.
-          value: contact.email ?? 'None given - they cannot be emailed',
-        },
-        ...(contact.phone ? [{ label: 'Phone', value: contact.phone }] : []),
-        // Only worth a row when it is the EXCEPTION. Every contact receives
-        // released reports unless somebody says otherwise, so stating the
-        // default on every one of these emails would bury the one case an admin
-        // has to look at: an assessor took this person off the distribution.
-        ...(contact.receivesReports === false
-          ? [
-              {
-                label: 'Report copies',
-                value:
-                  'No - they were added as not needing a copy of released fire risk assessment reports',
-              },
-            ]
-          : []),
-        { label: 'Customer', value: customerName },
-        { label: 'Added by', value: assessorName },
-      ],
-      cta: {
-        label: 'View the customer and invite them',
-        url: `${WEB_ORIGIN}/app/customers/${customerId}`,
+    const brand = orgEmailBrand(profile);
+    // The detail card, built once and shared by every admin's send.
+    const kindRows = [
+      { label: 'Contact', value: contact.name },
+      ...(contact.jobTitle
+        ? [{ label: 'Role', value: contact.jobTitle }]
+        : []),
+      {
+        label: 'Email',
+        // Named honestly: without an address the platform cannot tell this
+        // person anything, which is the admin's to put right.
+        value: contact.email ?? 'None given - they cannot be emailed',
       },
-      footerNote: `You are receiving this because you are an administrator of ${orgName} on Safentia.`,
-    });
+      ...(contact.phone ? [{ label: 'Phone', value: contact.phone }] : []),
+      // Only worth a row when it is the EXCEPTION. Every contact receives
+      // released reports unless somebody says otherwise, so stating the
+      // default on every one of these emails would bury the one case an admin
+      // has to look at: an assessor took this person off the distribution.
+      ...(contact.receivesReports === false
+        ? [
+            {
+              label: 'Report copies',
+              value:
+                'No - they were added as not needing a copy of released fire risk assessment reports',
+            },
+          ]
+        : []),
+      { label: 'Customer', value: customerName },
+      { label: 'Added by', value: assessorName },
+    ];
+    // One config read serves the whole admin loop, exactly as one rendered
+    // html used to.
+    const config = await loadKindConfig(env, orgId, 'field-contact-added', logger);
 
     for (const [uid, member] of Object.entries(members)) {
       if (member?.status !== 'active' || member.roles?.admin !== true) {
@@ -364,11 +354,25 @@ async function notifyAdminsOfFieldContact({
         logger,
       );
       if (member.email) {
-        await dispatchEmail({ to: member.email, subject, body, html }, logger, {
-          orgId,
-          env,
-          category: 'field-contact-added',
-        });
+        await sendKindEmail(
+          {
+            kind: 'field-contact-added',
+            env,
+            orgId,
+            to: member.email,
+            variables: {
+              'org.name': orgName,
+              'assessor.name': assessorName,
+              'contact.name': contact.name,
+              'customer.name': customerName,
+            },
+            brand,
+            kindRows,
+            kindLink: `${WEB_ORIGIN}/app/customers/${customerId}`,
+            config,
+          },
+          logger,
+        );
       }
     }
   } catch (caught) {

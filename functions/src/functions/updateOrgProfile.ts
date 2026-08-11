@@ -35,6 +35,8 @@ import {
 } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
+import { assertFeature, resolvePlanContext } from '../lib/planContext';
+import { markOnboardingStep } from '../lib/onboardingMarks';
 import type {
   OrgBrand,
   OrgContact,
@@ -47,7 +49,11 @@ import type {
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 
 /** The profile fields an admin may set. Anything else in the payload is rejected
- *  rather than dropped, so a client cannot silently believe it wrote a field. */
+ *  rather than dropped, so a client cannot silently believe it wrote a field.
+ *  `suspended` (the member-readable suspension mirror) is deliberately NOT
+ *  here: it is written exclusively by the Stripe webhook, and this whitelist
+ *  is what makes it unforgeable through the one client write path profile has.
+ *  The per-child writes below also mean an admin edit can never blow it away. */
 const PROFILE_FIELDS = [
   'name',
   'brand',
@@ -57,6 +63,22 @@ const PROFILE_FIELDS = [
   'coverImageUrl',
 ] as const;
 const CONTACT_FIELDS = ['name', 'email', 'phone', 'address', 'website'] as const;
+
+/**
+ * Does this partial profile write SET branded presentation - brand colours or
+ * a logo (Phase 3 §6)? Pure and exported so both outcomes unit-test without a
+ * database. An explicit null on logoUrl is a CLEAR, which moves the profile
+ * TOWARDS the platform default and is therefore always allowed - the gate
+ * blocks applying branding, never removing it (§6.3: never delete, never
+ * hide). Name, contact, cover image and typography stay ungated: only the
+ * fields the branding feature is sold on are refused.
+ */
+export function requestsBrandedFields(profile: Record<string, unknown>): boolean {
+  return (
+    profile.brand !== undefined ||
+    (profile.logoUrl !== undefined && profile.logoUrl !== null)
+  );
+}
 
 export const updateOrgProfile = onCall<UpdateOrgProfileInput>(
   callableOptions,
@@ -82,6 +104,22 @@ export const updateOrgProfile = onCall<UpdateOrgProfileInput>(
               field: key,
             });
           }
+        }
+
+        // Branding is a plan feature (Phase 3 §6): setting colours or a logo
+        // requires it. The plan context is read only when a branded field is
+        // actually being set, so the everyday name/contact edit costs nothing.
+        // Anything already stored stays stored (§6.3) - it is simply not
+        // APPLIED while the feature is off (see lib/planContext's
+        // applyBrandingEntitlement) - and an explicit null CLEAR is always
+        // allowed, because it moves the profile towards the platform default.
+        if (requestsBrandedFields(profile)) {
+          const { entitlements } = await resolvePlanContext(paths, orgId);
+          assertFeature(
+            entitlements,
+            'branding',
+            'Custom branding (your logo and colours) is included from the Silver plan. Upgrade to apply your own branding; anything you have already uploaded is kept safe.',
+          );
         }
 
         // Each present field validates on its own terms and becomes one child
@@ -206,6 +244,8 @@ export const updateOrgProfile = onCall<UpdateOrgProfileInput>(
         await db.ref().update(update);
 
         const logger = createLogger({ fn: 'updateOrgProfile', orgId });
+        // Setup-wizard piggyback (Phase 3 §5.4): best-effort, never throws.
+        await markOnboardingStep(uid, orgId, 'profile', logger);
         logger.info('Organisation profile updated', { fields: Object.keys(profile) });
         return { updated: true };
       },

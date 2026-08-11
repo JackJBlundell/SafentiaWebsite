@@ -28,6 +28,10 @@ import type {
   RevokeInvitationInput,
   RevokeInvitationResult,
 } from '../../types';
+import { isWithinLimit } from '../billing/entitlements';
+import { countPendingStaffInvites } from './inviteSeats';
+import { useEntitlements } from '../billing/useEntitlements';
+import { UpsellNotice } from '../billing/UpsellNotice';
 import { Card, CardHeader } from '../ui/Card';
 import { DataTable } from '../ui/DataTable';
 import { PageGrid, Toolbar, ToolbarGroup } from '../ui/Grid';
@@ -89,6 +93,28 @@ export function StaffDirectory() {
       )
       .sort((a, b) => a.member.name.localeCompare(b.member.name));
   }, [members.data, search, roleFilter, showArchived]);
+
+  // Entitlement gate (presentation only - createInvitation enforces the same
+  // limit server-side): at the plan's staff ceiling the invite button gives
+  // way to the calm upsell notice (§6.3 - block new creates, hide nothing).
+  // While the billing reads attach, the button shows as normal.
+  const billing = useEntitlements();
+  const staffLimit = billing.entitlements.limits.orgStaff;
+  // Occupied seats PLUS pending invites (the server's arithmetic - a pending
+  // invitation is a seat already promised), so the button never looks open
+  // when createInvitation would refuse.
+  const staffAtLimit =
+    !billing.loading &&
+    !isWithinLimit(
+      staffLimit,
+      (billing.usage?.staffCount ?? 0) +
+        countPendingStaffInvites(invitations.data, Date.now()),
+    );
+  const staffGateMessage = billing.entitlements.suspended
+    ? 'Your subscription has ended, so staff invitations are paused. Your existing staff are unaffected.'
+    : billing.plan
+      ? `You're on ${billing.plan.name} (${staffLimit} staff included). Upgrade to invite more staff.`
+      : `Your plan includes ${staffLimit} staff members. Upgrade to invite more.`;
 
   const archivedCount = useMemo(
     () =>
@@ -157,7 +183,11 @@ export function StaffDirectory() {
             </label>
           </ToolbarGroup>
           <ToolbarGroup push>
-            <Button to={staffUrls.invite}>Invite staff</Button>
+            {staffAtLimit ? (
+              <UpsellNotice message={staffGateMessage} isAdmin={billing.isAdmin} />
+            ) : (
+              <Button to={staffUrls.invite}>Invite staff</Button>
+            )}
           </ToolbarGroup>
         </Toolbar>
 

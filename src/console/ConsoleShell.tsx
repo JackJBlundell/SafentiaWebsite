@@ -38,8 +38,12 @@ import { ActivityRoutes } from './activity/ActivityRoutes';
 import { JobsRoutes } from './jobs/JobsRoutes';
 import { ValidationRoutes } from './validation/ValidationRoutes';
 import { TemplatesRoutes } from './templates/TemplatesRoutes';
+import { EmailsRoutes } from './emails/EmailsRoutes';
 import { ReportsRoutes, REPORTS_ROLES } from './reports/ReportsRoutes';
 import { AdminRoutes } from './admin/AdminRoutes';
+import { BillingBanner } from './billing/BillingBanner';
+import { ConsoleTourMount } from './tour/ConsoleTour';
+import { FloatingGettingStarted } from './home/FloatingGettingStarted';
 import { PlatformEnvProvider, usePlatformEnv } from './admin/platformEnv';
 import { useSuperAdminClaim } from './admin/useSuperAdminClaim';
 import { ErrorBoundary } from './ui/ErrorBoundary';
@@ -50,6 +54,7 @@ type NavIconName =
   | 'home'
   | 'customers'
   | 'templates'
+  | 'emails'
   | 'jobs'
   | 'validation'
   | 'activity'
@@ -57,6 +62,7 @@ type NavIconName =
   | 'staff'
   | 'platform'
   | 'dashboard'
+  | 'finance'
   | 'buildings'
   | 'settings';
 
@@ -90,6 +96,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   // finance members previously saw a nav item that dead-ended on a role gate.
   { to: '/app/validation', label: 'Validation', end: false, adminOnly: false, icon: 'validation', roles: ['auditor', 'admin'] },
   { to: '/app/templates', label: 'Templates', end: false, adminOnly: true, icon: 'templates' },
+  { to: '/app/emails', label: 'Emails', end: false, adminOnly: true, icon: 'emails' },
   { to: '/app/activity', label: 'Activity', end: false, adminOnly: false, icon: 'activity' },
   { to: '/app/reports', label: 'Reports', end: false, adminOnly: false, icon: 'reports', roles: REPORTS_ROLES },
   { to: '/app/staff', label: 'Staff', end: false, adminOnly: true, icon: 'staff' },
@@ -107,6 +114,9 @@ const NAV_ITEMS: readonly NavItem[] = [
  */
 const PLATFORM_NAV_ITEMS: readonly NavItem[] = [
   { to: '/app/admin', label: 'Dashboard', end: true, adminOnly: false, icon: 'dashboard' },
+  // Finance sits directly under Dashboard: it is the other whole-platform
+  // roll-up, before the rail descends into the per-entity lists.
+  { to: '/app/admin/finance', label: 'Finance', end: false, adminOnly: false, icon: 'finance' },
   { to: '/app/admin/organisations', label: 'Organisations', end: false, adminOnly: false, icon: 'platform' },
   { to: '/app/admin/customers', label: 'Customers', end: false, adminOnly: false, icon: 'customers' },
   { to: '/app/admin/buildings', label: 'Buildings', end: false, adminOnly: false, icon: 'buildings' },
@@ -152,6 +162,12 @@ function NavIcon({ name }: { name: NavIconName }) {
         <path d="M6 6h6M6 9h6M6 12h3.5" />
       </>
     ),
+    emails: (
+      <>
+        <rect x="2.5" y="4" width="13" height="10.5" rx="1.5" />
+        <path d="M3 5.5 9 10l6-4.5" />
+      </>
+    ),
     staff: (
       <>
         <circle cx="7" cy="6.5" r="2.6" />
@@ -178,6 +194,13 @@ function NavIcon({ name }: { name: NavIconName }) {
         <rect x="10.2" y="2.8" width="5" height="5" rx="1" />
         <rect x="2.8" y="10.2" width="5" height="5" rx="1" />
         <rect x="10.2" y="10.2" width="5" height="5" rx="1" />
+      </>
+    ),
+    finance: (
+      <>
+        <rect x="2.5" y="4.5" width="13" height="9" rx="1.5" />
+        <circle cx="9" cy="9" r="2" />
+        <path d="M5 7v4M13 7v4" />
       </>
     ),
     buildings: (
@@ -345,8 +368,10 @@ export function ConsoleShell() {
           </div>
           {/* Global search is an ORG-console aid only: the platform operator
               surface has its own scoped screens and never mixes tenant data. */}
+          {/* data-tour attributes here and below are the guided tour's anchors
+              (tour/ConsoleTour queries them); presentation is untouched. */}
           {!inPlatformMode && (
-            <div className={styles.searchRow}>
+            <div className={styles.searchRow} data-tour="search">
               <GlobalSearch />
             </div>
           )}
@@ -362,6 +387,7 @@ export function ConsoleShell() {
                   key={item.to}
                   to={item.to}
                   end={item.end}
+                  data-tour={`nav-${item.icon}`}
                   aria-label={
                     badge ? `${item.label}, ${badge.count} waiting` : undefined
                   }
@@ -390,7 +416,7 @@ export function ConsoleShell() {
               theme toggle share a row, the toggle pinned to the far end. On the
               mobile top bar .sessionRow is display:contents, so all three controls
               sit inline exactly as before. */}
-          <div className={styles.actions} data-tip-side="right">
+          <div className={styles.actions} data-tip-side="right" data-tour="actions">
             <OrgSwitcher />
             <div className={styles.sessionRow}>
               <ThemeToggle />
@@ -400,6 +426,10 @@ export function ConsoleShell() {
         </header>
         <main className={styles.main}>
           <ConnectionBanner />
+          {/* The billing state strip (§3.5): org chrome only - the platform
+              surface has its own finance views - and the component itself
+              renders nothing for non-admins or a healthy subscription. */}
+          {!inPlatformMode && <BillingBanner />}
           {/* The boundary sits INSIDE the chrome: a crashed page falls back to
               the calm card while the rail, switcher and account menu stay alive
               as the way out. resetKey clears an errored boundary on navigation. */}
@@ -412,6 +442,7 @@ export function ConsoleShell() {
               <Route path="jobs/*" element={<JobsRoutes />} />
               <Route path="validation/*" element={<ValidationRoutes />} />
               <Route path="templates/*" element={<TemplatesRoutes />} />
+              <Route path="emails/*" element={<EmailsRoutes />} />
               <Route path="reports/*" element={<ReportsRoutes />} />
               <Route path="staff/*" element={<StaffRoutes />} />
               <Route path="settings/*" element={<SettingsRoutes />} />
@@ -420,6 +451,17 @@ export function ConsoleShell() {
             </Routes>
           </ErrorBoundary>
         </main>
+        {/* The first-load guided tour: ORG mode only - the platform operator
+            surface is a different chrome and gets no tour. The mount decides
+            for itself whether a run is due (see tour/useTourTrigger). */}
+        {!inPlatformMode && <ConsoleTourMount />}
+        {/* The floating onboarding checklist: ORG mode only, and the component
+            itself renders nothing for non-admins, while its sources load, once
+            every step is done, or after a permanent hide. Mounted in the shell
+            (not ConsoleHome) so it floats across every console page and its
+            ticks update live as steps are completed wherever the admin is. Its
+            z-index sits BELOW the tour overlay's, so a running tour covers it. */}
+        {!inPlatformMode && <FloatingGettingStarted />}
       </div>
     </PlatformEnvProvider>
   );

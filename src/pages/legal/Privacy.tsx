@@ -30,7 +30,7 @@ export function PrivacyPage() {
           <h1 id="privacy-title" className={styles.title}>
             Privacy policy
           </h1>
-          <p className={styles.updated}>Last updated: 8 July 2026</p>
+          <p className={styles.updated}>Last updated: 6 August 2026</p>
 
           <h2 className={styles.heading}>Who we are</h2>
           <p className={styles.paragraph}>
@@ -108,9 +108,12 @@ export function PrivacyPage() {
           <h2 className={styles.heading}>Sub-processors</h2>
           <p className={styles.paragraph}>
             We use Google Firebase (Google Cloud) to host the website, the
-            platform and its data, in the europe-west1 region. When subscription
-            billing is introduced, Stripe will process payments; Stripe receives
-            payment details directly and we never hold card numbers.
+            platform and its data, in the europe-west1 region. Subscription
+            payments are processed by Stripe. Card details are entered directly
+            with Stripe and never pass through our systems - we never store
+            card numbers. The only billing information we share with Stripe is
+            what a subscription needs: the billing contact&rsquo;s email address
+            and the organisation&rsquo;s name.
           </p>
 
           <h2 className={styles.heading}>Your rights</h2>
