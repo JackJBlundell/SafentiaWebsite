@@ -110,3 +110,22 @@
   font-size: 0.875rem;
   font-weight: 600;
 }
+
+/* Support summary - a calm information line, not a call to action. */
+.supportLead {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.supportLink {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--status-info);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.supportLink:hover {
+  text-decoration: none;
+}

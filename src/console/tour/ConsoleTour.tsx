@@ -347,9 +347,16 @@ export function ConsoleTour({ onClose }: { onClose: () => void }) {
  * The shell's mount point: trigger logic (first run per device class, replay
  * event, done-flag writes) lives in useTourTrigger; this renders the overlay
  * only while a run is active. ConsoleShell mounts it in ORG mode only.
+ *
+ * `suppressAutoStart` forwards the shell's decision to stand the AUTO-tour down
+ * (a super admin inside a tenant org) while leaving the replay event working.
  */
-export function ConsoleTourMount() {
-  const { active, close } = useTourTrigger();
+export function ConsoleTourMount({
+  suppressAutoStart = false,
+}: {
+  suppressAutoStart?: boolean;
+} = {}) {
+  const { active, close } = useTourTrigger({ suppressAutoStart });
   if (!active) {
     return null;
   }

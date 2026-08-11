@@ -14,6 +14,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { Button } from '../components/Button';
 import { keys } from '../query/keys';
 import { useRtdbQuery } from '../query/useRtdbQuery';
+import { useEntitlements } from './billing/useEntitlements';
 import { useCallable } from './ui/useCallable';
 import type {
   OrgMember,
@@ -21,6 +22,10 @@ import type {
   UpdateMyPreferencesResult,
 } from '../types';
 import styles from './AccountPage.module.css';
+
+/** The single support address, echoed from the site footer / contact page so
+ *  there is one number to change. */
+const SUPPORT_EMAIL = 'contact@safentia.co.uk';
 
 /** Firebase's own minimum; validating locally gives an instant, plain message
  *  instead of a round-trip error code. */
@@ -69,6 +74,13 @@ export function AccountPage() {
           <EmailPreferencesForm />
         </section>
       )}
+
+      <section className={styles.card} aria-labelledby="support-heading">
+        <h2 id="support-heading" className={styles.cardHeading}>
+          Support
+        </h2>
+        <SupportSummary />
+      </section>
 
       <section className={styles.card} aria-labelledby="password-heading">
         <h2 id="password-heading" className={styles.cardHeading}>
@@ -324,6 +336,45 @@ function EmailPreferencesForm() {
       <Button onClick={() => void onSave()} disabled={update.pending || !seeded}>
         {update.pending ? 'Saving' : 'Save preferences'}
       </Button>
+    </div>
+  );
+}
+
+/** The plan-aware support surface (story 3036): the gold tier's
+ *  `prioritySupport` feature - until now only a boolean and a plan-card bullet -
+ *  gets one real, quiet home here. Resolved through the same useEntitlements
+ *  hook every gate reads, so it can never disagree with the plan. Gold (or a
+ *  grandfathered org) reads "priority support"; every other plan reads the
+ *  plain "standard support", never an error or an upsell - this is an
+ *  information surface, not a gate. The contact address is identical either way
+ *  (there is no separate support desk or ticketing system to route to - the
+ *  only difference the tier makes is the promise of a faster reply), so no
+ *  server routing tag applies. While the billing reads attach it stays on the
+ *  neutral standard-support wording rather than flashing a claim data may
+ *  retract. */
+function SupportSummary() {
+  const { entitlements, plan, loading } = useEntitlements();
+  const priority = !loading && entitlements.features.prioritySupport;
+
+  return (
+    <div className={styles.form}>
+      <p className={styles.supportLead}>
+        {priority
+          ? plan
+            ? `Your ${plan.name} plan includes priority support.`
+            : 'Your plan includes priority support.'
+          : 'Your plan includes standard support.'}
+      </p>
+      <p className={styles.note}>
+        {priority
+          ? 'Email us and your message goes to the front of the queue for a faster reply.'
+          : 'Email us and we will get back to you as soon as we can.'}
+      </p>
+      <p className={styles.note}>
+        <a className={styles.supportLink} href={`mailto:${SUPPORT_EMAIL}`}>
+          {SUPPORT_EMAIL}
+        </a>
+      </p>
     </div>
   );
 }

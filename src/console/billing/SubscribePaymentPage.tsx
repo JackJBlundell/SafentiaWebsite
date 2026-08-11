@@ -65,33 +65,40 @@ export function SubscribePaymentPage({
   const [nothingPending, setNothingPending] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
+  // One secret fetch per entry, and Stripe.js is loaded from the mode the
+  // SERVER used (returned as response.env), NOT the client-guessed `env` prop.
+  // They can differ: FIRERITE_FORCE_TEST_SIGNUPS forces the server to test
+  // while a claim-less account guesses live - and a live publishable key
+  // cannot mount a test client secret, so the Payment Element never mounts and
+  // confirmPayment throws. Loading Stripe.js only after the secret arrives,
+  // keyed to its true mode, makes the key and secret always agree. Mount-only:
+  // `choice` is fixed for this page's lifetime and the callable handles are
+  // stable.
   useEffect(() => {
     let cancelled = false;
-    loadStripeForEnv(env).then((resolved) => {
-      if (!cancelled) setStripe(resolved);
-    });
-    return () => {
-      cancelled = true;
+    const mountFor = async (secret: string, mode: Environment) => {
+      const resolved = await loadStripeForEnv(mode);
+      if (cancelled) return;
+      setStripe(resolved);
+      setClientSecret(secret);
     };
-  }, [env]);
-
-  // One secret fetch per entry. Deliberately mount-only: `choice` is fixed for
-  // the lifetime of this page (changing it goes back through the plan matrix,
-  // which remounts us), and the callable handles are stable.
-  useEffect(() => {
-    let cancelled = false;
     const start = async () => {
       if (choice) {
         // The organisation's name and details already live on the onboarding
         // node (saveOnboardingDetails); only the plan travels.
         const response = await create.call({ planId: choice.planId });
-        if (!cancelled && response) setClientSecret(response.clientSecret);
+        if (!cancelled && response) {
+          await mountFor(response.clientSecret, response.env);
+        }
         return;
       }
       const response = await billingState.call({});
       if (cancelled) return;
       if (response?.pendingPaymentClientSecret) {
-        setClientSecret(response.pendingPaymentClientSecret);
+        await mountFor(
+          response.pendingPaymentClientSecret,
+          response.env ?? env,
+        );
       } else if (response) {
         setNothingPending(true);
       }

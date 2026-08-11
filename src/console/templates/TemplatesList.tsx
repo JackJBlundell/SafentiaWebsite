@@ -13,20 +13,19 @@
 // separate, server-owned publishTemplate step.
 // ============================================================================
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import { push, ref, set, update } from 'firebase/database';
-import { useAuth } from '../../auth/AuthProvider';
+import { push, ref, set } from 'firebase/database';
 import { Button } from '../../components/Button';
 import { firebase } from '../../firebase';
-import { consoleState as consoleStatePath } from '../../paths';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import type { ReportStandard, Template } from '../../types';
 import { REPORT_STANDARDS } from '../../types';
-import { isWithinLimit } from '../billing/entitlements';
+import { isNearLimit, isWithinLimit } from '../billing/entitlements';
 import { useEntitlements } from '../billing/useEntitlements';
+import { LimitNudge } from '../billing/LimitNudge';
 import { UpsellNotice } from '../billing/UpsellNotice';
 import { Card } from '../ui/Card';
 import { DataTable, type Column, type RowExpansion } from '../ui/DataTable';
@@ -368,25 +367,10 @@ interface PublishedState {
 export function TemplatesList() {
   // No isAdmin branches here: TemplatesRoutes gates the whole area to admins.
   const { ready, orgId, db } = useOrgScope();
-  const { user } = useAuth();
-  const uid = user?.uid;
   const location = useLocation();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
-
-  // The Getting Started "View your templates" tick (Phase 3 §5.6): viewing IS
-  // the step, so the visit is recorded per-person at consoleState/{uid}. An
-  // update() with a nested path touches only this one flag; best-effort - a
-  // failed write simply leaves the tick for a later visit.
-  useEffect(() => {
-    if (!uid) {
-      return;
-    }
-    update(ref(firebase.db(), consoleStatePath(uid)), {
-      'gettingStarted/templatesVisited': true,
-    }).catch(() => {});
-  }, [uid]);
 
   // The builder lands here straight after a publish, carrying what it
   // published in navigation state; dismissing replaces the entry with no
@@ -434,6 +418,12 @@ export function TemplatesList() {
   ).length;
   const templatesAtLimit =
     !billing.loading && !isWithinLimit(templateLimit, publishedCount);
+  // The earlier, calmer nudge (assessment MEDIUM 20): >=80% of a finite ceiling
+  // but not yet at it, so it never renders beside the at-limit UpsellNotice.
+  const templatesNearLimit =
+    !billing.loading &&
+    !templatesAtLimit &&
+    isNearLimit(templateLimit, publishedCount);
   const templateGateMessage = billing.entitlements.suspended
     ? 'Your subscription has ended, so creating templates is paused. Your existing templates are unaffected.'
     : `Your plan includes ${templateLimit} assessment ${templateLimit === 1 ? 'template' : 'templates'}. Upgrade to add more.`;
@@ -503,6 +493,15 @@ export function TemplatesList() {
               </ToolbarGroup>
             )}
           </Toolbar>
+
+          {!creating && templatesNearLimit && (
+            <LimitNudge
+              used={publishedCount}
+              limit={templateLimit}
+              noun="assessment templates"
+              isAdmin={billing.isAdmin}
+            />
+          )}
 
           {creating && (
             <NewTemplatePanel

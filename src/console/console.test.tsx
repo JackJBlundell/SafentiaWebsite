@@ -111,11 +111,13 @@ vi.mock('./billing/SetupGate', () => ({
 }));
 
 // The floating Getting Started widget mounts in the shell but has its own
-// suite (home/gettingStarted.test.tsx); stubbed to nothing here so the shell
-// tests exercise the chrome, not the widget's data-derived states (the shared
-// rtdbData mock would otherwise feed all six of its sources the same value).
+// suite (home/gettingStarted.test.tsx); stubbed to an inert MARKER here so the
+// shell tests exercise the chrome, not the widget's data-derived states (the
+// shared rtdbData mock would otherwise feed all six of its sources the same
+// value). The marker still lets the shell's own MOUNT gating (org mode, and
+// the /app/admin cold-load race) be asserted by presence.
 vi.mock('./home/FloatingGettingStarted', () => ({
-  FloatingGettingStarted: () => null,
+  FloatingGettingStarted: () => <div data-testid="getting-started-widget" />,
 }));
 
 vi.mock('../seo/Seo', () => ({
@@ -304,6 +306,52 @@ describe('ConsoleGate', () => {
     expect(
       screen.getAllByRole('link', { name: 'View all' }).length,
     ).toBeGreaterThan(0);
+  });
+
+  it('replays the guided tour from the account menu in org mode (item 17)', async () => {
+    const user = userEvent.setup();
+    setAuth({
+      status: 'authenticated',
+      user: testUser,
+      claims: testClaims,
+      paths: forEnv('test'),
+    });
+    renderConsoleAt('/app');
+    const heard = vi.fn();
+    window.addEventListener('safentia:start-tour', heard);
+
+    await user.click(screen.getByRole('button', { name: /Jane Doe/ }));
+    await user.click(
+      screen.getByRole('button', { name: 'Take the console tour' }),
+    );
+
+    expect(heard).toHaveBeenCalledTimes(1);
+    window.removeEventListener('safentia:start-tour', heard);
+  });
+
+  it('hides the tour replay from the account menu in platform mode', async () => {
+    const user = userEvent.setup();
+    mocks.superAdmin = 'granted';
+    mocks.userSpaces.spaces = [
+      { kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
+    ];
+    setAuth({
+      status: 'authenticated',
+      user: testUser,
+      claims: testClaims,
+      paths: forEnv('test'),
+    });
+    renderConsoleAt('/app/admin');
+
+    await user.click(screen.getByRole('button', { name: /Jane Doe/ }));
+    // The operator surface has no org tour to replay.
+    expect(
+      screen.queryByRole('button', { name: 'Take the console tour' }),
+    ).not.toBeInTheDocument();
+    // The rest of the menu is intact.
+    expect(
+      screen.getByRole('link', { name: 'Account settings' }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -546,6 +594,30 @@ describe('Platform mode', () => {
       screen.queryByRole('link', { name: 'Organisations' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText('Acme Fire Safety')).toBeInTheDocument();
+  });
+
+  it('holds the org tour and checklist under /app/admin until the super-admin claim resolves', () => {
+    // Cold-load race (item 18a): while the claim is 'loading' under /app/admin we
+    // cannot yet tell the platform console from a hand-typed org 404, so the org
+    // aids must not mount there - arming them would briefly fire the auto-tour and
+    // attach the checklist's listeners on a URL about to become the operator surface.
+    mocks.superAdmin = 'loading';
+    mocks.userSpaces.spaces = [
+      { kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
+    ];
+    renderConsoleAt('/app/admin');
+    expect(screen.queryByTestId('getting-started-widget')).not.toBeInTheDocument();
+  });
+
+  it('still mounts the org aids while the claim loads at a tenant path', () => {
+    // The claim is 'loading' for every session at first paint; away from
+    // /app/admin that never gates the org aids, so a normal admin still gets them.
+    mocks.superAdmin = 'loading';
+    mocks.userSpaces.spaces = [
+      { kind: 'staff' as const, orgId: 'org-1', name: 'Acme Fire Safety', isCurrent: true },
+    ];
+    renderConsoleAt('/app');
+    expect(screen.getByTestId('getting-started-widget')).toBeInTheDocument();
   });
 
   it('returns to an organisation from platform mode', async () => {

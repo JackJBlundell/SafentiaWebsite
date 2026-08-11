@@ -335,8 +335,18 @@ export function ConsoleShell() {
   // Platform mode is a whole separate console: a super admin whose current URL
   // is under /app/admin. It swaps the rail and the brand chrome for the
   // operator surface, so the org and platform navigations never mix.
-  const inPlatformMode =
-    superAdmin === 'granted' && location.pathname.startsWith('/app/admin');
+  const underAdminPath = location.pathname.startsWith('/app/admin');
+  const inPlatformMode = superAdmin === 'granted' && underAdminPath;
+  // Org aids = the first-load tour and the floating Getting started checklist.
+  // Cold-load race (item 18a): under /app/admin the super-admin claim decides
+  // whether this is the platform operator console (no org aids) or - for a
+  // non-operator who hand-typed the URL - an org 404. While the claim is still
+  // 'loading' we cannot tell, so mounting the aids now would briefly ARM the
+  // auto-tour and attach the checklist's listeners under a URL that may be
+  // about to become the operator surface. Hold both there until the claim
+  // resolves; everywhere else they mount exactly as before.
+  const orgAidsReady = !underAdminPath || superAdmin !== 'loading';
+  const showOrgAids = !inPlatformMode && orgAidsReady;
   /** Every org-nav visibility rule must pass: the legacy admin flag and any
    *  role list. */
   const showsItem = (item: NavItem): boolean => {
@@ -420,7 +430,10 @@ export function ConsoleShell() {
             <OrgSwitcher />
             <div className={styles.sessionRow}>
               <ThemeToggle />
-              <AccountMenu />
+              {/* The account menu carries the one non-admin-gated way to replay
+                  the guided tour (item 17): every role sees it, but ORG mode
+                  only - the platform operator surface has no tour to replay. */}
+              <AccountMenu showTourReplay={!inPlatformMode} />
             </div>
           </div>
         </header>
@@ -452,16 +465,22 @@ export function ConsoleShell() {
           </ErrorBoundary>
         </main>
         {/* The first-load guided tour: ORG mode only - the platform operator
-            surface is a different chrome and gets no tour. The mount decides
-            for itself whether a run is due (see tour/useTourTrigger). */}
-        {!inPlatformMode && <ConsoleTourMount />}
-        {/* The floating onboarding checklist: ORG mode only, and the component
-            itself renders nothing for non-admins, while its sources load, once
-            every step is done, or after a permanent hide. Mounted in the shell
-            (not ConsoleHome) so it floats across every console page and its
-            ticks update live as steps are completed wherever the admin is. Its
+            surface is a different chrome and gets no tour - and held until the
+            super-admin claim resolves under /app/admin (see showOrgAids). The
+            mount decides for itself whether a run is due (see useTourTrigger);
+            suppressAutoStart stands the AUTO-tour down for a super admin inside
+            a tenant org (item 18b), replay via the account menu still working. */}
+        {showOrgAids && (
+          <ConsoleTourMount suppressAutoStart={superAdmin === 'granted'} />
+        )}
+        {/* The floating onboarding checklist: ORG mode only, held until the
+            claim resolves under /app/admin, and the component itself renders
+            nothing for non-admins, while its sources load, once every step is
+            done, or after a permanent hide. Mounted in the shell (not
+            ConsoleHome) so it floats across every console page and its ticks
+            update live as steps are completed wherever the admin is. Its
             z-index sits BELOW the tour overlay's, so a running tour covers it. */}
-        {!inPlatformMode && <FloatingGettingStarted />}
+        {showOrgAids && <FloatingGettingStarted />}
       </div>
     </PlatformEnvProvider>
   );
@@ -565,8 +584,8 @@ function PlatformBrandMark() {
   );
 }
 
-/** The signed-in user's disclosure: account settings and sign-out. */
-function AccountMenu() {
+/** The signed-in user's disclosure: account settings, tour replay, sign-out. */
+function AccountMenu({ showTourReplay = false }: { showTourReplay?: boolean }) {
   const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -636,6 +655,21 @@ function AccountMenu() {
           >
             Account settings
           </Link>
+          {showTourReplay && (
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={() => {
+                // Replay the guided tour from anywhere, for every role - the
+                // admin-only checklist held the only other entry point. Fixed
+                // event contract with useTourTrigger (START_TOUR_EVENT).
+                close(false);
+                window.dispatchEvent(new CustomEvent('safentia:start-tour'));
+              }}
+            >
+              Take the console tour
+            </button>
+          )}
           <button
             type="button"
             className={styles.menuItem}

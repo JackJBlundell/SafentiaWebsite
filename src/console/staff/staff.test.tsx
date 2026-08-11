@@ -183,6 +183,60 @@ describe('StaffRoutes gate', () => {
   });
 });
 
+describe('approaching-limit nudge (staff seats)', () => {
+  // A Bronze plan whose staff ceiling (5) the org is nearing. `usage.staffCount`
+  // is the seat count the nudge and the at-limit gate both read; the fixture
+  // invitation is long expired, so it reserves no seat here.
+  const bronzePlan = {
+    name: 'Bronze',
+    stripePriceId: 'price_bronze_test',
+    priceMonthlyPence: 4900,
+    currency: 'gbp',
+    features: { branding: false, emailTemplates: false, prioritySupport: false },
+    limits: {
+      orgStaff: 5,
+      customers: 10,
+      notificationsPerMonth: 100,
+      assessmentTemplates: 2,
+    },
+    order: 1,
+  };
+
+  const seedBilling = (staffCount: number) => {
+    mocks.rtdb.orgSubscription = { planId: 'bronze', status: 'active' };
+    mocks.rtdb.platformPlans = bronzePlan;
+    mocks.rtdb.orgUsage = { staffCount, customerCount: 0, notificationsThisMonth: 0 };
+  };
+
+  it('nudges at >=80% of the staff ceiling, before the wall', () => {
+    seedBilling(4); // 4 of 5 is exactly 80%.
+    renderStaffAt('/');
+    expect(screen.getByText(/4 of 5 team members used/)).toBeInTheDocument();
+    // Still below the wall: the invite action stays, not the at-limit upsell.
+    expect(
+      screen.getByRole('link', { name: 'Invite staff' }),
+    ).toBeInTheDocument();
+  });
+
+  it('stays quiet below 80%', () => {
+    seedBilling(3); // 3 of 5 is under the threshold.
+    renderStaffAt('/');
+    expect(screen.queryByText(/team members used/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Invite staff' }),
+    ).toBeInTheDocument();
+  });
+
+  it('gives way to the at-limit notice at the ceiling, not the nudge', () => {
+    seedBilling(5); // At the wall.
+    renderStaffAt('/');
+    expect(screen.queryByText(/team members used/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Invite staff' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('StaffDirectory', () => {
   it('renders members with readable role chips and status badges', () => {
     renderStaffAt('/');

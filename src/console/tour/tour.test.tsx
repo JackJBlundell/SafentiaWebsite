@@ -84,13 +84,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
   vi.useRealTimers();
+  // The setup-celebration flag is session-scoped; never let it leak between tests.
+  window.sessionStorage.clear();
 });
 
 // --- harness ----------------------------------------------------------------
 
 /** Stand-in chrome carrying the same data-tour anchors ConsoleShell sets.
- *  `admin: false` omits the role-gated items, as a member's shell would. */
-function Harness({ admin = true }: { admin?: boolean }) {
+ *  `admin: false` omits the role-gated items, as a member's shell would.
+ *  `suppressAutoStart` mirrors the shell's item-18b decision (a super admin in
+ *  a tenant org). */
+function Harness({
+  admin = true,
+  suppressAutoStart = false,
+}: {
+  admin?: boolean;
+  suppressAutoStart?: boolean;
+}) {
   return (
     <div>
       <a href="/app" data-tour="nav-home">
@@ -114,7 +124,7 @@ function Harness({ admin = true }: { admin?: boolean }) {
       )}
       <div data-tour="search" />
       <div data-tour="actions" />
-      <ConsoleTourMount />
+      <ConsoleTourMount suppressAutoStart={suppressAutoStart} />
     </div>
   );
 }
@@ -214,5 +224,35 @@ describe('ConsoleTour', () => {
     expect(
       screen.getByRole('heading', { name: 'Welcome to your console' }),
     ).toBeInTheDocument();
+  });
+
+  it('does not auto-start on a setup-celebration arrival, but replay still does', async () => {
+    vi.useFakeTimers();
+    // The flag SetupCompleteScreen's CTA sets; the checklist's expand takes the
+    // welcome instead, so the auto-tour stands down for this landing (item 11).
+    window.sessionStorage.setItem('safentia.arrivedFromSetup', '1');
+    render(<Harness />);
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // The flag never records the class as done, and replay is untouched.
+    expect(mocks.markDone).not.toHaveBeenCalled();
+    startTour();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('does not auto-start when suppressAutoStart is set (super admin in a tenant org), but replay still does', async () => {
+    vi.useFakeTimers();
+    render(<Harness suppressAutoStart />);
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+    });
+    // Item 18b: an operator inside a customer workspace already knows the
+    // console, so the org auto-tour holds - without marking the class done.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.markDone).not.toHaveBeenCalled();
+    startTour();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

@@ -49,6 +49,12 @@ const mocks = vi.hoisted(() => {
       buildingActions: {} as Record<string, Record<string, Action>>,
       templates: {} as Record<string, Template>,
       members: {} as Record<string, OrgMember>,
+      // Billing nodes (useEntitlements). Null by default => the org is
+      // grandfathered (unlimited / all features), so the entitlement gates and
+      // the approaching-limit nudge stay dormant unless a test seeds them.
+      subscription: null as unknown,
+      usage: null as unknown,
+      plan: null as unknown,
     },
     callableCall: vi.fn(async () => null as unknown),
   };
@@ -128,6 +134,15 @@ vi.mock('../../query/useRtdbQuery', () => ({
         break;
       case 'orgMembers':
         data = fixtures.members;
+        break;
+      case 'orgSubscription':
+        data = fixtures.subscription;
+        break;
+      case 'orgUsage':
+        data = fixtures.usage;
+        break;
+      case 'platformPlans':
+        data = fixtures.plan;
         break;
       default:
         data = null;
@@ -249,6 +264,9 @@ beforeEach(() => {
   mocks.fixtures.buildingActions = {};
   mocks.fixtures.templates = {};
   mocks.fixtures.members = {};
+  mocks.fixtures.subscription = null;
+  mocks.fixtures.usage = null;
+  mocks.fixtures.plan = null;
 });
 
 /** A minimal open action; overrides set the due date and LTP flag. */
@@ -273,6 +291,61 @@ describe('CustomersList', () => {
     expect(screen.getByText('Acme Facilities')).toBeInTheDocument();
     expect(screen.getByText('Borough Housing')).toBeInTheDocument();
     expect(screen.queryByText('Closed Company')).not.toBeInTheDocument();
+  });
+
+  describe('approaching-limit nudge (customers)', () => {
+    const bronzePlan = {
+      name: 'Bronze',
+      stripePriceId: 'price_bronze_test',
+      priceMonthlyPence: 4900,
+      currency: 'gbp',
+      features: {
+        branding: false,
+        emailTemplates: false,
+        prioritySupport: false,
+      },
+      // A ceiling of 10 so a usage of 8 is exactly the 80% threshold. The
+      // nudge reads usage.customerCount, independent of the rows displayed.
+      limits: {
+        orgStaff: 5,
+        customers: 10,
+        notificationsPerMonth: 100,
+        assessmentTemplates: 2,
+      },
+      order: 1,
+    };
+
+    const seedBilling = (customerCount: number) => {
+      mocks.fixtures.subscription = { planId: 'bronze', status: 'active' };
+      mocks.fixtures.plan = bronzePlan;
+      mocks.fixtures.usage = {
+        staffCount: 0,
+        customerCount,
+        notificationsThisMonth: 0,
+      };
+    };
+
+    it('nudges at >=80% of the customer ceiling, before the wall', () => {
+      seedBilling(8);
+      renderCustomersAt('/app/customers');
+      expect(
+        screen.getByText(/8 of 10 customers used/),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Add customer')).toBeInTheDocument();
+    });
+
+    it('stays quiet below 80%', () => {
+      seedBilling(7);
+      renderCustomersAt('/app/customers');
+      expect(screen.queryByText(/customers used/)).not.toBeInTheDocument();
+    });
+
+    it('gives way to the at-limit notice at the ceiling, not the nudge', () => {
+      seedBilling(10);
+      renderCustomersAt('/app/customers');
+      expect(screen.queryByText(/customers used/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Add customer')).not.toBeInTheDocument();
+    });
   });
 
   it('filters rows by the search box', async () => {

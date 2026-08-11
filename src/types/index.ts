@@ -186,8 +186,8 @@ export interface UserOnboarding {
   subscriptionId?: string;
   /** Set when the webhook provisions the organisation (step moves to 'setup'). */
   orgId?: string;
-  setupStep?: 'profile' | 'team' | 'customer' | 'building';
-  setupDone?: Partial<Record<'profile' | 'team' | 'customer' | 'building', boolean>>;
+  setupStep?: 'profile' | 'team' | 'customer';
+  setupDone?: Partial<Record<'profile' | 'team' | 'customer', boolean>>;
   /** Persisted so Stripe idempotency keys survive retries (Phase 3 §2). */
   attemptNonce?: string;
   createdAt: number;
@@ -2343,6 +2343,12 @@ export interface CreateSubscriptionRequest {
 }
 export interface CreateSubscriptionResponse {
   clientSecret: string; subscriptionId: string; stripeCustomerId: string;
+  /** The Stripe MODE the server actually used (from the caller's testMode
+   *  claim, or forced to 'test' by FIRERITE_FORCE_TEST_SIGNUPS). The client
+   *  MUST load Stripe.js with the matching publishable key, or the Payment
+   *  Element cannot mount the returned client secret (mixing a live key with
+   *  a test secret throws at confirmPayment). */
+  env: Environment;
 }
 
 // --- changeSubscription (org admin) ---
@@ -2392,6 +2398,10 @@ export interface GetBillingStateRequest { orgId?: string; }
 export interface GetBillingStateResponse {
   onboarding?: UserOnboarding;
   subscription?: OrgSubscription;
+  /** The Stripe MODE this billing state belongs to, so the client loads the
+   *  matching Stripe.js publishable key for any pending-payment secret below
+   *  (see CreateSubscriptionResponse.env). */
+  env?: Environment;
   /** For finishing an outstanding payment (existing PI/invoice client secret):
    *  an incomplete first payment, a 3DS challenge, or - the SEV-1 reactivation
    *  path - a suspended (unpaid/past_due) subscription's latest open invoice. */
@@ -2404,11 +2414,13 @@ export interface GetBillingStateResponse {
 
 // --- advanceOnboarding (authed owner of the onboarding node; §5.4) ---
 // The setup wizard's steps are marked done by the callables that perform them
-// (updateOrgProfile, createInvitation, manageCustomer, manageBuilding); this
-// callable exists ONLY for skip and finish, which perform no other action.
+// (updateOrgProfile, createInvitation, manageCustomer); this callable exists
+// ONLY for skip and finish, which perform no other action. Finishing DELETES
+// the node - a completed journey is never read again (the gate routes via
+// membership claims), so nothing is left to accumulate.
 export interface AdvanceOnboardingRequest {
   /** Skip to this setup step without completing the current one. */
-  skipTo?: 'profile' | 'team' | 'customer' | 'building';
+  skipTo?: 'profile' | 'team' | 'customer';
   /** Finish the wizard: stamps completedAt and sets step 'done'. */
   finish?: boolean;
 }

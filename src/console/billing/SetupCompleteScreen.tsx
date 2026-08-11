@@ -85,7 +85,26 @@ export default function SetupCompleteScreen({
           {summaryLine(summary)}
         </p>
         <div className={styles.cta}>
-          <Button type="button" size="lg" onClick={onContinue}>
+          <Button
+            type="button"
+            size="lg"
+            onClick={() => {
+              // Flag THIS session as a setup-celebration arrival before handing
+              // back to the shell. The console then deliberates its welcome: the
+              // auto-tour stands down and the floating Getting started checklist
+              // takes its "here's what's next" moment, rather than a third
+              // greeting stacking on this "You're all set" screen. Session
+              // scoped and consumed once by the checklist; best-effort, so a
+              // storage failure simply falls back to the ordinary organic
+              // auto-tour welcome.
+              try {
+                window.sessionStorage.setItem('safentia.arrivedFromSetup', '1');
+              } catch {
+                // Storage unavailable - the organic auto-tour welcome runs.
+              }
+              onContinue();
+            }}
+          >
             Go to your dashboard
           </Button>
         </div>

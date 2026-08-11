@@ -39,7 +39,6 @@ import {
 } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
-import { markOnboardingStep } from '../lib/onboardingMarks';
 import {
   ALARM_CATEGORIES,
   SERVICE_SCHEDULE_KEYS,
@@ -444,8 +443,6 @@ export const manageBuilding = onCall<ManageBuildingInput>(
             }),
           });
           const logger = createLogger({ fn: 'manageBuilding', orgId });
-          // Setup-wizard piggyback (Phase 3 §5.4): best-effort, never throws.
-          await markOnboardingStep(uid, orgId, 'building', logger);
           logger.info('Building created', {
             siteId,
             buildingId,

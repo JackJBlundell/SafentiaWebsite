@@ -123,8 +123,8 @@ export const getBillingState = onCall<GetBillingStateRequest>(
           if (!onboarding) {
             return {};
           }
-          const response: GetBillingStateResponse = { onboarding };
           const env = signupEnv(request.auth?.token?.testMode === true);
+          const response: GetBillingStateResponse = { onboarding, env };
           // The node's subscription id is only visible to the mode that
           // minted it (node.env); after a mode flip the secret cannot be
           // fetched - createSubscription starts the payment afresh instead

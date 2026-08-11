@@ -28,8 +28,9 @@ import type {
   ManageCustomerResult,
   RiskLevel,
 } from '../../types';
-import { isWithinLimit } from '../billing/entitlements';
+import { isNearLimit, isWithinLimit } from '../billing/entitlements';
 import { useEntitlements } from '../billing/useEntitlements';
+import { LimitNudge } from '../billing/LimitNudge';
 import { UpsellNotice } from '../billing/UpsellNotice';
 import { Card } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
@@ -246,9 +247,16 @@ export function CustomersList() {
   // hide nothing). While the billing reads attach, the button shows as normal.
   const billing = useEntitlements();
   const customerLimit = billing.entitlements.limits.customers;
+  const customerCount = billing.usage?.customerCount ?? 0;
   const customersAtLimit =
+    !billing.loading && !isWithinLimit(customerLimit, customerCount);
+  // The earlier, calmer nudge (assessment MEDIUM 20): >=80% of a finite ceiling
+  // but not yet at it, so it never renders beside the at-limit UpsellNotice.
+  // Admin-only, matching this page's at-limit gate.
+  const customersNearLimit =
     !billing.loading &&
-    !isWithinLimit(customerLimit, billing.usage?.customerCount ?? 0);
+    !customersAtLimit &&
+    isNearLimit(customerLimit, customerCount);
   const customerGateMessage = billing.entitlements.suspended
     ? 'Your subscription has ended, so adding customers is paused. Your existing customers are unaffected.'
     : billing.plan
@@ -466,6 +474,15 @@ export function CustomersList() {
               </ToolbarGroup>
             )}
           </Toolbar>
+
+          {isAdmin && customersNearLimit && (
+            <LimitNudge
+              used={customerCount}
+              limit={customerLimit}
+              noun="customers"
+              isAdmin={isAdmin}
+            />
+          )}
 
           {filterLabel && (
             <div className={styles.filterRow}>

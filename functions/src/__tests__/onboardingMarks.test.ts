@@ -78,7 +78,7 @@ describe('markOnboardingStep', () => {
     mockDbData[NODE] = { step: 'payment', orgId: ORG };
     await markOnboardingStep(UID, ORG, 'profile', logger);
     mockDbData[NODE] = { step: 'done', orgId: ORG };
-    await markOnboardingStep(UID, ORG, 'building', logger);
+    await markOnboardingStep(UID, ORG, 'customer', logger);
     expect(updateCalls).toEqual([]);
   });
 

@@ -212,6 +212,14 @@ export const keys = {
   customersPresence: (orgId: string) =>
     ['customers', orgId, 'presence'] as const,
   jobsPresence: (orgId: string) => ['jobs', orgId, 'presence'] as const,
+  /** A one-record presence probe over an org's RELEASED assessments, used by
+   *  the Getting Started checklist to answer "has this org released one yet?"
+   *  (orderByChild('status') + equalTo('released') + limitToFirst(1)). Its own
+   *  discriminator keeps it from clobbering ConsoleHome's bounded release
+   *  window over the same node; the node-name prefix keeps it covered by that
+   *  prefix's invalidation. */
+  releasedAssessmentsPresence: (orgId: string) =>
+    ['assessments', orgId, 'presence', 'released'] as const,
 
   /** Global client config for the force-update gate (story 1080). */
   clientConfig: () => ['clientConfig'] as const,

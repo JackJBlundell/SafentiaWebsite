@@ -212,6 +212,7 @@ export function BillingSettingsPage() {
           subscription={subscription}
           plan={plan}
           plansById={plansQuery.data ?? null}
+          nextRetryAt={nextRetryAt}
         />
         <ChangePlanCard
           orgId={orgId}
@@ -227,6 +228,7 @@ export function BillingSettingsPage() {
           stripe={stripe}
           pendingSecret={pendingSecret}
           onPendingSettled={() => setPendingSecret(null)}
+          onCardUpdated={refreshPendingPayment}
         />
         <InvoicesCard orgId={orgId} />
       </div>
@@ -244,10 +246,13 @@ function CurrentPlanCard({
   subscription,
   plan,
   plansById,
+  nextRetryAt,
 }: {
   subscription: OrgSubscription | undefined;
   plan: Plan | undefined;
   plansById: Record<string, Plan> | null;
+  /** Stripe's scheduled dunning retry (ms epoch), when known. */
+  nextRetryAt: number | null;
 }) {
   const periodEnd = subscription?.currentPeriodEnd;
   const pendingPlanId = subscription?.pendingPlanId;
@@ -305,6 +310,9 @@ function CurrentPlanCard({
               ? ` until ${formatDate(subscription.graceUntil)}`
               : ' for now'}
             {' '}- please update your card below to keep it that way.
+            {nextRetryAt
+              ? ` Stripe will automatically try your card again on ${formatDate(nextRetryAt)}.`
+              : ''}
           </p>
         )}
 
@@ -791,12 +799,16 @@ function PaymentMethodCard({
   stripe,
   pendingSecret,
   onPendingSettled,
+  onCardUpdated,
 }: {
   orgId: string;
   subscription: OrgSubscription | undefined;
   stripe: Stripe | null | 'loading';
   pendingSecret: string | null;
   onPendingSettled: () => void;
+  /** Re-read the pending-payment facts after a card change, so the pay-now
+   *  follow-on works off a fresh secret. Returns the refreshed state. */
+  onCardUpdated: () => Promise<GetBillingStateResponse | null>;
 }) {
   const createIntent = useCallable<
     CreateCardUpdateIntentRequest,
@@ -898,6 +910,25 @@ function PaymentMethodCard({
                     setStatus(
                       'Your card has been updated. It can take a moment for the new details to appear here.',
                     );
+                    // Close the loop for a past-due/suspended org: rather than
+                    // wait for Stripe's next automatic retry, offer to settle
+                    // the open invoice with the card they just saved. Re-fetch
+                    // first - the webhook that made the new card the default
+                    // may still be landing, and a race may already have settled
+                    // the invoice.
+                    if (paysOutstandingInvoice) {
+                      void onCardUpdated().then((refreshed) => {
+                        if (refreshed?.pendingPaymentClientSecret) {
+                          setStatus(
+                            'Your card has been saved. You can pay your outstanding invoice now with the button above.',
+                          );
+                        } else {
+                          setStatus(
+                            'Your card has been saved - there is nothing left to pay right now.',
+                          );
+                        }
+                      });
+                    }
                   } else {
                     setStatus(
                       'Thank you - your payment has been confirmed. It can take a moment for your subscription to update here.',

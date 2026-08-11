@@ -91,18 +91,15 @@ const STEP_LABELS = ['Branding', 'Team', 'First customer'] as const;
 const FORWARD_TARGETS = ['team', 'customer'] as const;
 
 /** How far the node's recorded setupStep says this admin has ever got. Used
- *  for two things: the reload resume point (clamped to the last pane - the
- *  legacy 'building' value predates the finish pane's removal), and deciding
- *  whether a forward movement breaks new ground (call advanceOnboarding) or
- *  merely re-crosses reviewed ground (local only). */
+ *  for two things: the reload resume point (clamped to the last pane for
+ *  safety), and deciding whether a forward movement breaks new ground (call
+ *  advanceOnboarding) or merely re-crosses reviewed ground (local only). */
 function furthestIndex(step: UserOnboarding['setupStep']): number {
   switch (step) {
     case 'team':
       return 1;
     case 'customer':
       return 2;
-    case 'building':
-      return 3;
     default:
       return 0;
   }

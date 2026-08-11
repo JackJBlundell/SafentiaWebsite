@@ -60,6 +60,7 @@ vi.mock('../ui/useCallable', () => ({
 }));
 
 import { useEntitlements } from './useEntitlements';
+import { isNearLimit } from './entitlements';
 import { BillingBanner } from './BillingBanner';
 import { OrganisationSettingsPage } from '../settings/OrganisationSettingsPage';
 
@@ -144,6 +145,30 @@ describe('useEntitlements resolution', () => {
     expect(result.current.entitlements.limits.orgStaff).toBe(-1);
     expect(result.current.entitlements.features.branding).toBe(true);
     expect(result.current.loading).toBe(false);
+  });
+});
+
+describe('isNearLimit (approaching-limit nudge threshold)', () => {
+  it('fires at >=80% of a finite ceiling but below it', () => {
+    // Limit 10: 80% is 8, so 8 and 9 nudge; 7 does not; 10 is the wall.
+    expect(isNearLimit(10, 7)).toBe(false);
+    expect(isNearLimit(10, 8)).toBe(true);
+    expect(isNearLimit(10, 9)).toBe(true);
+    expect(isNearLimit(10, 10)).toBe(false);
+    expect(isNearLimit(10, 11)).toBe(false);
+  });
+
+  it('handles a small ceiling where 80% is exact', () => {
+    // Limit 5: 80% is exactly 4.
+    expect(isNearLimit(5, 3)).toBe(false);
+    expect(isNearLimit(5, 4)).toBe(true);
+    expect(isNearLimit(5, 5)).toBe(false);
+  });
+
+  it('never fires for unlimited (-1) or the suspended zero-create floor (0)', () => {
+    expect(isNearLimit(-1, 1000)).toBe(false);
+    expect(isNearLimit(0, 0)).toBe(false);
+    expect(isNearLimit(0, 1)).toBe(false);
   });
 });
 

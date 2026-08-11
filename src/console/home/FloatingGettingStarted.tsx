@@ -19,13 +19,22 @@
 // drift into flattery. Tick sources, cheapest honest read first:
 //   - profile / members / buildings ride the subscriptions ConsoleHome and the
 //     shell already hold (same cache keys - no second listener attaches);
-//   - customers and jobs use one-record limitToFirst(1) presence probes,
-//     because "has one ever been added?" never justifies the whole node, and
-//     the server-maintained usage counters exist only for orgs provisioned
-//     under Phase 3 billing - a counter would fake "not done" at older orgs;
-//   - the templates item cannot be derived from data (viewing writes nothing),
-//     so TemplatesList records the visit in consoleState/{uid} - the one
-//     stored tick, and it is per-person by nature.
+//   - customers, jobs and the first RELEASED assessment use one-record
+//     presence probes (limitToFirst(1), the released one filtered by the
+//     'status' index), because "has one ever happened?" never justifies the
+//     whole node, and the server-maintained usage counters exist only for orgs
+//     provisioned under Phase 3 billing - a counter would fake "not done" at
+//     older orgs.
+//
+// Every tick is now data-derived: there is no stored "done" flag left, so the
+// checklist can never flatter an org into thinking a step is finished when the
+// thing itself is not there.
+//
+// First-landing sequencing: when the person arrived from the setup celebration
+// this session (SetupCompleteScreen sets `safentia.arrivedFromSetup`), the
+// widget opens EXPANDED once - its "here's what's next" moment - and the
+// auto-tour stands down (useTourTrigger reads the same flag), so the two do not
+// greet at once. The flag is session-scoped and consumed here on first mount.
 //
 // Honest loading: while ANY source is still attaching the widget renders
 // nothing at all - an unticked flash would tell an org that has done
@@ -39,7 +48,14 @@
 // panel rather than competing with them.
 // ============================================================================
 
-import { limitToFirst, query, ref, update } from 'firebase/database';
+import {
+  equalTo,
+  limitToFirst,
+  orderByChild,
+  query,
+  ref,
+  update,
+} from 'firebase/database';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
@@ -53,6 +69,13 @@ import styles from './FloatingGettingStarted.module.css';
 /** One-record probe: enough to answer "does anything exist here?". */
 const buildPresenceProbe: RtdbQueryBuilder = (node) =>
   query(node, limitToFirst(1));
+
+/** One-record probe over the assessments node filtered to the released stage:
+ *  enough to answer "has this org released an assessment yet?" without reading
+ *  the whole node. Uses the same 'status' index ConsoleHome's release window
+ *  already relies on. */
+const buildReleasedProbe: RtdbQueryBuilder = (node) =>
+  query(node, orderByChild('status'), equalTo('released'), limitToFirst(1));
 
 /** An absent RTDB node arrives as null; anything else means at least one row. */
 const selectPresent = (value: unknown): boolean => value != null;
@@ -85,6 +108,29 @@ function writeExpanded(uid: string, expanded: boolean): void {
   } catch {
     // Storage unavailable: the widget simply opens collapsed next load,
     // correct behaviour rather than a failure worth reporting.
+  }
+}
+
+// --- The one-shot "arrived from the setup celebration" flag ------------------
+// SetupCompleteScreen's CTA sets this the moment the person leaves the "You're
+// all set" screen. Both this widget (which expands to greet) and useTourTrigger
+// (which stands the auto-tour down) look for it; this widget owns CONSUMING it,
+// so the greeting happens exactly once per setup arrival. Same guarded-storage
+// idiom as above: an unavailable store simply means the organic welcome runs.
+
+const ARRIVED_FROM_SETUP_KEY = 'safentia.arrivedFromSetup';
+
+/** Reads and clears the flag in one go, returning whether it was set. */
+function consumeArrivedFromSetup(): boolean {
+  try {
+    const arrived =
+      window.sessionStorage.getItem(ARRIVED_FROM_SETUP_KEY) === '1';
+    if (arrived) {
+      window.sessionStorage.removeItem(ARRIVED_FROM_SETUP_KEY);
+    }
+    return arrived;
+  } catch {
+    return false;
   }
 }
 
@@ -125,6 +171,22 @@ export function FloatingGettingStarted() {
     focusTarget.current = null;
   }, [expanded]);
 
+  // First-landing sequencing (Fix 11): if this session arrived from the setup
+  // celebration, open expanded once as the "here's what's next" moment, and
+  // consume the flag so a later remount this session opens by the ordinary
+  // preference. The auto-tour reads the same flag and stands down (see
+  // useTourTrigger), so the two never greet together. Runs once on mount; the
+  // widget renders nothing until its data loads, so this settles before paint.
+  useEffect(() => {
+    if (consumeArrivedFromSetup()) {
+      setExpanded(true);
+      writeExpanded(uid, true);
+    }
+    // Intentionally mount-once: the flag is a one-shot session signal, and uid
+    // is stable for the shell's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Already-subscribed keys (ConsoleHome holds profile/buildings/members for
   // admins) - these attach nothing new, they read the shared cache.
   const profile = useRtdbQuery<OrgProfile | null>({
@@ -161,6 +223,16 @@ export function FloatingGettingStarted() {
     build: buildPresenceProbe,
     enabled,
   });
+  // "Has this org released an assessment yet?" - the honest replacement for the
+  // old stored templates-visited tick. Its own presence key, so it never
+  // clobbers ConsoleHome's bounded release window over the same node.
+  const releasesPresent = useRtdbQuery<boolean>({
+    key: keys.releasedAssessmentsPresence(orgId),
+    path: paths ? paths.db.assessments(orgId) : '',
+    select: selectPresent,
+    build: buildReleasedProbe,
+    enabled,
+  });
 
   // The person's own console state: the dismiss flag and the visit-based tick.
   const consoleState = useRtdbQuery<ConsoleState | null>({
@@ -182,6 +254,7 @@ export function FloatingGettingStarted() {
     memberCount.data === undefined ||
     customersPresent.data === undefined ||
     jobsPresent.data === undefined ||
+    releasesPresent.data === undefined ||
     consoleState.data === undefined
   ) {
     return null;
@@ -241,12 +314,12 @@ export function FloatingGettingStarted() {
       linkLabel: 'Schedule a job',
     },
     {
-      id: 'templates',
-      label: 'View your templates',
-      description: 'PAS 79 and BS 9792 are ready; customise or add your own.',
-      done: consoleState.data?.gettingStarted?.templatesVisited === true,
-      to: '/app/templates',
-      linkLabel: 'Open templates',
+      id: 'assessment',
+      label: 'Release your first assessment',
+      description: 'Releasing sends the finished report to your customer.',
+      done: releasesPresent.data,
+      to: '/app/jobs',
+      linkLabel: 'Open jobs',
     },
   ];
 

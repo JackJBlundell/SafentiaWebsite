@@ -196,6 +196,7 @@ export const createSubscription = onCall<CreateSubscriptionRequest>(
                 clientSecret,
                 subscriptionId: existing.id,
                 stripeCustomerId: modeMatched.stripeCustomerId,
+                env,
               };
             }
           }
@@ -290,7 +291,7 @@ export const createSubscription = onCall<CreateSubscriptionRequest>(
           planId,
           subscriptionId: subscription.id,
         });
-        return { clientSecret, subscriptionId: subscription.id, stripeCustomerId };
+        return { clientSecret, subscriptionId: subscription.id, stripeCustomerId, env };
       },
     ),
 );

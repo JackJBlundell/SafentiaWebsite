@@ -1,0 +1,33 @@
+/* ============================================================================
+   LimitNudge - quieter than UpsellNotice: a plain muted row, not a card-let.
+   It is guidance ahead of a limit, so it carries no surface tint of its own -
+   just a soft border and muted text, so it reads as a hint, never an alert.
+   ============================================================================ */
+
+.nudge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.message {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.link {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--status-info);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:hover {
+  text-decoration: none;
+}

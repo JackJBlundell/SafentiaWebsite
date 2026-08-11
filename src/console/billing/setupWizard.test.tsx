@@ -372,8 +372,8 @@ describe('SetupWizard', () => {
 
   // --- Finishing ------------------------------------------------------------
 
-  it('resumes at the last pane when the node records the legacy building step', () => {
-    renderWizard({ setupStep: 'building', setupDone: { profile: true, team: true } });
+  it('resumes at the customer pane when that is the furthest recorded step', () => {
+    renderWizard({ setupStep: 'customer', setupDone: { profile: true, team: true } });
     expect(screen.getByText('Add your first customers')).toBeTruthy();
   });
 

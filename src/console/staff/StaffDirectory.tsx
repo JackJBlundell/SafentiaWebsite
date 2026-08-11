@@ -28,9 +28,10 @@ import type {
   RevokeInvitationInput,
   RevokeInvitationResult,
 } from '../../types';
-import { isWithinLimit } from '../billing/entitlements';
+import { isNearLimit, isWithinLimit } from '../billing/entitlements';
 import { countPendingStaffInvites } from './inviteSeats';
 import { useEntitlements } from '../billing/useEntitlements';
+import { LimitNudge } from '../billing/LimitNudge';
 import { UpsellNotice } from '../billing/UpsellNotice';
 import { Card, CardHeader } from '../ui/Card';
 import { DataTable } from '../ui/DataTable';
@@ -101,15 +102,18 @@ export function StaffDirectory() {
   const billing = useEntitlements();
   const staffLimit = billing.entitlements.limits.orgStaff;
   // Occupied seats PLUS pending invites (the server's arithmetic - a pending
-  // invitation is a seat already promised), so the button never looks open
-  // when createInvitation would refuse.
+  // invitation is a seat already promised, counted once via inviteSeats so the
+  // gate and the nudge never recompute it two different ways), so the button
+  // never looks open when createInvitation would refuse.
+  const staffUsed =
+    (billing.usage?.staffCount ?? 0) +
+    countPendingStaffInvites(invitations.data, Date.now());
   const staffAtLimit =
-    !billing.loading &&
-    !isWithinLimit(
-      staffLimit,
-      (billing.usage?.staffCount ?? 0) +
-        countPendingStaffInvites(invitations.data, Date.now()),
-    );
+    !billing.loading && !isWithinLimit(staffLimit, staffUsed);
+  // The earlier, calmer nudge (assessment MEDIUM 20): >=80% of a finite ceiling
+  // but not yet at it, so it never renders beside the at-limit UpsellNotice.
+  const staffNearLimit =
+    !billing.loading && !staffAtLimit && isNearLimit(staffLimit, staffUsed);
   const staffGateMessage = billing.entitlements.suspended
     ? 'Your subscription has ended, so staff invitations are paused. Your existing staff are unaffected.'
     : billing.plan
@@ -190,6 +194,15 @@ export function StaffDirectory() {
             )}
           </ToolbarGroup>
         </Toolbar>
+
+        {staffNearLimit && (
+          <LimitNudge
+            used={staffUsed}
+            limit={staffLimit}
+            noun="team members"
+            isAdmin={billing.isAdmin}
+          />
+        )}
 
         <Card flush>
           <CardHeader title="Members" />

@@ -49,6 +49,8 @@ vi.mock('firebase/database', () => ({
   ref: vi.fn((_db: unknown, path: string) => ({ path })),
   query: vi.fn((node: unknown) => node),
   limitToFirst: vi.fn(),
+  orderByChild: vi.fn(),
+  equalTo: vi.fn(),
   update: vi.fn(async (target: { path: string }, value: unknown) => {
     mocks.updateCalls.push({ path: target.path, value });
   }),
@@ -69,6 +71,9 @@ function rawFor(key: readonly (string | number)[]): unknown {
       return mocks.raw.customers;
     case 'jobs':
       return mocks.raw.jobs;
+    case 'assessments':
+      // The released-assessments presence probe (keys.releasedAssessmentsPresence).
+      return mocks.raw.releases;
     case 'consoleState':
       return mocks.raw.consoleState;
     default:
@@ -106,7 +111,7 @@ function adminSession() {
 
 /** A mid-journey org: profile filled in, a teammate invited, a building added;
  *  no customers probe hit (the building fixture is deliberately independent),
- *  no jobs, templates not yet visited. 3 of 6. */
+ *  no jobs, no released assessment yet. 3 of 6. */
 function midJourneyFixtures() {
   mocks.raw.profile = {
     name: 'Acme Fire Safety',
@@ -117,6 +122,7 @@ function midJourneyFixtures() {
   mocks.raw.buildingsRoot = { 'site-1': { 'building-1': { name: 'Block A' } } };
   mocks.raw.customers = null;
   mocks.raw.jobs = null;
+  mocks.raw.releases = null;
   mocks.raw.consoleState = null;
 }
 
@@ -218,8 +224,13 @@ describe('FloatingGettingStarted', () => {
       .closest('li');
     expect(within(jobItem as HTMLElement).getByText('To do:')).toBeInTheDocument();
 
-    const templatesItem = screen.getByText('View your templates').closest('li');
-    expect(within(templatesItem as HTMLElement).getByText('To do:')).toBeInTheDocument();
+    const releaseItem = screen
+      .getByText('Release your first assessment')
+      .closest('li');
+    expect(within(releaseItem as HTMLElement).getByText('To do:')).toBeInTheDocument();
+    expect(
+      within(releaseItem as HTMLElement).getByRole('link', { name: 'Open jobs' }),
+    ).toHaveAttribute('href', '/app/jobs');
 
     // A finished step needs no door: ticked rows carry no action link.
     const doneItem = screen.getByText('Invite a teammate').closest('li');
@@ -272,18 +283,38 @@ describe('FloatingGettingStarted', () => {
     expect(screen.queryByRole('region', { name: 'Getting started' })).toBeNull();
   });
 
-  it('ticks the templates item from the stored consoleState visit flag', async () => {
+  it('ticks the release item from a released-assessment presence probe', async () => {
     midJourneyFixtures();
-    mocks.raw.consoleState = {
-      gettingStarted: { templatesVisited: true },
-    } satisfies ConsoleState;
+    // A single released row is all the limitToFirst(1) probe would deliver;
+    // the widget's selectPresent turns any non-null value into a tick.
+    mocks.raw.releases = { 'assessment-1': { status: 'released' } };
     renderWidget();
 
     expect(queryPill()).toHaveTextContent('4/6');
     await expandWidget();
     expect(screen.getByRole('status')).toHaveTextContent('4 of 6 done');
-    const templatesItem = screen.getByText('View your templates').closest('li');
-    expect(within(templatesItem as HTMLElement).getByText('Done:')).toBeInTheDocument();
+    const releaseItem = screen
+      .getByText('Release your first assessment')
+      .closest('li');
+    expect(within(releaseItem as HTMLElement).getByText('Done:')).toBeInTheDocument();
+  });
+
+  it('expands on a setup-celebration arrival, consuming the one-shot flag', () => {
+    midJourneyFixtures();
+    // SetupCompleteScreen's CTA sets this the moment the user leaves the "You're
+    // all set" screen; the widget greets by opening expanded, once.
+    window.sessionStorage.setItem('safentia.arrivedFromSetup', '1');
+    renderWidget();
+
+    // The panel is open without any click (its "here's what's next" moment)...
+    expect(
+      screen.getByRole('region', { name: 'Getting started' }),
+    ).toBeInTheDocument();
+    // ...and the flag is consumed, so a later remount opens by the ordinary
+    // per-tab preference rather than greeting again.
+    expect(
+      window.sessionStorage.getItem('safentia.arrivedFromSetup'),
+    ).toBeNull();
   });
 
   it('hides forever only through the two-step confirm, persisting to consoleState', async () => {
@@ -327,9 +358,7 @@ describe('FloatingGettingStarted', () => {
     midJourneyFixtures();
     mocks.raw.customers = { 'customer-1': { name: 'Bluewater Estates' } };
     mocks.raw.jobs = { 'job-1': { status: 'scheduled' } };
-    mocks.raw.consoleState = {
-      gettingStarted: { templatesVisited: true },
-    } satisfies ConsoleState;
+    mocks.raw.releases = { 'assessment-1': { status: 'released' } };
     renderWidget();
     expect(queryPill()).toBeNull();
     expect(screen.queryByRole('region', { name: 'Getting started' })).toBeNull();

@@ -129,6 +129,24 @@ export function isWithinLimit(limit: number, current: number): boolean {
 }
 
 /**
+ * The proactive "approaching your limit" predicate - the calm nudge BEFORE the
+ * hard wall (assessment MEDIUM 20). True only for a FINITE, positive ceiling
+ * the org has reached 80% of but not yet hit, so it never fires for unlimited
+ * (-1), the suspended zero-create floor (0), or an org already AT its limit
+ * (that state belongs to the at-limit UpsellNotice, not the nudge). Pure and
+ * shared so the 80% threshold is spelled exactly once. `current` is counted the
+ * same way each call site gates its at-limit check (occupied + pending for
+ * staff, live count for customers/templates), so the nudge and the wall always
+ * agree about the number.
+ */
+export function isNearLimit(limit: number, current: number): boolean {
+  if (limit <= 0) {
+    return false;
+  }
+  return current >= limit * 0.8 && current < limit;
+}
+
+/**
  * The one word-of-truth predicate for "this organisation is not entitled",
  * shared by effectiveEntitlements, the Stripe webhook's member-readable
  * profile.suspended mirror and the Billing tab's restart gating:

@@ -108,6 +108,78 @@ beforeEach(() => {
   mocks.mintCounter = 0;
 });
 
+describe('approaching-limit nudge (assessment templates)', () => {
+  const bronzePlan = {
+    name: 'Bronze',
+    stripePriceId: 'price_bronze_test',
+    priceMonthlyPence: 4900,
+    currency: 'gbp',
+    features: { branding: false, emailTemplates: false, prioritySupport: false },
+    limits: {
+      orgStaff: 5,
+      customers: 10,
+      notificationsPerMonth: 100,
+      // A ceiling of 5 so 4 published templates is exactly the 80% threshold.
+      assessmentTemplates: 5,
+    },
+    order: 1,
+  };
+
+  const publishedTemplates = (count: number): Record<string, Template> => {
+    const out: Record<string, Template> = {};
+    for (let i = 1; i <= count; i += 1) {
+      out[`t${i}`] = {
+        name: `Template ${i}`,
+        version: 1,
+        status: 'published',
+        standard: 'custom',
+        sections: [],
+      };
+    }
+    return out;
+  };
+
+  const seedBilling = (publishedCount: number) => {
+    mocks.rtdb = {
+      templates: publishedTemplates(publishedCount),
+      templateDrafts: null,
+      orgSubscription: { planId: 'bronze', status: 'active' },
+      platformPlans: bronzePlan,
+      orgUsage: { staffCount: 0, customerCount: 0, notificationsThisMonth: 0 },
+    };
+  };
+
+  it('nudges at >=80% of the template ceiling, before the wall', () => {
+    seedBilling(4); // 4 of 5 published.
+    renderTemplatesAt('/');
+    expect(
+      screen.getByText(/4 of 5 assessment templates used/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'New template' }),
+    ).toBeInTheDocument();
+  });
+
+  it('stays quiet below 80%', () => {
+    seedBilling(3);
+    renderTemplatesAt('/');
+    expect(
+      screen.queryByText(/assessment templates used/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('gives way to the at-limit notice at the ceiling, not the nudge', () => {
+    seedBilling(5);
+    renderTemplatesAt('/');
+    expect(
+      screen.queryByText(/assessment templates used/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'New template' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('TemplatesRoutes gate', () => {
   it('shows the calm admin gate to a non-admin at a direct URL', () => {
     mocks.auth.claims = {

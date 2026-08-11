@@ -20,6 +20,23 @@ import { createTourStorage, type TourDeviceClass } from './tourStorage';
 /** The replay event name - the Getting Started card dispatches exactly this. */
 export const START_TOUR_EVENT = 'safentia:start-tour';
 
+/** Session flag set by SetupCompleteScreen's CTA: this landing is the setup
+ *  celebration's "you're all set" arrival. The floating checklist owns
+ *  CONSUMING it (it expands to greet); here we only PEEK, at mount, so the
+ *  auto-tour stands down without racing the checklist's removal of the flag. */
+const ARRIVED_FROM_SETUP_KEY = 'safentia.arrivedFromSetup';
+
+/** True when this session arrived from the setup celebration. Read-only, and
+ *  guarded like every other storage touch here - an unreadable store just
+ *  means the ordinary auto-tour welcome runs. */
+function arrivedFromSetup(): boolean {
+  try {
+    return window.sessionStorage.getItem(ARRIVED_FROM_SETUP_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** A settle delay after mount, so the tour never opens over a page still
  *  painting its first data. The targets are chrome and exist immediately;
  *  this is about calm, not correctness. */
@@ -47,7 +64,17 @@ function deviceClass(): TourDeviceClass {
     : 'mobile';
 }
 
-export function useTourTrigger(): { active: boolean; close: () => void } {
+/**
+ * @param suppressAutoStart Caller-decided reasons to stand the AUTO-tour down
+ *   while leaving replay untouched. ConsoleShell passes this true for a super
+ *   admin working inside a tenant org (item 18b): an operator who reaches a
+ *   customer's workspace already knows the console, so the org auto-tour would
+ *   be noise - but "Take the console tour" in the account menu still replays it
+ *   on demand. (The /app/admin platform surface never mounts the tour at all.)
+ */
+export function useTourTrigger(
+  { suppressAutoStart = false }: { suppressAutoStart?: boolean } = {},
+): { active: boolean; close: () => void } {
   const { user } = useAuth();
   const uid = user?.uid;
   const storage = useMemo(() => (uid ? createTourStorage(uid) : null), [uid]);
@@ -62,9 +89,19 @@ export function useTourTrigger(): { active: boolean; close: () => void } {
     }
     let cancelled = false;
     const createdBeforeTour = predatesTour(user?.metadata?.creationTime);
+    // Peeked at MOUNT, before the settle delay, so the checklist consuming the
+    // flag mid-delay cannot flip this back to "not from setup".
+    const fromSetup = arrivedFromSetup();
     const timer = window.setTimeout(() => {
       void storage.read().then((done) => {
         if (cancelled || done?.[deviceClass()] === true) {
+          return;
+        }
+        // Deliberate arrivals stand the auto-tour down (item 11: setup
+        // celebration; item 18b: super admin in a tenant org). We do NOT mark
+        // the class done - a later organic landing still earns the tour once -
+        // and the replay event is untouched, so it starts on demand.
+        if (suppressAutoStart || fromSetup) {
           return;
         }
         if (createdBeforeTour) {
@@ -83,7 +120,7 @@ export function useTourTrigger(): { active: boolean; close: () => void } {
     // `user` only matters through the uid (already in `storage`) and the
     // immutable creationTime, so storage remains the honest dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storage]);
+  }, [storage, suppressAutoStart]);
 
   // Replay on demand, done flag or not.
   useEffect(() => {

@@ -2,8 +2,8 @@
 // Onboarding setup-step marks - Phase 3 setup wizard (plan §5.4).
 //
 // The setup wizard's steps are ticked off by the callables that actually
-// PERFORM them (updateOrgProfile, createInvitation, manageCustomer,
-// manageBuilding) rather than by client writes: rules deny all client writes
+// PERFORM them (updateOrgProfile, createInvitation, manageCustomer) rather than
+// by client writes: rules deny all client writes
 // to usersOnboarding/{uid}, so a real business write landing through the real
 // callable is the only thing that can mark a step done. This module is the
 // single piggyback seam those callables share.
@@ -19,7 +19,7 @@ import type { Logger } from './logging';
 import { usersOnboarding } from './paths';
 
 /** The wizard steps a business callable can mark done (shared type §5.4). */
-export type OnboardingSetupStep = 'profile' | 'team' | 'customer' | 'building';
+export type OnboardingSetupStep = 'profile' | 'team' | 'customer';
 
 /**
  * Mark a setup-wizard step done for the caller, iff their onboarding node is
