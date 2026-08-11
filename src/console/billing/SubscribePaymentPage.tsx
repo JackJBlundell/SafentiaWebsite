@@ -65,15 +65,28 @@ export function SubscribePaymentPage({
   const [nothingPending, setNothingPending] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
-  // One secret fetch per entry, and Stripe.js is loaded from the mode the
+  // Eager load for the best-known env (the `env` prop) so a missing
+  // publishable key is discovered immediately - the "not configured" notice
+  // does not wait on the secret fetch, which may fail. The secret fetch below
+  // re-keys Stripe.js to the mode the SERVER actually used when it differs.
+  useEffect(() => {
+    let cancelled = false;
+    loadStripeForEnv(env).then((resolved) => {
+      if (!cancelled) setStripe(resolved);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [env]);
+
+  // One secret fetch per entry. Stripe.js is (re)loaded for the mode the
   // SERVER used (returned as response.env), NOT the client-guessed `env` prop.
   // They can differ: FIRERITE_FORCE_TEST_SIGNUPS forces the server to test
   // while a claim-less account guesses live - and a live publishable key
   // cannot mount a test client secret, so the Payment Element never mounts and
-  // confirmPayment throws. Loading Stripe.js only after the secret arrives,
-  // keyed to its true mode, makes the key and secret always agree. Mount-only:
-  // `choice` is fixed for this page's lifetime and the callable handles are
-  // stable.
+  // confirmPayment throws. loadStripeForEnv caches per mode, so when the modes
+  // agree this re-load is free. Mount-only: `choice` is fixed for this page's
+  // lifetime and the callable handles are stable.
   useEffect(() => {
     let cancelled = false;
     const mountFor = async (secret: string, mode: Environment) => {
@@ -88,7 +101,10 @@ export function SubscribePaymentPage({
         // node (saveOnboardingDetails); only the plan travels.
         const response = await create.call({ planId: choice.planId });
         if (!cancelled && response) {
-          await mountFor(response.clientSecret, response.env);
+          // `?? env` guards the pre-deploy window: an older function that does
+          // not yet return `env` must not fall through loadStripeForEnv's
+          // non-'test' default to the LIVE key against a test secret.
+          await mountFor(response.clientSecret, response.env ?? env);
         }
         return;
       }
