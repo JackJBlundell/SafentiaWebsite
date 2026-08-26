@@ -206,6 +206,63 @@ describe('SentEmailsPage', () => {
       screen.getByText('No emails have been sent yet.', { exact: false }),
     ).toBeInTheDocument();
   });
+
+  // The bundling seam. The fixtures are set inside these two tests rather than
+  // added to the shared beforeEach, because the counts the tests above assert
+  // ('the most recent 3 sends', two 'Built-in' cells) are part of what they
+  // check, and a fourth row would break them for no reason.
+
+  it('marks a bundled send with the number of events it carried', () => {
+    mocks.emailRows = [
+      {
+        id: 'm1',
+        to: 'r***@borough.gov.uk',
+        subject: '12 buildings need a fire risk assessment review',
+        category: 'review-reminder',
+        sentAt: Date.UTC(2026, 7, 24, 8, 15),
+        outcome: 'sent',
+        kindId: 'review-reminder-admin',
+        bundledCount: 12,
+      },
+    ];
+    renderEmailsRoutes();
+    expect(screen.getByText('Digest of 12')).toBeInTheDocument();
+    // Beside the type, not instead of it: the row still says what the email
+    // was, and both readings sit in the one cell.
+    expect(
+      screen.getByRole('cell', {
+        name: /Review reminder \(admins\).*Digest of 12/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves an ordinary send unmarked, and a bundle of one with it', () => {
+    // A bundle that held a single item is rendered as the ordinary email, not
+    // as a digest of one, so it must not carry the mark either.
+    mocks.emailRows = [
+      {
+        id: 'm2',
+        to: 'r***@borough.gov.uk',
+        subject: 'A review is due',
+        category: 'review-reminder',
+        sentAt: Date.UTC(2026, 7, 24, 8, 15),
+        outcome: 'sent',
+        kindId: 'review-reminder-admin',
+        bundledCount: 1,
+      },
+      {
+        id: 'm1',
+        to: 'j***@example.com',
+        subject: 'You have been invited to Safentia',
+        category: 'invitation',
+        sentAt: Date.UTC(2026, 7, 23, 9, 0),
+        outcome: 'sent',
+        kindId: 'invitation',
+      },
+    ];
+    renderEmailsRoutes();
+    expect(screen.queryByText(/Digest of/)).toBeNull();
+  });
 });
 
 // --- Admin gate ----------------------------------------------------------------

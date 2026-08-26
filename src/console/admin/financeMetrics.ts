@@ -291,6 +291,7 @@ export const EVENT_PHRASES: Record<FinanceEvent['type'], string> = {
   subscription_started: 'Subscription started',
   subscription_canceled: 'Subscription cancelled',
   plan_changed: 'Plan changed',
+  org_deleted: 'Organisation data deleted',
 };
 
 /** The chip/dot palette vocabulary. Tones are always paired with words - the
@@ -306,6 +307,7 @@ export const EVENT_TONES: Record<FinanceEvent['type'], FinanceTone> = {
   subscription_started: 'info',
   subscription_canceled: 'neutral',
   plan_changed: 'neutral',
+  org_deleted: 'warning',
 };
 
 /** "12 Sep 2026" - the health table's date voice, pinned here so the chip and

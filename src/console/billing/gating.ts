@@ -57,3 +57,26 @@ export function pickNoMembershipView(
   // organisation's details before any plan is pitched.
   return 'details';
 }
+
+/**
+ * Whether an authenticated (now org-holding) session is carrying an unfinished
+ * subscription of its OWN - a live onboarding node still at step 'payment'
+ * (assessment 1.6). Such a session was invited into an organisation part-way
+ * through founding one: only the provisioning webhook advances a node past
+ * 'payment' (stamping the new org's id as it does), so an org-holding session
+ * whose node is STILL at 'payment' cannot have reached those claims by paying -
+ * it reached them through an invitation, leaving the payment attempt in flight.
+ *
+ * The gate surfaces a one-time notice off this rather than dropping the user
+ * straight into the inviting org's shell with no word about the journey they
+ * abandoned. It is a SEPARATE predicate from pickNoMembershipView because that
+ * function's 'authenticated' arm is fed the node SCOPED to the active org (so a
+ * leftover 'setup' node from a different org cannot gate the wrong session),
+ * whereas this collision is detected on the RAW node - the payment node has no
+ * org to scope by yet. Pure and exported for the tests.
+ */
+export function hasUnfinishedSubscription(
+  onboarding: UserOnboarding | null | undefined,
+): boolean {
+  return onboarding?.step === 'payment';
+}

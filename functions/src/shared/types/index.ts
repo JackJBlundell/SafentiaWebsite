@@ -212,14 +212,18 @@ export interface ConsoleState {
   gettingStarted?: { templatesVisited?: boolean };
 }
 
-/** Finance-feed entry kinds (Phase 3 §5.5), written by the Stripe webhook. */
+/** Finance-feed entry kinds (Phase 3 §5.5). Written by the Stripe webhook, plus
+ *  `org_deleted` written by the offboarding tooling (the nightly retention sweep
+ *  and the operator immediate-delete script) so a cancelled tenant's final
+ *  reaping leaves a durable, super-admin-visible audit line (DECISIONS §8). */
 export type FinanceEventType =
   | 'payment'
   | 'payment_failed'
   | 'refund'
   | 'subscription_started'
   | 'subscription_canceled'
-  | 'plan_changed';
+  | 'plan_changed'
+  | 'org_deleted';
 
 /**
  * One entry in the super-admin billing activity feed at
@@ -359,6 +363,18 @@ export interface OrgSubscription {
    *  grace window is open - never degrade a live safety tool over a card hiccup. */
   paymentState?: 'past_due' | 'action_required';
   graceUntil?: number;
+  /**
+   * Data-retention clock (DECISIONS §8). The ms-epoch instant AT or AFTER which a
+   * FULLY-cancelled organisation's data may be reaped by the nightly
+   * `cleanupExpiredOrgs` sweep. Stamped ONCE, at FINAL cancellation
+   * (`customer.subscription.deleted` → status canceled), as `now + 12 months`;
+   * CLEARED (deleted) the moment the org resubscribes to an active/trialing
+   * subscription, so a returning customer is never reaped. Absent on every live
+   * org - it exists only while a cancelled org sits inside its 12-month retention
+   * window. Server-written only (the Stripe webhook); the operator immediate-delete
+   * script bypasses it entirely.
+   */
+  retentionUntil?: number;
   /** Display metadata only (SAQ-A): never any card data beyond brand/last4/exp. */
   paymentMethod?: { brand: string; last4: string; expMonth: number; expYear: number };
   updatedAt?: number;
@@ -1320,6 +1336,14 @@ export interface EmailLogEntry {
   /** The org template rendered for the send; absent means the built-in default
    *  copy was used. */
   templateId?: string;
+  /**
+   * How many queued sends this ONE email carried, when it was a bundle. Absent
+   * or 1 means an ordinary single send - which is also what a bundle of one
+   * renders as, deliberately: a digest of one item would read worse than the
+   * message it replaced. Set only by the digest flush, so the send log can say
+   * 'Digest of 12' where twelve emails would once have been listed.
+   */
+  bundledCount?: number;
 }
 
 // ----------------------------------------------------------------------------
@@ -1457,12 +1481,52 @@ export interface EmailTemplate {
   updatedBy: string;
 }
 
+/**
+ * How a kind reaches its recipient, the rule that keeps one person from being
+ * emailed a hundred times in a morning. The guarantee the three policies exist
+ * to deliver is: FOR EACH (recipient address, kind), AT MOST ONE EMAIL PER UK
+ * CALENDAR DAY - everything else that happened that day is bundled into it.
+ *
+ * - 'immediate' - always sends now, never queued, never counted against the
+ *   day slot. Security and access-critical mail ('invitation',
+ *   'payment-failed', 'subscription-ended'), the admin-composed 'manual' send,
+ *   and the two kinds that are ALREADY one-per-recipient-per-day by
+ *   construction ('job-reminder', 'deadline-admin-digest').
+ * - 'collapse' - the FIRST event of the day sends immediately, in the kind's
+ *   ordinary copy, and claims the day slot; every later event that day is
+ *   queued and bundled into the next flush. Event-driven mail, where the first
+ *   one is news and the twentieth is noise.
+ * - 'digest' - never sends immediately; always queued. The sweep-driven
+ *   reminders, which are a daily batch by nature and whose crons all run
+ *   BEFORE the flush - so the digest still arrives the same morning.
+ *
+ * Declared per kind in the mirrored emailKindCatalogue, not stored per org:
+ * the policy is a property of what the email IS, not a preference.
+ */
+export type EmailDeliveryPolicy = 'immediate' | 'collapse' | 'digest';
+
+export const EMAIL_DELIVERY_POLICIES = [
+  'immediate',
+  'collapse',
+  'digest',
+] as const;
+
 /** Per-kind org settings (`/{env}/emailSettings/{orgId}/kinds/{kindId}`).
  *  Absent node = enabled with the built-in default template. 'invitation' may
  *  never be disabled (security email); rules and server both enforce it. */
 export interface EmailKindSettings {
   enabled?: boolean;
   templateId?: string;
+  /**
+   * The template rendered when this kind's sends are BUNDLED - two or more of
+   * them collapsed into one daily email. Deliberately a second slot rather
+   * than a second EmailKindId: an org's ordinary template is written in the
+   * singular ('the review for Rose Court is due in 60 days') and cannot be
+   * reused for forty buildings, but nor may it be rewritten under them. Absent
+   * means the kind's built-in digest default. Only kinds whose catalogue entry
+   * carries a `digest` block can be bundled, so only those show the slot.
+   */
+  digestTemplateId?: string;
 }
 
 export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked';

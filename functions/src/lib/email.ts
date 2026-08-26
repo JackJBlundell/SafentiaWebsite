@@ -95,6 +95,9 @@ export interface EmailDispatchContext {
   /** The org template rendered for the send; absent means the built-in
    *  default copy was used. */
   templateId?: string;
+  /** How many queued sends this one email carried, when the digest flush
+   *  bundled them (lib/emailDigest). Absent means an ordinary single send. */
+  bundledCount?: number;
 }
 
 /**
@@ -146,6 +149,9 @@ async function appendEmailLog(
       // ====
       ...(context.kindId !== undefined ? { kindId: context.kindId } : {}),
       ...(context.templateId !== undefined ? { templateId: context.templateId } : {}),
+      ...(context.bundledCount !== undefined
+        ? { bundledCount: context.bundledCount }
+        : {}),
     };
     await db.ref(forEnv(context.env).db.emailLog(context.orgId)).push(entry);
   } catch (error) {

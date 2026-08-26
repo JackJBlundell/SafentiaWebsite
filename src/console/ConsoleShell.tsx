@@ -585,6 +585,37 @@ function PlatformBrandMark() {
 }
 
 /** The signed-in user's disclosure: account settings, tour replay, sign-out. */
+/** Leading glyphs for the account menu, drawn in the same 18px currentColor
+ *  stroke language as the nav rail's NavIcon so the two menus read as one
+ *  system. Reinforcement only - every item still carries its label. */
+function MenuIcon({ name }: { name: 'account' | 'tour' | 'signout' }) {
+  const paths: Record<string, React.ReactNode> = {
+    account: (
+      <>
+        <circle cx="9" cy="6" r="3" />
+        <path d="M3.5 15.5a5.5 5.5 0 0 1 11 0" />
+      </>
+    ),
+    tour: (
+      <>
+        <circle cx="9" cy="9" r="6.5" />
+        <path d="M11.5 6.5 8 8 6.5 11.5 10 10z" />
+      </>
+    ),
+    signout: (
+      <>
+        <path d="M11 5.5V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-1.5" />
+        <path d="M7.5 9h8M12.5 6l3 3-3 3" />
+      </>
+    ),
+  };
+  return (
+    <svg viewBox="0 0 18 18" className={styles.menuIcon} aria-hidden="true" focusable="false">
+      {paths[name]}
+    </svg>
+  );
+}
+
 function AccountMenu({ showTourReplay = false }: { showTourReplay?: boolean }) {
   const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
@@ -653,7 +684,8 @@ function AccountMenu({ showTourReplay = false }: { showTourReplay?: boolean }) {
             className={styles.menuItem}
             onClick={() => close(false)}
           >
-            Account settings
+            <MenuIcon name="account" />
+            <span className={styles.menuItemLabel}>Account settings</span>
           </Link>
           {showTourReplay && (
             <button
@@ -667,7 +699,8 @@ function AccountMenu({ showTourReplay = false }: { showTourReplay?: boolean }) {
                 window.dispatchEvent(new CustomEvent('safentia:start-tour'));
               }}
             >
-              Take the console tour
+              <MenuIcon name="tour" />
+              <span className={styles.menuItemLabel}>Take the console tour</span>
             </button>
           )}
           <button
@@ -680,7 +713,8 @@ function AccountMenu({ showTourReplay = false }: { showTourReplay?: boolean }) {
               void signOut();
             }}
           >
-            Sign out
+            <MenuIcon name="signout" />
+            <span className={styles.menuItemLabel}>Sign out</span>
           </button>
         </div>
       )}

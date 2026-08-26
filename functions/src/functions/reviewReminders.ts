@@ -5,8 +5,23 @@
 // every organisation's buildings, check the fire-risk-assessment review date
 // (serviceSchedule.fraReview.nextDue). A building whose review falls exactly
 // 60, 30 or 7 days ahead - or whose due day fully passed yesterday ("lapsed") -
-// earns ONE notice: an in-app notification (plus best-effort push) to each of
-// the org's active admins, and one branded email to each admin's address.
+// earns ONE notice: one branded email to each of the org's active admins, plus
+// (at the nearer marks) one to every contact of the customer that owns it, and
+// a place in the single in-app notification the org's admins receive.
+//
+// THE TWO CHANNELS COLLAPSE IN DIFFERENT PLACES, deliberately. The IN-APP notice
+// is one per admin per RUN, covering every building that matched, not one per
+// building: each in-app notice spends a slot of the organisation's monthly
+// notification quota, which sendNotification enforces by SILENTLY ABORTING
+// everything past the cap, so a large estate on a ladder day could burn a whole
+// month's quota in one morning and suppress unrelated notices (a submitted
+// assessment, a cancelled job) for weeks afterwards. The estate walk therefore
+// accumulates its matches and tells each admin once at the end - the pattern
+// deadlineReminders' sweepActions established, for exactly this reason. The
+// EMAILS stay one per building: they cost credits rather than quota, and the
+// delivery seam (lib/emailDigest) already holds every message of one kind to one
+// digest per address per day, carrying a row per building inside it. Collapsing
+// them here as well would only discard detail the digest is able to keep.
 //
 // WHO IS IN SCOPE: the organisation's master switch (OrgSettings
 // .reviewRemindersEnabled) can stop the sweep for a whole org; an ARCHIVED
@@ -39,7 +54,8 @@ import { WEB_ORIGIN } from '../lib/webOrigin';
 import { sendNotification } from '../lib/notifications';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { orgEmailBrand, type EmailBrand } from '../lib/emailTemplates';
-import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
+import { loadKindConfig } from '../lib/templatedEmail';
+import { deliverKindEmail } from '../lib/emailDigest';
 import {
   reviewReminderStage,
   resolveReviewReminderDays,
@@ -157,6 +173,15 @@ export const reviewReminders = onSchedule(
         // fan-outs, and the seam accepts the resolution back as `config`.
         let adminConfig: KindConfig | null = null;
         let contactConfig: KindConfig | null = null;
+        // Every building in this org that matched today, held until the whole
+        // estate has been walked so the admins are told ONCE rather than once
+        // per building. See the header note on the two channels for why the
+        // in-app side collapses here while the emails below do not.
+        const matched: Array<{
+          buildingName: string;
+          stage: ReminderStage;
+          nextDue: number;
+        }> = [];
 
         // Entries, not values: the CTA below deep-links to the building, whose
         // console route carries the site it sits under.
@@ -222,7 +247,6 @@ export const reviewReminders = onSchedule(
             }
 
             const buildingName = building.name ?? buildingId;
-            const body = stageCopy(stage, buildingName);
             // The seam owns the rendering now; what it needs from here are the
             // exact phrases this sweep has always computed, supplied as the
             // catalogue's declared variables.
@@ -232,26 +256,30 @@ export const reviewReminders = onSchedule(
                 : `FRA review due in ${stage} days`;
             const bodyStagePhrase =
               stage === 'lapsed' ? 'now overdue' : `due in ${stage} days`;
+            // This building's line when the seam bundles a recipient's day into
+            // one digest: a row in a table, not a sentence. Shared by both kinds
+            // because an admin and a duty-holder reading about the same building
+            // on the same morning should see the same row.
+            const digestRow = {
+              label: buildingName,
+              value:
+                stage === 'lapsed'
+                  ? `Review overdue (due ${formatDueDate(nextDue)})`
+                  : `Due ${formatDueDate(nextDue)} — ${stage} days`,
+            };
+
+            // Held for the org's single in-app notice, sent once the estate
+            // walk is done (see the note on `matched`).
+            matched.push({ buildingName, stage, nextDue });
 
             for (const admin of admins) {
-              // ONE in-app notification (plus best-effort push) per admin...
-              await sendNotification(
-                paths,
-                orgId,
-                admin.uid,
-                {
-                  type: 'reminder',
-                  title:
-                    stage === 'lapsed' ? 'FRA review overdue' : 'FRA review due',
-                  body,
-                },
-                logger,
-              );
-              // ...and one branded email, unless the admin quietened the
-              // review-due category. Best-effort by design: sendKindEmail
-              // never throws, so a provider outage cannot abort the sweep.
+              // One branded email per admin per building, unless the admin
+              // quietened the review-due category. Best-effort by design:
+              // deliverKindEmail never throws, so a provider outage cannot abort
+              // the sweep - and it decides for itself whether this message goes
+              // out now or joins the admin's next daily digest.
               if (admin.email && admin.emailReviewDue) {
-                await sendKindEmail(
+                await deliverKindEmail(
                   {
                     kind: 'review-reminder-admin',
                     env,
@@ -272,6 +300,7 @@ export const reviewReminders = onSchedule(
                     // Straight to the building's record, where the service
                     // schedule that raised this reminder is edited.
                     kindLink: `${WEB_ORIGIN}/app/customers/${building.customerId}/sites/${siteId}/buildings/${buildingId}`,
+                    digestRow,
                     config: adminConfig ?? undefined,
                   },
                   logger,
@@ -340,9 +369,9 @@ export const reviewReminders = onSchedule(
                   continue;
                 }
                 seen.add(key);
-                // Best-effort per recipient: sendKindEmail never throws, so one
-                // contact's provider failure cannot abort the sweep.
-                await sendKindEmail(
+                // Best-effort per recipient: deliverKindEmail never throws, so
+                // one contact's provider failure cannot abort the sweep.
+                await deliverKindEmail(
                   {
                     kind: 'review-reminder-contact',
                     env,
@@ -354,6 +383,7 @@ export const reviewReminders = onSchedule(
                     // console - the console would only show them a permission
                     // wall.
                     kindLink: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
+                    digestRow,
                     config: contactConfig,
                   },
                   logger,
@@ -362,6 +392,40 @@ export const reviewReminders = onSchedule(
             }
             notices += 1;
           }
+        }
+
+        // ONE in-app notice per admin for the whole org, however many buildings
+        // matched today. `admins` is non-null exactly when at least one did, so
+        // an org with nothing due has still cost nothing beyond its settings and
+        // customer reads. Every building here already holds its own per-day
+        // marker, claimed in the walk above, so a scheduler redelivery finds
+        // nothing to accumulate and sends no second notice.
+        if (matched.length === 0 || admins === null) {
+          continue;
+        }
+        const overdue = matched.filter((item) => item.stage === 'lapsed').length;
+        // A single match keeps today's exact wording, so the common case reads
+        // precisely as it always has; several collapse to a count, because
+        // naming forty buildings in a notification body is a list nobody reads
+        // from an inbox row. The same one-versus-many shape sweepActions uses.
+        const summary =
+          matched.length === 1
+            ? stageCopy(matched[0].stage, matched[0].buildingName)
+            : `${matched.length} buildings need a fire risk assessment review${overdue > 0 ? `, ${overdue} of them overdue` : ''}.`;
+        const title =
+          matched.length > 1
+            ? 'FRA reviews due'
+            : matched[0].stage === 'lapsed'
+              ? 'FRA review overdue'
+              : 'FRA review due';
+        for (const admin of admins) {
+          await sendNotification(
+            paths,
+            orgId,
+            admin.uid,
+            { type: 'reminder', title, body: summary },
+            logger,
+          );
         }
       }
     }

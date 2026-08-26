@@ -9,6 +9,15 @@
 // access (lib/customerAccess) - then tells the organisation's admins it has
 // happened, in-app and by email.
 //
+// THE TWO CHANNELS COLLAPSE IN DIFFERENT PLACES. Each admin gets ONE in-app
+// notice per run covering every contract that ended, because an inbox record
+// spends a slot of the org's monthly notification quota and a week of clustered
+// renewals could otherwise exhaust it (see the note on `ended`). The EMAILS are
+// still sent one per customer: the delivery seam (lib/emailDigest) already holds
+// every 'contract-ended' message to one digest per address per day and lists a
+// row per customer inside it, so the reader gets one email either way - with the
+// per-customer detail kept rather than thrown away here.
+//
 // It is a convenience over the archive action, never a second source of truth:
 // `status` alone decides whether a customer is live, so there is no way for a
 // date and a status to disagree about who has access. Restoring a customer
@@ -39,7 +48,8 @@ import { WEB_ORIGIN } from '../lib/webOrigin';
 import { sendNotification } from '../lib/notifications';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { orgEmailBrand, type EmailBrand } from '../lib/emailTemplates';
-import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
+import { loadKindConfig } from '../lib/templatedEmail';
+import { deliverKindEmail } from '../lib/emailDigest';
 import { portalAccessCascade } from '../lib/customerAccess';
 import { adjustCustomerCount } from '../lib/usageCounters';
 import { activityUpdate } from '../lib/events';
@@ -99,6 +109,17 @@ export const customerContracts = onSchedule(
         // The kind's resolved template, read once per org alongside the
         // audience rather than once per customer or per admin.
         let kindConfig: KindConfig | null = null;
+        // Every customer this run archived in this org, held until the whole
+        // customer walk is done so the admins hear ONCE however many contracts
+        // ended together. Renewals cluster - a year's worth signed in the same
+        // week ends in the same week - and each in-app notice consumes a slot
+        // of the organisation's monthly notification quota, which
+        // sendNotification enforces by SILENTLY ABORTING once the cap is
+        // reached. A per-customer fan-out could therefore spend a month's quota
+        // in one morning and suppress unrelated notices (a submitted
+        // assessment, a cancelled job) for weeks afterwards. The admin digest in
+        // deadlineReminders' sweepActions is the precedent this follows.
+        const ended: Array<{ name: string; endDate: number }> = [];
 
         for (const [customerId, customer] of Object.entries(customers ?? {})) {
           const endDate = customer?.contractEndDate;
@@ -156,48 +177,91 @@ export const customerContracts = onSchedule(
           }
 
           const customerName = customer.name ?? customerId;
-          const body = `The contract with ${customerName} ended on ${formatDate(
-            endDate,
-          )}. They have been archived and their portal access has been withdrawn.`;
+          // Held for the org's single in-app notice, sent once the customer
+          // walk is done (see the note on `ended`).
+          ended.push({ name: customerName, endDate });
 
+          // The EMAIL stays per customer. The two channels are collapsed in
+          // different places on purpose: an inbox record costs a slot of the
+          // org's monthly notification quota and so has to be collapsed here,
+          // inside the sweep, whereas an email costs credits and is bundled for
+          // us by the delivery seam, which holds every 'contract-ended' message
+          // to one digest per address per day and carries a row per customer
+          // inside it. Collapsing the email here as well would throw away
+          // detail the digest is able to keep. deadlineReminders splits the two
+          // channels the same way.
           for (const admin of admins) {
-            // This is an account-state change the organisation MUST know about -
-            // access has been withdrawn on their behalf - so no INDIVIDUAL can
-            // switch it off: it is not one of the quietenable categories a
-            // member's preferences cover, in the same way the overdue review
-            // notice always sends. The ORGANISATION, though, can now silence
-            // the email kind as a whole: sendKindEmail honours the org's
-            // 'contract-ended' toggle, which is an intended new capability of
-            // the templating seam, not a per-member preference.
-            await sendNotification(
-              paths,
-              orgId,
-              admin.uid,
-              { type: 'account', title: 'Customer contract ended', body },
+            if (!admin.email) {
+              continue;
+            }
+            await deliverKindEmail(
+              {
+                kind: 'contract-ended',
+                env,
+                orgId,
+                to: admin.email,
+                variables: {
+                  'org.name': orgName ?? 'Your organisation',
+                  'customer.name': customerName,
+                  'contract.endDate': formatDate(endDate),
+                },
+                // Guaranteed set alongside `admins`; the fallback is the
+                // same Safentia default the renderer would choose.
+                brand: orgBrand ?? orgEmailBrand(null),
+                kindLink: `${WEB_ORIGIN}/app/customers/${customerId}`,
+                // This customer's line in a bundled digest: a row in a table,
+                // not the sentence the single-customer email already carries.
+                digestRow: {
+                  label: customerName,
+                  value: `Contract ended ${formatDate(endDate)}`,
+                },
+                config: kindConfig ?? undefined,
+              },
               logger,
             );
-            if (admin.email) {
-              await sendKindEmail(
-                {
-                  kind: 'contract-ended',
-                  env,
-                  orgId,
-                  to: admin.email,
-                  variables: {
-                    'org.name': orgName ?? 'Your organisation',
-                    'customer.name': customerName,
-                    'contract.endDate': formatDate(endDate),
-                  },
-                  // Guaranteed set alongside `admins`; the fallback is the
-                  // same Safentia default the renderer would choose.
-                  brand: orgBrand ?? orgEmailBrand(null),
-                  kindLink: `${WEB_ORIGIN}/app/customers/${customerId}`,
-                  config: kindConfig ?? undefined,
-                },
-                logger,
-              );
-            }
           }
+        }
+
+        // ONE in-app notice per admin for the whole org, however many contracts
+        // ended today. `admins` is non-null exactly when at least one did, so
+        // an org with nothing expiring has still cost nothing to read.
+        if (ended.length === 0 || admins === null) {
+          continue;
+        }
+        // This is an account-state change the organisation MUST know about -
+        // access has been withdrawn on their behalf - so no INDIVIDUAL can
+        // switch it off: it is not one of the quietenable categories a member's
+        // preferences cover, in the same way the overdue review notice always
+        // sends. The ORGANISATION, though, can now silence the email kind as a
+        // whole: the seam honours the org's 'contract-ended' toggle, which is an
+        // intended capability of the templating seam, not a per-member
+        // preference.
+        //
+        // A single ending keeps the wording it has always had, so the common
+        // case reads exactly as before; several collapse to a count, because
+        // naming five customers in a notification body is a list nobody reads
+        // in an inbox row.
+        const body =
+          ended.length === 1
+            ? `The contract with ${ended[0].name} ended on ${formatDate(
+                ended[0].endDate,
+              )}. They have been archived and their portal access has been withdrawn.`
+            : `${ended.length} customer contracts have ended. Those customers have been archived and their portal access withdrawn.`;
+        for (const admin of admins) {
+          await sendNotification(
+            paths,
+            orgId,
+            admin.uid,
+            {
+              type: 'account',
+              title:
+                ended.length === 1
+                  ? 'Customer contract ended'
+                  : 'Customer contracts ended',
+              body,
+            },
+            logger,
+          );
         }
       }
     }

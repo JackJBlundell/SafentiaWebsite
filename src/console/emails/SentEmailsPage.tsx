@@ -24,6 +24,14 @@
 // org's templates node ('Built-in' when absent - the default copy - and the
 // raw id when the template has since been deleted).
 //
+// The bundling seam adds one mark: a send that carried several queued events
+// notes how many, beside its type. Deliberately quiet - it is metadata about
+// the delivery, not the subject of the row - but it must be shown, because
+// without it the log looks as though the platform stopped sending on a busy
+// morning when in fact it sent one email instead of forty. Absent (an ordinary
+// send) and 1 (a bundle that held a single item, and so was rendered as the
+// ordinary email) both read exactly as they always have.
+//
 // Presentation: the console kit - the filters in a Toolbar, the table a
 // DataTable inside a flush Card, so this screen reads like the audit trail.
 // ============================================================================
@@ -303,10 +311,19 @@ export function SentEmailsPage() {
                   {
                     header: 'Type',
                     // Catalogue label; legacy entries without a kindId degrade
-                    // to their raw category string (see kindLabel above).
+                    // to their raw category string (see kindLabel above). A
+                    // bundled send appends how many events it carried - only
+                    // above one, since a bundle of one IS the ordinary email
+                    // and saying 'Digest of 1' would misdescribe it.
                     cell: (row) => (
                       <span className={styles.kind}>
                         {kindLabel(row.kindId, row.category)}
+                        {typeof row.bundledCount === 'number' &&
+                          row.bundledCount > 1 && (
+                            <span className={styles.bundle}>
+                              Digest of {row.bundledCount}
+                            </span>
+                          )}
                       </span>
                     ),
                   },

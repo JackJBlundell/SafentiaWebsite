@@ -24,6 +24,28 @@ import { isUnfilled, webConfig } from "../../config/env";
 const stripePromises: Partial<Record<Environment, Promise<Stripe | null>>> = {};
 
 /**
+ * Whether Stripe is configured for the given environment, decided WITHOUT
+ * loading Stripe.js: the matching publishable key is present and not the
+ * committed `.env` placeholder. Synchronous and side-effect free (it never
+ * injects the js.stripe.com script tag - loadStripeForEnv remains the only
+ * thing that does), so a page can gate on it during render.
+ *
+ * The plan step uses this to refuse advancing into createSubscription when a
+ * checkout could never complete: without a client key the browser can never
+ * confirm the PaymentIntent, so minting a Stripe Customer + subscription for it
+ * only litters the account with dead objects. The check is client-side because
+ * only the browser knows its own publishable-key state - the server holds the
+ * secret keys and cannot tell whether this build shipped a usable client key.
+ */
+export function isStripeConfiguredForEnv(env: Environment): boolean {
+  const key =
+    env === "test"
+      ? webConfig.stripePublishableKeyTest
+      : webConfig.stripePublishableKey;
+  return !isUnfilled(key);
+}
+
+/**
  * Load Stripe.js for the given environment, or resolve null when the matching
  * publishable key is absent or still the committed `.env` placeholder - the
  * caller renders a not-configured notice and must never crash.

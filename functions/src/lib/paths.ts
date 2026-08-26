@@ -61,6 +61,10 @@ export const ops = {
     orgId: string,
     yyyyMm: string,
   ): RtdbPath => `ops/notificationCounts/${env}/${orgId}/${yyyyMm}`,
+  /** One org's whole notification-counter subtree (all months), for offboarding
+   *  deletion to reap without hand-typing the parent path. */
+  notificationCountsForOrg: (env: Environment, orgId: string): RtdbPath =>
+    `ops/notificationCounts/${env}/${orgId}`,
   /** Per-env, per-org DAILY manual-email recipient counter (UTC date key), for
    *  the spam-relay cap in lib/manualEmailLimits. */
   manualEmailCount: (
@@ -68,6 +72,45 @@ export const ops = {
     orgId: string,
     yyyyMmDd: string,
   ): RtdbPath => `ops/manualEmailCounts/${env}/${orgId}/${yyyyMmDd}`,
+  /** One org's whole manual-email-counter subtree (all days), for offboarding
+   *  deletion. */
+  manualEmailCountsForOrg: (env: Environment, orgId: string): RtdbPath =>
+    `ops/manualEmailCounts/${env}/${orgId}`,
+
+  // ====
+  // Email bundling (EMAIL_BUNDLING_PLAN.md). Both trees are keyed by a HASH of
+  // the recipient address, never the address itself: RTDB keys may not contain
+  // '.', and hashing also keeps addresses out of path strings and therefore out
+  // of the logs that quote them (brief 18.4 data minimisation). The address
+  // itself lives in the bundle's `to` child, transiently, and is deleted when
+  // the bundle is flushed. Server-only by definition - rules default-deny the
+  // whole `ops` tree - and reaped on offboarding by the ...ForOrg builders.
+  // ====
+  /** One recipient's pending bundle for one kind: `to`, a `dropped` overflow
+   *  counter, `items/{pushId}` and, mid-flush, `inflight/{flushId}`. */
+  emailBundle: (
+    env: Environment,
+    orgId: string,
+    recipientHash: string,
+    kindId: string,
+  ): RtdbPath => `ops/emailBundles/${env}/${orgId}/${recipientHash}/${kindId}`,
+  /** One env's whole bundle collection - the flush sweep's read root. */
+  emailBundles: (env: Environment): RtdbPath => `ops/emailBundles/${env}`,
+  /** One org's whole bundle subtree, for offboarding deletion. */
+  emailBundlesForOrg: (env: Environment, orgId: string): RtdbPath =>
+    `ops/emailBundles/${env}/${orgId}`,
+  /** The last UK day an email of this kind reached this recipient ('YYYY-MM-DD').
+   *  ONE node per (recipient, kind) holding a date string, not a child per day,
+   *  so the slot record never grows and needs no cleanup sweep of its own. */
+  emailDay: (
+    env: Environment,
+    orgId: string,
+    recipientHash: string,
+    kindId: string,
+  ): RtdbPath => `ops/emailDays/${env}/${orgId}/${recipientHash}/${kindId}`,
+  /** One org's whole day-slot subtree, for offboarding deletion. */
+  emailDaysForOrg: (env: Environment, orgId: string): RtdbPath =>
+    `ops/emailDays/${env}/${orgId}`,
   // ====
   // Stripe billing plumbing (Phase 3, plan section 4.3). Both are server-only by
   // definition: they exist to make the webhook idempotent and to resolve which

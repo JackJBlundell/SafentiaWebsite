@@ -1,6 +1,8 @@
 /* EmailTypesPage - grouped Cards of kind rows. Each row: the kind's name and
-   description on the left, its three controls (toggle, template select,
-   preview) on the right, stacking on narrow screens. Tokens only. */
+   description on the left, its controls on the right - the toggle, the
+   read-only delivery statement, one or two template selects, and preview -
+   wrapping when the row runs out of width and stacking on narrow screens.
+   Tokens only. */
 
 .root {
   display: flex;
@@ -10,6 +12,15 @@
 
 .skeletonWrap {
   padding: var(--space-lg) var(--space-xxl) var(--space-xxl);
+}
+
+/* The one-per-day guarantee, stated under the page lede. Reads as part of the
+   lede, so it takes the lede's muted weight rather than body emphasis. */
+.guarantee {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
 }
 
 /* The transient 'Saved' announcement; keeps its line so the page never
@@ -59,9 +70,14 @@
   max-width: 52ch;
 }
 
+/* Wraps at every width, not only below the breakpoint: a bundleable kind
+   carries a second select, and a row that overflowed instead of wrapping would
+   push the preview button off the card on a laptop. */
 .kindControls {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--space-md);
   flex-shrink: 0;
 }
@@ -84,6 +100,38 @@
   min-height: var(--min-touch-target);
   font-size: 0.875rem;
   color: var(--color-text-muted);
+}
+
+/* Delivery: a statement, not a control, so it borrows the locked toggle's
+   muted register - no border, no affordance, nothing that invites a click.
+   The min-width keeps the two labels ('Sends immediately' / 'Bundled daily')
+   on a common left edge down the card, which is what makes it read as a
+   column rather than as loose text between two controls. */
+.delivery {
+  display: flex;
+  align-items: center;
+  min-height: var(--min-touch-target);
+  min-width: 9.5rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.deliveryLabel {
+  white-space: nowrap;
+}
+
+/* Available to a screen reader, invisible on the page - carries the delivery
+   hint that a sighted reader gets from the `title` tooltip. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .templateField {
@@ -117,6 +165,32 @@
 }
 
 /* Preview dialog internals. */
+
+/* The single/bundled form switch: the page's ordinary checkbox-label toggles
+   in radio form, on one line, so the dialog gains no new idiom. */
+.formChoice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.formChoiceLegend {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.formChoiceOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--min-touch-target);
+  font-size: 0.875rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
 .previewMeta {
   margin: 0;
   font-size: 0.875rem;

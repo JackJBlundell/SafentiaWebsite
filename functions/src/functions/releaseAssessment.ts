@@ -55,7 +55,8 @@ import { deriveRiskLevel, RAG_CONFIG_DEFAULTS } from '../lib/ragDerivation';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import { orgEmailBrand } from '../lib/emailTemplates';
-import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
+import { loadKindConfig } from '../lib/templatedEmail';
+import { deliverKindEmail } from '../lib/emailDigest';
 import { resolveResponsibleAssignment } from '../lib/responsibleParty';
 import { SEVERITIES } from '../shared/types';
 import type { EnvPaths } from '../shared/paths';
@@ -105,6 +106,12 @@ function formatDueDate(millis: number): string {
  * actionable summary, not an inbox flood), and never one shared digest to the
  * building's party covering work recorded against somebody else.
  *
+ * That summary covers ONE release. A contact responsible for several buildings
+ * released the same day would still have had one email per release, so the send
+ * goes through lib/emailDigest: the first is theirs immediately, and the rest of
+ * the day's bundle into one email per contact the following morning, a line per
+ * building (EMAIL_BUNDLING_PLAN.md §2).
+ *
  * Resolution is strictly through `Action.responsibleContactId`, matched against
  * the customer's contact directory read once by the caller. An action with no
  * contact id (a legacy or imported party that is only a name) and a contact with
@@ -123,7 +130,7 @@ function formatDueDate(millis: number): string {
  * at the report, exactly as review reminders and visit notices do.
  *
  * Best-effort throughout: the release has already landed, so nothing here may
- * throw (the sendKindEmail contract, extended to the reads around it).
+ * throw (the deliverKindEmail contract, extended to the reads around it).
  */
 async function emailReleaseDigests(
   paths: EnvPaths,
@@ -206,7 +213,8 @@ async function emailReleaseDigests(
         dueDates.length > 0 ? Math.min(...dueDates) : undefined;
 
       const count = actions.length;
-      await sendKindEmail(
+      const countPhrase = `${count} ${count === 1 ? 'action' : 'actions'}`;
+      await deliverKindEmail(
         {
           kind: 'release-digest',
           env: paths.env,
@@ -214,7 +222,7 @@ async function emailReleaseDigests(
           to: contact.email,
           variables: {
             'building.name': building.name,
-            'actions.countPhrase': `${count} ${count === 1 ? 'action' : 'actions'}`,
+            'actions.countPhrase': countPhrase,
           },
           brand,
           // Straight to the building in the customer's own portal, where the new
@@ -230,6 +238,11 @@ async function emailReleaseDigests(
               : []),
           ],
           config: digestConfig,
+          // A line per building when several releases land on one contact in a
+          // day: how much work this building has just handed them. The severity
+          // and the dates stay in the per-release detail card - a digest row is
+          // a scan, and the count is what tells one building from another.
+          digestRow: { label: building.name, value: countPhrase },
         },
         logger,
       );

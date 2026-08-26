@@ -46,11 +46,15 @@ exported from `functions/src/index.ts`; the source is under
 | --- | --- | --- |
 | `exportBackups` | 02:30 daily | Full nightly JSON export of the RTDB (`live`, `test`, `platform` roots, one file each) to `backups/{date}/` in the default Storage bucket. See Backups below. |
 | `cleanupLeads` | 03:15 daily | Enforces the privacy policy's 24-month retention: deletes any `/platform/leads` entry older than 730 days (and any malformed record that cannot prove its age). |
+| `cleanupBilling` | 03:45 daily | Trims billing bookkeeping in both envs: Stripe webhook idempotency done-markers older than 30 days, and finance-feed / email-log entries older than 12 months. |
+| `cleanupExpiredOrgs` | 04:15 daily | **Data-retention reaper (DESTRUCTIVE).** Erases organisations whose 12-month post-cancellation retention clock has elapsed. **REPORT-ONLY unless armed** — see Organisation offboarding below. |
 | `reviewReminders` | 07:30 daily | Sends FRA review due-date reminders. For every building whose review falls 60, 30 or 7 days ahead, or lapsed yesterday, it sends one in-app notification (plus best-effort push) and one branded email to each active org admin. Idempotent per building per day. |
 
 A same-day scheduler redelivery is safe: `exportBackups` overwrites that day's
-files, and `cleanupLeads` / `reviewReminders` are idempotent (the latter claims
-a per-building per-day marker under `/{env}/ops/reviewReminders` before sending).
+files, and `cleanupLeads` / `cleanupBilling` / `reviewReminders` are idempotent
+(the last claims a per-building per-day marker under `/{env}/ops/reviewReminders`
+before sending). `cleanupExpiredOrgs` is idempotent too: a re-run against an
+already-erased org removes already-absent nodes, a no-op.
 
 ## Backups and restore
 
@@ -119,6 +123,79 @@ contacts, sites, buildings, templates, jobs, assessments, actions, documents,
 log book, activity, email log, invitation summaries and more) and deliberately
 excludes the tokenised `/invitations` tree; a redaction pass masks any
 secret-looking value as belt-and-braces.
+
+### Organisation immediate deletion (on request)
+
+`functions/src/scripts/deleteOrganisation.ts` **permanently erases all of one
+organisation's data** — the manual counterpart to the nightly retention reaper,
+for a customer who asks for deletion before their 12-month clock elapses
+(DECISIONS §8). It is a **dry run by default**; pass `--apply` to actually
+delete. Take (or confirm) a fresh `exportOrgData` first — the erase is
+irreversible.
+
+```sh
+cd functions
+# 1. Dry run — prints exactly what WOULD be erased, writes nothing:
+GOOGLE_APPLICATION_CREDENTIALS=<key.json> FIREBASE_DATABASE_URL=<rtdb-url> \
+  npx ts-node src/scripts/deleteOrganisation.ts --org <orgId> --env live
+# 2. Then, only after reading the dry-run report, apply:
+GOOGLE_APPLICATION_CREDENTIALS=<key.json> FIREBASE_DATABASE_URL=<rtdb-url> \
+  npx ts-node src/scripts/deleteOrganisation.ts --org <orgId> --env live --apply
+```
+
+`--env` defaults to `live`. Both the script and the sweep share one deletion
+core (`functions/src/lib/deleteOrgData.ts`), so they erase identically:
+
+- **every org-scoped RTDB subtree** (organisation profile/settings/subscription/
+  usage, members, customers, contacts, sites, buildings, building access, floor
+  plans, templates + drafts + versions, standard paragraphs, jobs + assessor
+  index, assessments + answers, actions, documents, log book, reports,
+  notification ledger, activity, email log, email templates, email settings, and
+  the per-org `ops` notification/manual-email counters);
+- the org's **per-user reverse-index entries** (`userOrgs/{uid}/{orgId}` and each
+  portal `customerUserIndex/{uid}/{orgId__customerId}`) and the **Stripe reverse
+  markers** (`stripeCustomers`, `provisionedSubs`);
+- the whole **`{env}/orgs/{orgId}/` Storage prefix** (photos, floor plans, flag
+  composites, documents, action evidence, org assets, report PDFs).
+
+It appends one `org_deleted` entry to the super-admin finance feed.
+
+**Deliberately NOT deleted** (documented exclusions): Firebase **Auth accounts
+are left intact** — a person may belong to other orgs, so deleting their login is
+unsafe to automate; instead their membership + reverse-index entries go, and
+their claims are stripped of this org when they still point at it (their next
+token refresh routes them cleanly). Also excluded: the tokenised global
+`/invitations` tree (keyed by inviteId, not orgId — a stray bearer token is
+useless once the org is gone), per-user `/notifications/{uid}` (may mix several
+orgs), the `ops/stripeEvents` idempotency markers (swept on their own 30-day
+clock), and the `platform/financeEvents` billing audit feed (a financial record
+swept on its own 12-month clock — the deletion appends to it, never erases it).
+
+### Data-retention reaper (`cleanupExpiredOrgs`) and the arming flag
+
+On **final** subscription cancellation the Stripe webhook stamps
+`organisations/{orgId}/subscription/retentionUntil = now + 12 months`; a
+resubscribe clears it, so a returning customer is never reaped. The nightly
+`cleanupExpiredOrgs` sweep finds orgs whose clock has **elapsed** and erases them
+via the same core above, capped at 25 orgs per run.
+
+**It is REPORT-ONLY by default.** It always logs which orgs it *would* reap
+(`Retention elapsed but deletion NOT armed`), but performs no deletion unless the
+functions runtime env carries:
+
+```
+FIRERITE_ENABLE_RETENTION_DELETION=true
+```
+
+Any other value (unset, `false`, …) leaves it in the safe dry-run posture. Leave
+it **unset** until the data-retention privacy copy is signed off (see below);
+watch the candidate logs first, then arm it deliberately.
+
+> **CLIENT SIGN-OFF REQUIRED.** The customer-facing retention/deletion copy — the
+> 12-month post-cancellation window, export-on-request and operator-performed
+> deletion — is a contractual blocker not yet approved (DECISIONS §9). Do not arm
+> automated deletion, and do not go live, until that wording is published and the
+> client has signed it off.
 
 ## App Check enforcement
 

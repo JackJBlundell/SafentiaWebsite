@@ -154,10 +154,14 @@ describe('sendKindEmail - template resolution', () => {
 
     // brandingAllowed true: no subscription node exists, so the grandfather
     // rule keeps every feature on (Phase 3 §6).
+    // digestTemplate null alongside template null: 'visit-scheduled' is a
+    // bundleable kind, so its digest slot IS resolved - the org simply has not
+    // assigned one, which resolves to the built-in digest default at send time.
     expect(config).toEqual({
       kind: 'visit-scheduled',
       enabled: true,
       template: null,
+      digestTemplate: null,
       brandingAllowed: true,
     });
     expect(logger.warn).toHaveBeenCalledTimes(1);

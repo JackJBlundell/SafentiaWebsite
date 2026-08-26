@@ -633,6 +633,128 @@ describe('Email kind settings (admin-only, invitation lock at every depth)', () 
       db.ref('live/emailSettings/orgA/kinds/review-reminder/junk/x').set('y'),
     );
   });
+
+  // ==========================================================================
+  // digestTemplateId — the bundled-copy slot (EMAIL_BUNDLING_PLAN.md §4.4).
+  // A SECOND template pointer beside templateId, and it must be exactly as
+  // hard to abuse: same string/length/no-slash shape, same "the template must
+  // actually exist" existence check, same admin-only, same-org, same-env gate,
+  // and the same C1 leaf-depth enforcement so a direct write to the leaf
+  // cannot slip past the node-level validate. A dangling pointer here would
+  // silently degrade every bundled send to the built-in default; a writable
+  // one would let a non-admin choose the copy an org's customers receive.
+  // ==========================================================================
+  test('an admin assigns an EXISTING digest template beside the ordinary one (whole-node allow)', async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'live/emailTemplates/orgA/t1': validTemplate,
+      'live/emailTemplates/orgA/t2': validTemplate,
+    });
+    const db = await dbFor(adminA);
+    await assertSucceeds(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder').set({
+        enabled: true,
+        templateId: 't1',
+        digestTemplateId: 't2',
+      }),
+    );
+  });
+
+  test('a valid direct digestTemplateId assignment at the leaf is allowed', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertSucceeds(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder/digestTemplateId').set('t1'),
+    );
+  });
+
+  test('a dangling digestTemplateId on a whole-node write is rejected (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db
+        .ref('live/emailSettings/orgA/kinds/review-reminder')
+        .set({ digestTemplateId: 'no-such-doc' }),
+    );
+  });
+
+  test('C1: a dangling digestTemplateId written DIRECTLY at the leaf is rejected (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db
+        .ref('live/emailSettings/orgA/kinds/review-reminder/digestTemplateId')
+        .set('no-such-doc'),
+    );
+  });
+
+  test('a non-string digestTemplateId is rejected at the leaf (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder/digestTemplateId').set(7),
+    );
+  });
+
+  test('a path-shaped digestTemplateId (contains a slash) is rejected (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db
+        .ref('live/emailSettings/orgA/kinds/review-reminder/digestTemplateId')
+        .set('../../orgB/t1'),
+    );
+  });
+
+  test('an over-long digestTemplateId is rejected (deny)', async () => {
+    const db = await dbFor(adminA);
+    await assertFails(
+      db
+        .ref('live/emailSettings/orgA/kinds/review-reminder/digestTemplateId')
+        .set('x'.repeat(201)),
+    );
+  });
+
+  test('a non-admin cannot assign a digest template (deny)', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder/digestTemplateId').set('t1'),
+    );
+  });
+
+  test('a cross-org admin cannot assign a digest template (deny)', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(orgBUser);
+    await assertFails(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder/digestTemplateId').set('t1'),
+    );
+  });
+
+  test('a cross-org digest template pointer is rejected: existence is checked in the OWNING org', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgB/t9': validTemplate });
+    const db = await dbFor(adminA);
+    await assertFails(
+      db.ref('live/emailSettings/orgA/kinds/review-reminder/digestTemplateId').set('t9'),
+    );
+  });
+
+  test('the invitation lock survives a write that also carries a valid digestTemplateId (deny)', async () => {
+    await seedAsAdmin(await getTestEnv(), { 'live/emailTemplates/orgA/t1': validTemplate });
+    const db = await dbFor(adminA);
+    await assertFails(
+      db
+        .ref('live/emailSettings/orgA/kinds/invitation')
+        .set({ enabled: false, digestTemplateId: 't1' }),
+    );
+  });
+
+  test('deep junk under digestTemplateId is DENIED', async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'live/emailSettings/orgA/kinds/review-reminder': { enabled: true },
+    });
+    const db = await dbFor(adminA);
+    await assertFails(
+      db
+        .ref('live/emailSettings/orgA/kinds/review-reminder/digestTemplateId/junk')
+        .set('y'),
+    );
+  });
 });
 
 // ============================================================================

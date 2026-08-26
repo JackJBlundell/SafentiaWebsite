@@ -217,10 +217,13 @@
   top: calc(100% + var(--space-xs));
   right: 0;
   z-index: 20;
-  min-width: 12rem;
+  /* Wide enough for the longest item ("Take the console tour") on one line,
+   * so nothing wraps or spills; grows with content past this floor. */
+  min-width: 15rem;
   padding: var(--space-xs);
   display: flex;
   flex-direction: column;
+  gap: 2px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -230,6 +233,7 @@
 .menuItem {
   display: flex;
   align-items: center;
+  gap: var(--space-sm);
   min-height: var(--min-touch-target);
   padding-inline: var(--space-md);
   border: none;
@@ -240,6 +244,27 @@
   font-weight: 500;
   text-align: left;
   text-decoration: none;
+  /* One clean line per item: never wrap a label into a cramped two-line row
+   * (the panel's min-width guarantees the room). */
+  white-space: nowrap;
+}
+
+/* Same 18px currentColor glyph language as the nav rail (NavIcon), so the
+ * account menu and the rail read as one system. */
+.menuIcon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--color-text-muted);
+}
+
+.menuItemLabel {
+  flex: 1 1 auto;
 }
 
 .menuItem:hover {
@@ -247,15 +272,16 @@
 }
 
 /* In the rail the session controls sit at the FOOT of the viewport, so a
- * downward panel opens off-screen. Flip it above the trigger and let it span
- * the rail. Breakpoint mirrors the rail media query above. */
+ * downward panel opens off-screen. Flip it ABOVE the trigger. It anchors to
+ * the rail's left edge and grows rightward from its own min-width (over the
+ * content, popover-style) rather than being squeezed to the rail's 248px -
+ * which is what made it cramped. Breakpoint mirrors the rail media query. */
 @media (min-width: 1024px) {
   .menuPanel {
     top: auto;
     bottom: calc(100% + var(--space-xs));
     left: 0;
-    right: 0;
-    min-width: 0;
+    right: auto;
   }
 }
 

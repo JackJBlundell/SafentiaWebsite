@@ -6,21 +6,24 @@
 // way back. Renders inside the shared SubscribeChrome, reading the plan
 // catalogue live from /platform/plans/{env} (authed-read platform data).
 //
-// The feature list is derived from the plan's real limits and flags: what the
-// tier actually meters, no marketing gloss. The MIDDLE tier of a full matrix
-// is quietly recommended ("Most popular") so the choice feels considered
-// rather than flat.
+// Each card shows the SAME comparison rows (story 3018 AC2), so a buyer can
+// see what a tier LACKS as plainly as what it includes - every row is present
+// on every card, a metered value or a tick where included and a "-" where not.
+// The numbers come straight from the plan's real limits and flags, never
+// marketing copy. The MIDDLE tier of a full matrix is quietly recommended
+// ("Most popular") so the choice feels considered rather than flat.
 // ============================================================================
 
 import { useMemo } from 'react';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import { keys } from '../../query/keys';
 import { platform } from '../../paths';
-import type { Environment, Plan, PlanLimits } from '../../types';
+import type { Environment, Plan } from '../../types';
 import { Button } from '../../components/Button';
 import { EmptyState, ErrorNotice } from '../ui/Page';
 import { Skeleton } from '../ui/Skeleton';
 import { SubscribeChrome } from './SubscribeChrome';
+import { isStripeConfiguredForEnv } from './stripeClient';
 import styles from './SubscribePlanPage.module.css';
 
 export interface PlanChoice {
@@ -38,32 +41,43 @@ export function formatMonthlyPrice(pence: number): string {
   return Number.isInteger(pounds) ? `£${pounds}` : `£${pounds.toFixed(2)}`;
 }
 
-/** One metered line: "-1" is the unlimited sentinel across every limit. */
-function limitLine(count: number, singular: string, plural: string): string {
-  if (count === -1) return `Unlimited ${plural}`;
-  return `${count} ${count === 1 ? singular : plural}`;
+/** A metered limit as a display value: "-1" is the unlimited sentinel across
+ *  every limit, everything else is its own count. */
+function limitValue(count: number): string {
+  return count === -1 ? 'Unlimited' : String(count);
 }
 
-/** The honest feature list for a tier, straight from limits + flags. Exported
- *  for the subscribe tests. */
-export function planFeatureLines(plan: Plan): string[] {
-  const limits: PlanLimits = plan.limits;
-  const lines = [
-    limitLine(limits.orgStaff, 'staff member', 'staff members'),
-    limitLine(limits.customers, 'customer', 'customers'),
-    limits.notificationsPerMonth === -1
-      ? 'Unlimited notifications each month'
-      : `${limits.notificationsPerMonth} notifications each month`,
-    limitLine(
-      limits.assessmentTemplates,
-      'assessment template',
-      'assessment templates',
-    ),
+/** One comparison row: a `string` value is a metered count; a `boolean` is a
+ *  whole-surface feature flag, rendered as a tick when included and a "-" when
+ *  not, so an excluded feature is still SHOWN rather than dropped. */
+export interface PlanRow {
+  label: string;
+  value: string | boolean;
+}
+
+/**
+ * The fixed comparison rows for a tier, in a single order shared by every card
+ * so the matrix reads straight across (story 3018 AC2). Sourced entirely from
+ * the plan's real limits and feature flags - the same shape the entitlements
+ * module meters against - never hardcoded per tier. Exported for the tests.
+ */
+export function planMatrixRows(plan: Plan): PlanRow[] {
+  const { limits, features } = plan;
+  return [
+    { label: 'Staff members', value: limitValue(limits.orgStaff) },
+    { label: 'Customers', value: limitValue(limits.customers) },
+    {
+      label: 'Notifications each month',
+      value: limitValue(limits.notificationsPerMonth),
+    },
+    { label: 'Custom branding', value: features.branding },
+    { label: 'Custom email templates', value: features.emailTemplates },
+    {
+      label: 'Assessment templates',
+      value: limitValue(limits.assessmentTemplates),
+    },
+    { label: 'Priority support', value: features.prioritySupport },
   ];
-  if (plan.features.branding) lines.push('Your own branding and logo');
-  if (plan.features.emailTemplates) lines.push('Customisable email templates');
-  if (plan.features.prioritySupport) lines.push('Priority support');
-  return lines;
 }
 
 /** Sort the catalogue node into display order. Exported for the tests: this is
@@ -103,6 +117,12 @@ export function SubscribePlanPage({
   const plans = useMemo(() => sortPlans(plansQuery.data), [plansQuery.data]);
   // The middle tier of a full matrix is the quiet recommendation.
   const popularIndex = plans.length >= 3 ? 1 : -1;
+  // Client-side gate (assessment 1.4): without a publishable key for this env,
+  // createSubscription would mint a Stripe customer + subscription for a
+  // checkout the browser can never confirm. Only the browser knows its own key
+  // state, so the guard lives here - the choice boundary - and blocks the
+  // advance before onChoose is ever called, showing the calm notice instead.
+  const stripeConfigured = isStripeConfiguredForEnv(env);
 
   return (
     <SubscribeChrome
@@ -143,6 +163,13 @@ export function SubscribePlanPage({
         />
       )}
 
+      {plans.length > 0 && !stripeConfigured && (
+        <p className={styles.notConfiguredNotice} role="status">
+          Payments are not available just yet, so a plan cannot be started right
+          now. Please try again later, or contact us if this keeps happening.
+        </p>
+      )}
+
       {plans.length > 0 && (
         <ul className={styles.planGrid}>
           {plans.map(({ id, plan }, index) => (
@@ -162,14 +189,39 @@ export function SubscribePlanPage({
                 </span>{' '}
                 <span className={styles.planPricePeriod}>per month</span>
               </p>
-              <ul className={styles.featureList}>
-                {planFeatureLines(plan).map((line) => (
-                  <li key={line} className={styles.featureItem}>
-                    {line}
-                  </li>
+              <dl className={styles.featureList}>
+                {planMatrixRows(plan).map((row) => (
+                  <div key={row.label} className={styles.featureRow}>
+                    <dt className={styles.featureLabel}>{row.label}</dt>
+                    <dd className={styles.featureValue}>
+                      {typeof row.value === 'boolean' ? (
+                        row.value ? (
+                          <span
+                            className={styles.included}
+                            aria-label="Included"
+                          >
+                            ✓
+                          </span>
+                        ) : (
+                          <span
+                            className={styles.excluded}
+                            aria-label="Not included"
+                          >
+                            -
+                          </span>
+                        )
+                      ) : (
+                        row.value
+                      )}
+                    </dd>
+                  </div>
                 ))}
-              </ul>
-              <Button block onClick={() => onChoose({ planId: id, plan })}>
+              </dl>
+              <Button
+                block
+                disabled={!stripeConfigured}
+                onClick={() => onChoose({ planId: id, plan })}
+              >
                 Choose {plan.name}
               </Button>
             </li>

@@ -75,7 +75,8 @@ import { sendNotification } from '../lib/notifications';
 import { issueInvitation } from '../lib/invitations';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { orgEmailBrand } from '../lib/emailTemplates';
-import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
+import { loadKindConfig } from '../lib/templatedEmail';
+import { deliverKindEmail } from '../lib/emailDigest';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import type { Logger } from '../lib/logging';
 import type { EnvPaths } from '../shared/paths';
@@ -263,6 +264,12 @@ async function autoInvitePortalContact({
  * take is whether to invite them. The email links straight to the customer,
  * where that is done.
  *
+ * The email goes through lib/emailDigest, so a day of field work does not fill
+ * every admin's inbox one contact at a time: the first addition reaches them
+ * straight away, and the rest of the day's arrive next morning as one list. The
+ * in-app notification above is unbundled and always sent, so the console still
+ * shows every addition individually.
+ *
  * Best-effort throughout - the contact already exists by the time this runs, so
  * a failure here is logged and swallowed rather than surfaced to an assessor who
  * did nothing wrong.
@@ -354,7 +361,7 @@ async function notifyAdminsOfFieldContact({
         logger,
       );
       if (member.email) {
-        await sendKindEmail(
+        await deliverKindEmail(
           {
             kind: 'field-contact-added',
             env,
@@ -370,6 +377,10 @@ async function notifyAdminsOfFieldContact({
             kindRows,
             kindLink: `${WEB_ORIGIN}/app/customers/${customerId}`,
             config,
+            // A day on site can add half a dozen contacts, so the digest gives
+            // each one a line: who was added, and whose directory they landed
+            // in - which is what an admin checks before they trust the entry.
+            digestRow: { label: contact.name, value: customerName },
           },
           logger,
         );

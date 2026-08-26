@@ -200,6 +200,12 @@ export { customerContracts } from './functions/customerContracts';
 // assessor's outstanding information request and an open action's due date.
 // In-app plus best-effort push, and email to the people who own each.
 export { deadlineReminders } from './functions/deadlineReminders';
+// The other half of the bundling seam (EMAIL_BUNDLING_PLAN.md): at 08:15 UK -
+// thirty minutes after deadlineReminders, the last of the morning sweeps, so
+// everything they queued flushes the SAME morning - every pending bundle
+// becomes exactly one email per person per kind, digested when it holds two or
+// more items and rendered as today's ordinary copy when it holds one.
+export { emailDigestFlush } from './functions/emailDigestFlush';
 // Nightly 03:15 UK lead-retention sweep: deletes /platform/leads entries older
 // than the privacy policy's promised 24 months.
 export { cleanupLeads } from './functions/cleanupLeads';
@@ -210,3 +216,8 @@ export { exportBackups } from './functions/exportBackups';
 // idempotency done-markers older than 30 days and finance-feed entries older
 // than 12 months.
 export { cleanupBilling } from './functions/cleanupBilling';
+// Nightly 04:15 UK data-retention reaper, both envs: erases organisations whose
+// 12-month post-cancellation retention clock (subscription.retentionUntil,
+// stamped by the Stripe webhook) has elapsed. REPORT-ONLY unless
+// FIRERITE_ENABLE_RETENTION_DELETION=true (DECISIONS §8).
+export { cleanupExpiredOrgs } from './functions/cleanupExpiredOrgs';

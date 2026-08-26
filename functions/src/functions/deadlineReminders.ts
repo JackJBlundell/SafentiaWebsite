@@ -62,7 +62,8 @@ import type { EnvPaths } from '../lib/paths';
 import { sendNotification } from '../lib/notifications';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { orgEmailBrand, type EmailBrand } from '../lib/emailTemplates';
-import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
+import { loadKindConfig } from '../lib/templatedEmail';
+import { deliverKindEmail } from '../lib/emailDigest';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import {
   deadlineReminderStage,
@@ -302,7 +303,7 @@ async function sweepInfoRequests(
       );
 
       if (member.email && member.emailPreferences?.deadlineReminder !== false) {
-        await sendKindEmail(
+        await deliverKindEmail(
           {
             kind: 'deadline-info-assessor',
             env,
@@ -321,6 +322,17 @@ async function sweepInfoRequests(
             },
             brand: audience.brand,
             kindLink: `${WEB_ORIGIN}/app/jobs/${assessment.jobId}`,
+            // This assessment's line when the seam bundles an assessor's day
+            // into one digest. The label is the assessment's own id because it
+            // is the only identifier this sweep holds: it walks /assessments
+            // and never reads the estate, so there is no building NAME here
+            // without a per-assessment read the sweep deliberately avoids. The
+            // row is there to tell one queued reminder from another; the CTA is
+            // what carries the reader to the work.
+            digestRow: {
+              label: assessmentId,
+              value: `${questions} outstanding, ${stagePhrase(stage)}`,
+            },
             config: kindConfig ?? undefined,
           },
           logger,
@@ -520,7 +532,7 @@ async function sweepActions(
               },
             );
           } else {
-            await sendKindEmail(
+            await deliverKindEmail(
               {
                 kind: 'deadline-action-contact',
                 env,
@@ -543,6 +555,15 @@ async function sweepActions(
                 kindLink: `${WEB_ORIGIN}/app/sites/${located.siteId}/buildings/${buildingId}`,
                 // The detail card as built above, conditional rows included.
                 kindRows: detailRows,
+                // This action's line when the seam bundles a responsible
+                // party's day into one digest. Deliberately the SAME row shape
+                // the admin digest below builds for the same action, so a
+                // duty-holder and the admin chasing them read the identical
+                // wording about the identical piece of work.
+                digestRow: {
+                  label: buildingName,
+                  value: `${SEVERITY_LABELS[action.severity]} severity, ${stagePhrase(stage)} (${formatDueDate(action.dueBy)})`,
+                },
                 config: contactConfig ?? undefined,
               },
               logger,
@@ -616,7 +637,14 @@ async function sweepActions(
         logger,
       );
       if (admin.email && admin.emailDeadlines) {
-        await sendKindEmail(
+        // Routed through the seam like every other send site, for uniformity -
+        // but this kind is classified `immediate` in the catalogue and so is
+        // never queued: it is ALREADY one email per admin per morning covering
+        // the whole org, and bundling a digest into a digest would only put a
+        // day's delay in front of copy that is already collapsed. It carries no
+        // digestRow for the same reason - there is nothing for it to be a row
+        // inside of.
+        await deliverKindEmail(
           {
             kind: 'deadline-admin-digest',
             env,

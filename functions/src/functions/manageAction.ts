@@ -51,7 +51,7 @@ import { activityUpdate } from '../lib/events';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import { orgEmailBrand } from '../lib/emailTemplates';
-import { sendKindEmail } from '../lib/templatedEmail';
+import { deliverKindEmail } from '../lib/emailDigest';
 import { resolveResponsibleAssignment } from '../lib/responsibleParty';
 import {
   createActionRecord,
@@ -285,8 +285,14 @@ interface AssignedActionView {
  * "nobody was emailed" must be diagnosable - and neither is guessed around:
  * inventing an address for a statutory compliance message is worse than silence.
  *
+ * ONE email per assignment is still one too many when an admin works through a
+ * plan and assigns twenty in an afternoon, so the send goes through
+ * lib/emailDigest: the first assignment of the day reaches the contact
+ * immediately in this exact copy, and the rest arrive next morning as a single
+ * list of what they have been made responsible for.
+ *
  * Best-effort throughout - the action record has already landed and nothing here
- * may throw (the dispatchEmail contract, extended to the reads around it).
+ * may throw (the deliverKindEmail contract, extended to the reads around it).
  *
  * Story 2066 note: NO emailPreferences.actionAssigned check here, deliberately.
  * The recipient is a CUSTOMER CONTACT (customerContacts record), and email
@@ -353,7 +359,7 @@ async function emailAssignedAction(
     // The copy lives in the 'action-assigned' catalogue entry (or the org's own
     // saved template); this site supplies the values and the detail card it
     // computes - the conditional Due by / Life protection rows included.
-    await sendKindEmail(
+    await deliverKindEmail(
       {
         kind: 'action-assigned',
         env: paths.env,
@@ -381,6 +387,18 @@ async function emailAssignedAction(
         // action plan lives. The staff console (/app/customers/...) would only
         // show this recipient a permission wall.
         kindLink: `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${buildingId}`,
+        // One line per action when a day's assignments arrive together. The
+        // observation is far too long for a table cell (it is a paragraph an
+        // assessor typed on site), so the row carries the two facts that set
+        // the order the work gets done in: how serious, and by when. The full
+        // wording is in each action's own detail card.
+        digestRow: {
+          label: building.name,
+          value:
+            view.dueBy !== undefined
+              ? `${SEVERITY_LABELS[view.severity]} severity, due ${formatDueDate(view.dueBy)}`
+              : `${SEVERITY_LABELS[view.severity]} severity`,
+        },
       },
       logger,
     );

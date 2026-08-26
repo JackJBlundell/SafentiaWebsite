@@ -641,8 +641,8 @@
           ".read": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active'",
           "kinds": {
             "$kindId": {
-              ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && (!newData.exists() || ((!newData.child('enabled').exists() || newData.child('enabled').isBoolean()) && ($kindId !== 'invitation' || newData.child('enabled').val() !== false) && (!newData.child('templateId').exists() || (newData.child('templateId').isString() && newData.child('templateId').val().length <= 200 && !newData.child('templateId').val().contains('/') && root.child($env).child('emailTemplates').child($orgId).child(newData.child('templateId').val()).exists()))))",
-              ".validate": "($kindId !== 'invitation' || newData.child('enabled').val() !== false) && (!newData.child('templateId').exists() || (newData.child('templateId').isString() && root.child($env).child('emailTemplates').child($orgId).child(newData.child('templateId').val()).exists()))",
+              ".write": "auth != null && auth.token.orgId === $orgId && ((auth.token.testMode === true) === ($env === 'test')) && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('roles').child('admin').val() === true && root.child($env).child('orgMembers').child($orgId).child(auth.uid).child('status').val() === 'active' && (!newData.exists() || ((!newData.child('enabled').exists() || newData.child('enabled').isBoolean()) && ($kindId !== 'invitation' || newData.child('enabled').val() !== false) && (!newData.child('templateId').exists() || (newData.child('templateId').isString() && newData.child('templateId').val().length <= 200 && !newData.child('templateId').val().contains('/') && root.child($env).child('emailTemplates').child($orgId).child(newData.child('templateId').val()).exists())) && (!newData.child('digestTemplateId').exists() || (newData.child('digestTemplateId').isString() && newData.child('digestTemplateId').val().length <= 200 && !newData.child('digestTemplateId').val().contains('/') && root.child($env).child('emailTemplates').child($orgId).child(newData.child('digestTemplateId').val()).exists()))))",
+              ".validate": "($kindId !== 'invitation' || newData.child('enabled').val() !== false) && (!newData.child('templateId').exists() || (newData.child('templateId').isString() && root.child($env).child('emailTemplates').child($orgId).child(newData.child('templateId').val()).exists())) && (!newData.child('digestTemplateId').exists() || (newData.child('digestTemplateId').isString() && root.child($env).child('emailTemplates').child($orgId).child(newData.child('digestTemplateId').val()).exists()))",
               "enabled": {
                 ".validate": "newData.isBoolean() && ($kindId !== 'invitation' || newData.val() === true)",
                 "$other": {
@@ -650,6 +650,12 @@
                 }
               },
               "templateId": {
+                ".validate": "newData.isString() && newData.val().length <= 200 && !newData.val().contains('/') && root.child($env).child('emailTemplates').child($orgId).child(newData.val()).exists()",
+                "$other": {
+                  ".validate": false
+                }
+              },
+              "digestTemplateId": {
                 ".validate": "newData.isString() && newData.val().length <= 200 && !newData.val().contains('/') && root.child($env).child('emailTemplates').child($orgId).child(newData.val()).exists()",
                 "$other": {
                   ".validate": false

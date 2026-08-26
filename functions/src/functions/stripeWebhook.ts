@@ -49,8 +49,10 @@ import {
 } from '../lib/stripe';
 import { provisionOrganisation } from '../lib/provisionOrganisation';
 import { isSuspendedStatus } from '../lib/entitlements';
+import { ORG_RETENTION_MS } from '../lib/orgRetention';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
+import { deliverKindEmail } from '../lib/emailDigest';
 import { orgEmailBrand } from '../lib/emailTemplates';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import type {
@@ -313,8 +315,14 @@ async function appendFinanceEvent(
 // act on these. Per-member emailPreferences do NOT gate any of them - they are
 // not one of the quietenable member categories - and the two toggleAllowed:
 // false kinds ('payment-failed', 'subscription-ended') cannot be silenced at
-// the org level either; sendKindEmail still honours the org toggle for
-// 'payment-receipt'.
+// the org level either; the org toggle is still honoured for 'payment-receipt'.
+//
+// DELIVERY splits the same way. 'payment-failed' and 'subscription-ended' are
+// declared `immediate` in the catalogue - a warning that access is about to
+// pause, or has, can never be held for a morning flush - so they go straight to
+// the renderer rather than through the bundling seam, which would only add a
+// catalogue lookup to the one billing path that must not be slowed. The receipt
+// is ordinary correspondence and bundles like everything else.
 // ============================================================================
 
 /** The three billing kinds this webhook sends; a narrowed alias so a send site
@@ -369,9 +377,13 @@ async function planDisplayName(
 /**
  * Fan one billing email kind out to every active org admin. One members read,
  * one profile read, ONE loadKindConfig hoisted across the audience (the
- * customerContracts pattern), then sendKindEmail per admin - which itself
- * never throws. The whole helper is wrapped so no billing-email failure can
- * ever escape into the webhook response.
+ * customerContracts pattern), then one send per admin - neither delivery path
+ * throws. The whole helper is wrapped so no billing-email failure can ever
+ * escape into the webhook response.
+ *
+ * `digestRow` is the receipt's line in a bundled digest and is meaningful for
+ * 'payment-receipt' alone: the other two kinds are immediate and never queued
+ * (see the section header), so they have no digest to appear in.
  */
 async function sendBillingEmailToAdmins(
   env: Environment,
@@ -379,6 +391,7 @@ async function sendBillingEmailToAdmins(
   kind: BillingEmailKind,
   variables: Record<string, string>,
   logger: Logger,
+  digestRow?: { label: string; value: string },
 ): Promise<void> {
   try {
     const { db } = await import('../admin');
@@ -410,19 +423,27 @@ async function sendBillingEmailToAdmins(
     const brand = orgEmailBrand(profile);
     const config = await loadKindConfig(env, orgId, kind, logger);
     for (const admin of admins) {
-      await sendKindEmail(
-        {
-          kind,
-          env,
-          orgId,
-          to: admin.email as string,
-          variables: { 'org.name': orgName, ...variables },
-          brand,
-          kindLink: BILLING_URL,
-          config,
-        },
-        logger,
-      );
+      const request = {
+        kind,
+        env,
+        orgId,
+        to: admin.email as string,
+        variables: { 'org.name': orgName, ...variables },
+        brand,
+        kindLink: BILLING_URL,
+        config,
+      };
+      // An org billed for several subscriptions, or renewed alongside a
+      // proration, can produce more than one receipt in a day; those bundle.
+      // The two urgent kinds bypass the seam entirely - see the section header.
+      if (kind === 'payment-receipt') {
+        await deliverKindEmail(
+          { ...request, ...(digestRow ? { digestRow } : {}) },
+          logger,
+        );
+      } else {
+        await sendKindEmail(request, logger);
+      }
     }
   } catch (error) {
     // Best-effort contract (header note): the state writes are committed and
@@ -561,7 +582,19 @@ async function handleSubscriptionUpsert(
     await db.ref(forEnv(env).db.orgSubscription(orgId)).get()
   ).val() as OrgSubscription | null;
 
-  await writeSubscriptionSnapshot(env, orgId, sub);
+  // Retention lifecycle (DECISIONS §8): a returning customer must never be
+  // reaped. The moment the subscription is entitled again (active/trialing),
+  // CLEAR any retention clock a prior cancellation stamped (null deletes the
+  // key). Any other status leaves the clock untouched by this merge, so a
+  // still-cancelled org keeps counting down toward deletion.
+  const entitledAgain =
+    mapStatus(sub.status) === 'active' || mapStatus(sub.status) === 'trialing';
+  await writeSubscriptionSnapshot(
+    env,
+    orgId,
+    sub,
+    entitledAgain ? { retentionUntil: null } : {},
+  );
 
   // The display card. Checkout saves the card as the SUBSCRIPTION's default
   // (save_default_payment_method: 'on_subscription'), so the customer's
@@ -672,11 +705,16 @@ async function handleSubscriptionDeleted(
 
   // Status forced to 'canceled': whatever terminal state Stripe reports, the
   // org's subscription is over. Dunning state is cleared - there is nothing
-  // left to collect.
+  // left to collect. This is also the org's FINAL cancellation, so it is where
+  // the 12-month data-retention clock is stamped (DECISIONS §8): from now the
+  // org keeps all its data, fully readable, until `retentionUntil` passes and
+  // the nightly cleanupExpiredOrgs sweep may reap it. A resubscribe (the upsert
+  // handler above) clears the clock again, so a returning customer is safe.
   await writeSubscriptionSnapshot(env, orgId, sub, {
     status: 'canceled',
     paymentState: null,
     graceUntil: null,
+    retentionUntil: Date.now() + ORG_RETENTION_MS,
   });
   await appendFinanceEvent(env, event.id, orgId, 'subscription_canceled', {
     planId: planIdFromSubscription(sub),
@@ -778,6 +816,13 @@ async function handleInvoiceEvent(
             'invoice.url': invoice.hosted_invoice_url ?? '',
           },
           logger,
+          // A day's receipts as one line each: the invoice an accounts team
+          // would search by, and what it took. An invoice with no number falls
+          // back to its id, exactly as the copy above does.
+          {
+            label: invoice.number ?? invoice.id ?? 'Invoice',
+            value: formatPence(invoice.amount_paid),
+          },
         );
       }
       return;

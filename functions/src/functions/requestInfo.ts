@@ -47,7 +47,7 @@ import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { orgEmailBrand } from '../lib/emailTemplates';
-import { sendKindEmail } from '../lib/templatedEmail';
+import { deliverKindEmail } from '../lib/emailDigest';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import type {
   RequestInfoInput,
@@ -89,9 +89,14 @@ function formatDueDate(millis: number): string {
 
 /**
  * Tell the assessor by email that a round of questions is waiting, and by when.
- * Best-effort throughout (the dispatchEmail contract, extended to the reads
+ * Best-effort throughout (the deliverKindEmail contract, extended to the reads
  * around it): the requests have already landed, so nothing here may throw and
  * undo a completed validation act.
+ *
+ * Delivered through lib/emailDigest, so an auditor working a queue does not put
+ * six separate emails into one assessor's morning: the first round of questions
+ * arrives at once and the rest of the day's bundle into a single list of what is
+ * waiting, one line per building.
  */
 async function sendInfoRequestedEmail(
   paths: EnvPaths,
@@ -127,9 +132,11 @@ async function sendInfoRequestedEmail(
 
     const profileSnap = await db.ref(paths.db.orgProfile(orgId)).get();
     const brand = orgEmailBrand(profileSnap.val() as OrgProfile | null);
+    const flaggedPhrase = `${flagged} ${flagged === 1 ? 'question' : 'questions'}`;
+    const dueDate = formatDueDate(dueBy);
     // The copy lives in the 'info-requested' catalogue entry (or the org's own
     // saved template); this site supplies only the values it computes.
-    await sendKindEmail(
+    await deliverKindEmail(
       {
         kind: 'info-requested',
         env: paths.env,
@@ -137,8 +144,8 @@ async function sendInfoRequestedEmail(
         to: member.email,
         variables: {
           'building.name': buildingName,
-          'info.flaggedPhrase': `${flagged} ${flagged === 1 ? 'question' : 'questions'}`,
-          'info.dueDate': formatDueDate(dueBy),
+          'info.flaggedPhrase': flaggedPhrase,
+          'info.dueDate': dueDate,
         },
         brand,
         // The job is the assessor's own view of this work in the console
@@ -146,6 +153,14 @@ async function sendInfoRequestedEmail(
         // business landing in). On a phone the app deep link is the better
         // route, but a web CTA works on every device the email opens on.
         kindLink: `${WEB_ORIGIN}/app/jobs/${assessment.jobId}`,
+        // An auditor working through a queue can send an assessor several
+        // rounds of questions in a morning; the digest gives each building one
+        // line carrying the two facts that decide what to answer first - how
+        // much is waiting on them, and by when.
+        digestRow: {
+          label: buildingName,
+          value: `${flaggedPhrase} to answer by ${dueDate}`,
+        },
       },
       logger,
     );

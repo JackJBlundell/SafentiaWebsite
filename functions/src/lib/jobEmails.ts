@@ -28,13 +28,24 @@
 // Everything here is BEST-EFFORT, deliberately: three of the four senders run
 // from a callable's request path AFTER the business write has committed, so a
 // slow provider or a missing customer record must not turn a successful
-// reschedule into an error the admin will retry (sendKindEmail never throws by
-// contract; the reads around it are wrapped to hold the same promise).
+// reschedule into an error the admin will retry (deliverKindEmail never throws
+// by contract; the reads around it are wrapped to hold the same promise).
+//
+// DELIVERY, and the one exception in the platform. Both senders below go through
+// lib/emailDigest, so a day of bulk bookings collapses into one email per person
+// per kind rather than one per job (EMAIL_BUNDLING_PLAN.md §2). This module is
+// the ONLY place that sets `urgent`, and it is the single deliberate exception
+// to the one-email-per-kind-per-day rule: a visit that falls inside the next 48
+// hours is sent the moment it changes, because a duty-holder who learns at 08:15
+// tomorrow that yesterday's visit was cancelled waited in for nobody. Routine
+// bookings further out, and changes to visits already past, bundle like
+// everything else - see isImminentVisit for exactly where the line sits.
 // ============================================================================
 
 import { db } from '../admin';
 import { WEB_ORIGIN } from './webOrigin';
-import { loadKindConfig, sendKindEmail } from './templatedEmail';
+import { loadKindConfig } from './templatedEmail';
+import { deliverKindEmail, isImminentVisit } from './emailDigest';
 import {
   orgEmailBrand,
   type EmailBrand,
@@ -251,7 +262,7 @@ export async function sendJobChangeEmail(
       value: formatVisitDate(message.scheduledFor, message.scheduledUntil),
     });
 
-    await sendKindEmail(
+    await deliverKindEmail(
       {
         kind: message.kind,
         env: paths.env,
@@ -264,6 +275,19 @@ export async function sendJobChangeEmail(
         // (the notification carries the safentia:// deep link for phones).
         kindLink: `${WEB_ORIGIN}/app/jobs/${message.jobId}`,
         kindRows: detailRows,
+        // One line for this visit when a day's changes arrive as a digest: the
+        // building, and the day it is (or was) booked for. The assessor reads a
+        // diary, so the date is the value that tells one row from the next.
+        digestRow: {
+          label: message.buildingName,
+          value: formatVisitDate(message.scheduledFor, message.scheduledUntil),
+        },
+        // An assessor's diary for today or tomorrow cannot wait for the 08:15
+        // flush - they would drive to a cancelled job, or miss one they were
+        // never told about. isImminentVisit draws the line for all three diary
+        // kinds at once: false for a visit already past (nobody is travelling to
+        // it) and false beyond 48 hours (a routine booking, which bundles).
+        urgent: isImminentVisit(message.scheduledFor),
       },
       logger,
     );
@@ -504,13 +528,25 @@ export async function sendVisitCustomerEmails(
     }
 
     // 5. Send. The template is resolved ONCE for the whole batch and handed to
-    // each send; best-effort per recipient (sendKindEmail never throws), so
+    // each send; best-effort per recipient (deliverKindEmail never throws), so
     // one contact's provider failure cannot cost the others their notice.
     const config = await loadKindConfig(paths.env, orgId, kind, logger);
+    // The digest line for this visit, identical for every contact: which
+    // building, and the arrival window they would be expecting somebody in.
+    const digestRow = {
+      label: message.buildingName,
+      value: formatVisitWindow(message.scheduledFor, message.scheduledUntil),
+    };
+    // A contact cannot be told at 08:15 tomorrow that this morning's visit was
+    // moved or called off - they would have waited in for an assessor who was
+    // never coming. isImminentVisit covers all four visit kinds from the one
+    // date: false for a visit already past, and false more than 48 hours out,
+    // where a booking is routine news and bundles with the rest of the day's.
+    const urgent = isImminentVisit(message.scheduledFor);
     for (const recipient of recipients) {
       const hasPortal =
         recipient.uid !== undefined && activePortalUids.has(recipient.uid);
-      await sendKindEmail(
+      await deliverKindEmail(
         {
           kind,
           env: paths.env,
@@ -527,13 +563,18 @@ export async function sendVisitCustomerEmails(
             : {}),
           kindRows: detailRows,
           config,
+          digestRow,
+          urgent,
         },
         logger,
       );
     }
-    logger.info('Visit emails dispatched to customer contacts', {
+    // "Handed to the seam", not "delivered": a routine booking is queued for
+    // the next morning's digest rather than sent now, and the seam logs which.
+    logger.info('Visit emails handed to delivery for customer contacts', {
       ...context,
       recipients: recipients.length,
+      urgent,
     });
   } catch (error) {
     // The booking, move or cancellation has already committed; the customer

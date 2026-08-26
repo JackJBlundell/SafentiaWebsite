@@ -24,7 +24,8 @@ import { appendActivity, activityUpdate, logBookUpdate } from '../lib/events';
 import { sendNotification } from '../lib/notifications';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { orgEmailBrand } from '../lib/emailTemplates';
-import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
+import { loadKindConfig } from '../lib/templatedEmail';
+import { deliverKindEmail } from '../lib/emailDigest';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import type { EnvPaths } from '../lib/paths';
 import {
@@ -495,6 +496,13 @@ export const onAssessmentStageChange = onValueWritten(
                 ? [{ label: 'Submitted', value: formatWhen(submittedAt) }]
                 : []),
             ];
+            // One line for this submission in an auditor's queue digest: which
+            // building, and whose work it is - the two facts that decide the
+            // order a reviewer picks a morning's submissions up in.
+            const awaitingDigestRow = {
+              label: buildingName,
+              value: `Submitted by ${assessorName}`,
+            };
             for (const member of Object.values(members)) {
               if (
                 member?.status === 'active' &&
@@ -502,7 +510,7 @@ export const onAssessmentStageChange = onValueWritten(
                 member.email &&
                 member.emailPreferences?.awaitingValidation !== false
               ) {
-                await sendKindEmail(
+                await deliverKindEmail(
                   {
                     kind: 'awaiting-validation',
                     env: envPaths.env,
@@ -515,6 +523,7 @@ export const onAssessmentStageChange = onValueWritten(
                     kindLink: `${WEB_ORIGIN}/app/validation/${assessmentId}`,
                     kindRows: awaitingRows,
                     config: awaitingConfig,
+                    digestRow: awaitingDigestRow,
                   },
                   logger,
                 );
@@ -546,7 +555,7 @@ export const onAssessmentStageChange = onValueWritten(
                 member.emailPreferences?.released !== false
               ) {
                 emailedAdmins.add(member.email.trim().toLowerCase());
-                await sendKindEmail(
+                await deliverKindEmail(
                   {
                     kind: 'released-admin',
                     env: envPaths.env,
@@ -558,6 +567,13 @@ export const onAssessmentStageChange = onValueWritten(
                     // download - closer to the point than the reports index.
                     kindLink: `${WEB_ORIGIN}/app/validation/${assessmentId}`,
                     config: adminConfig,
+                    // A bulk release is exactly the day this digest exists for:
+                    // one line per building, all saying the same thing, which is
+                    // the whole news an admin needs from thirty of them.
+                    digestRow: {
+                      label: buildingName,
+                      value: 'Report released',
+                    },
                   },
                   logger,
                 );
@@ -616,10 +632,10 @@ export const onAssessmentStageChange = onValueWritten(
                   releasedReportId && siteId
                     ? `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}/reports/${releasedReportId}`
                     : `${WEB_ORIGIN}/app/sites/${siteId}/buildings/${assessment.buildingId}`;
-                // Best-effort per recipient: sendKindEmail never throws, so one
-                // contact's provider failure cannot stop the rest being told.
+                // Best-effort per recipient: deliverKindEmail never throws, so
+                // one contact's provider failure cannot stop the rest being told.
                 for (const contactEmail of contactEmails) {
-                  await sendKindEmail(
+                  await deliverKindEmail(
                     {
                       kind: 'released-contact',
                       env: envPaths.env,
@@ -629,6 +645,13 @@ export const onAssessmentStageChange = onValueWritten(
                       brand,
                       kindLink: contactLink,
                       config: contactConfig,
+                      // A contact covering an estate hears about several
+                      // releases in a day; the building is the only thing that
+                      // distinguishes one line of that digest from the next.
+                      digestRow: {
+                        label: buildingName,
+                        value: 'Report released',
+                      },
                     },
                     logger,
                   );
@@ -718,7 +741,7 @@ export const onAssessmentStageChange = onValueWritten(
               // 'assessment-accepted' / 'assessment-released' - intended: the
               // kindId is the precise identifier now, and the log UI tolerates
               // any category string.
-              await sendKindEmail(
+              await deliverKindEmail(
                 {
                   kind: 'released-assessor',
                   env: envPaths.env,
@@ -755,6 +778,14 @@ export const onAssessmentStageChange = onValueWritten(
                       : []),
                     { label: 'When', value: formatWhen(Date.now()) },
                   ],
+                  // An assessor who submitted a week's work hears both verdicts
+                  // across a day, so the digest line has to say WHICH this was -
+                  // 'accepted, nothing more to do' and 'released, it is finished'
+                  // are different news about the same building.
+                  digestRow: {
+                    label: buildingName,
+                    value: accepted ? 'Accepted' : 'Released',
+                  },
                 },
                 logger,
               );

@@ -39,6 +39,14 @@ export interface KindConfig {
   template: EmailTemplateShape | null;
   /** Set only when template is non-null. */
   templateId?: string;
+  /** The org's assigned template for BUNDLED sends - two or more of this kind
+   *  collapsed into one daily email (lib/emailDigest). Resolved by exactly the
+   *  same rules as `template`: validated, plan-gated, null = built-in digest
+   *  default. Kinds the catalogue gives no `digest` block are never bundled,
+   *  so this stays null for them however the settings node reads. */
+  digestTemplate: EmailTemplateShape | null;
+  /** Set only when digestTemplate is non-null. */
+  digestTemplateId?: string;
   /** Whether the org's plan includes the branding feature (Phase 3 §6). False
    *  ⇒ sendKindEmail dresses the email in the Safentia accent instead of the
    *  org's stored colour. Resolved here - once per (org, kind), cached with
@@ -95,46 +103,74 @@ export async function loadKindConfig(
     // ====
     const enabled = !(def.toggleAllowed && settings?.enabled === false);
 
-    let template: EmailTemplateShape | null = null;
-    let templateId: string | undefined;
-    if (settings?.templateId && !features.emailTemplates) {
-      // ====
-      // Custom email templates are a silver+ feature (Phase 3 §6): the org's
-      // assignment stays stored (§6.3 - never delete) but is NOT applied, so
-      // the built-in default renders exactly as it would for an org that never
-      // assigned one. info, not warn: this is a plan state, not a data fault.
-      // ====
-      logger.info('Org email template not applied (plan lacks emailTemplates); using built-in default', {
-        kind,
-        orgId,
-        templateId: settings.templateId,
-      });
-    } else if (settings?.templateId) {
-      const doc: unknown = (await db.ref(paths.emailTemplate(orgId, settings.templateId)).get()).val();
-      if (isRenderableTemplate(doc)) {
-        template = doc;
-        templateId = settings.templateId;
-      } else {
-        // ====
-        // The assignment points at a deleted or malformed doc. Rules constrain
-        // writes, but this send-boundary check is what guarantees a bad
-        // template degrades to the default instead of failing the send.
-        // ====
-        logger.warn('Assigned email template missing or not renderable; using built-in default', {
-          kind,
-          orgId,
-          templateId: settings.templateId,
-        });
+    // ====
+    // The ordinary template and the bundled one resolve by IDENTICAL rules -
+    // plan gate, existence, renderability, degrade to the built-in default -
+    // so the rules are written once and applied to both assignments. A slot
+    // the org has not filled simply resolves to null.
+    // ====
+    const resolveAssignment = async (
+      assignedId: string | undefined,
+      slot: 'template' | 'digest template',
+    ): Promise<{ template: EmailTemplateShape | null; id?: string }> => {
+      if (!assignedId) {
+        return { template: null };
       }
-    }
+      if (!features.emailTemplates) {
+        // ====
+        // Custom email templates are a silver+ feature (Phase 3 §6): the org's
+        // assignment stays stored (§6.3 - never delete) but is NOT applied, so
+        // the built-in default renders exactly as it would for an org that never
+        // assigned one. info, not warn: this is a plan state, not a data fault.
+        // ====
+        logger.info(
+          `Org email ${slot} not applied (plan lacks emailTemplates); using built-in default`,
+          { kind, orgId, templateId: assignedId },
+        );
+        return { template: null };
+      }
+      const doc: unknown = (
+        await db.ref(paths.emailTemplate(orgId, assignedId)).get()
+      ).val();
+      if (isRenderableTemplate(doc)) {
+        return { template: doc, id: assignedId };
+      }
+      // ====
+      // The assignment points at a deleted or malformed doc. Rules constrain
+      // writes, but this send-boundary check is what guarantees a bad
+      // template degrades to the default instead of failing the send.
+      // ====
+      logger.warn(
+        `Assigned email ${slot} missing or not renderable; using built-in default`,
+        { kind, orgId, templateId: assignedId },
+      );
+      return { template: null };
+    };
+
+    // ====
+    // Kinds the catalogue gives no `digest` block are never bundled, so their
+    // digest assignment is not even looked up - one fewer read on the hot path
+    // for every immediate kind.
+    // ====
+    const [single, digest] = await Promise.all([
+      resolveAssignment(settings?.templateId, 'template'),
+      def.digest !== undefined
+        ? resolveAssignment(settings?.digestTemplateId, 'digest template')
+        : Promise.resolve({ template: null } as {
+            template: EmailTemplateShape | null;
+            id?: string;
+          }),
+    ]);
 
     return {
       kind,
       enabled,
-      template,
+      template: single.template,
       // RTDB-style hygiene and exact contract: templateId appears only when a
       // valid template was resolved.
-      ...(templateId !== undefined ? { templateId } : {}),
+      ...(single.id !== undefined ? { templateId: single.id } : {}),
+      digestTemplate: digest.template,
+      ...(digest.id !== undefined ? { digestTemplateId: digest.id } : {}),
       brandingAllowed: features.branding,
     };
   } catch (error) {
@@ -150,7 +186,13 @@ export async function loadKindConfig(
       orgId,
       message: error instanceof Error ? error.message : String(error),
     });
-    return { kind, enabled: true, template: null, brandingAllowed: true };
+    return {
+      kind,
+      enabled: true,
+      template: null,
+      digestTemplate: null,
+      brandingAllowed: true,
+    };
   }
 }
 
@@ -170,6 +212,16 @@ export interface KindSendRequest {
   kindRows?: Array<{ label: string; value: string }>;
   /** Preloaded config; when absent sendKindEmail loads it itself. */
   config?: KindConfig;
+  /**
+   * Which of the kind's two templates to render. Absent means 'single' - the
+   * ordinary copy, which is also what a BUNDLE OF ONE renders as: a digest of
+   * a single item would read worse than the message it replaced. Only the
+   * digest flush passes 'digest', and only for bundles of two or more.
+   */
+  variant?: 'single' | 'digest';
+  /** How many queued sends this one email carries, recorded on the send-log
+   *  entry so the console can say 'Digest of 12'. Set only by the flush. */
+  bundledCount?: number;
 }
 
 /**
@@ -191,7 +243,21 @@ export async function sendKindEmail(req: KindSendRequest, logger: Logger): Promi
       return false;
     }
 
-    const template = config.template ?? def.defaultTemplate;
+    // ====
+    // Which copy. The digest variant walks the same ladder as the ordinary
+    // one - org assignment, then built-in - and falls all the way back to the
+    // kind's SINGLE default if a caller ever asks for a digest of a kind the
+    // catalogue gives no digest block. That last step should be unreachable
+    // (emailDigest refuses to bundle such a kind at all), but a send must
+    // never fail over a missing template, so it degrades rather than throws.
+    // ====
+    const digestVariant = req.variant === 'digest';
+    const template = digestVariant
+      ? (config.digestTemplate ?? def.digest?.defaultTemplate ?? def.defaultTemplate)
+      : (config.template ?? def.defaultTemplate);
+    const appliedTemplateId = digestVariant
+      ? config.digestTemplateId
+      : config.templateId;
     const rendered = renderTemplate(template, req.variables, 'send', req.kindRows, req.kindLink);
 
     if (rendered.unknown.length > 0) {
@@ -240,7 +306,8 @@ export async function sendKindEmail(req: KindSendRequest, logger: Logger): Promi
         kindId: req.kind,
         // Conditional spread: absent means the built-in default was rendered,
         // and RTDB rejects undefined values in the log entry.
-        ...(config.templateId !== undefined ? { templateId: config.templateId } : {}),
+        ...(appliedTemplateId !== undefined ? { templateId: appliedTemplateId } : {}),
+        ...(req.bundledCount !== undefined ? { bundledCount: req.bundledCount } : {}),
       },
     );
   } catch (error) {

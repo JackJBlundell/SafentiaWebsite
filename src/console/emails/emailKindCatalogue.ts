@@ -17,7 +17,11 @@
 // (the ragDerivation/emailVariableEngine mirroring pattern).
 // ============================================================================
 
-import type { EmailKindId, EmailTemplateBlock } from '../../types';
+import type {
+  EmailDeliveryPolicy,
+  EmailKindId,
+  EmailTemplateBlock,
+} from '../../types';
 import type { EmailTemplateShape } from './emailVariableEngine';
 
 /** One variable a kind's send site supplies to the template renderer. The
@@ -28,6 +32,19 @@ export interface EmailVariableSpec {
   name: string;
   label: string;
   example: string;
+}
+
+/** The bundled form of a kind: the copy used when two or more of its sends
+ *  collapse into one daily email. */
+export interface EmailKindDigest {
+  /** Singular / plural noun for the count phrase: ['building', 'buildings']. */
+  noun: [string, string];
+  /** Console/portal path for the digest's CTA - a digest cannot deep-link one
+   *  item. The flush prefixes WEB_ORIGIN; the catalogue is a pure mirrored
+   *  module and must not import it. */
+  ctaPath: string;
+  /** The bundled copy, in the same block vocabulary as defaultTemplate. */
+  defaultTemplate: EmailTemplateShape;
 }
 
 export interface EmailKindDefinition {
@@ -55,6 +72,10 @@ export interface EmailKindDefinition {
   hasKindRows: boolean;
   /** Today's copy, verbatim, as blocks. */
   defaultTemplate: EmailTemplateShape;
+  /** How this kind reaches its recipient (see EmailDeliveryPolicy). */
+  delivery: EmailDeliveryPolicy;
+  /** Present only on kinds that may be bundled. Absent = never bundled. */
+  digest?: EmailKindDigest;
 }
 
 // ----------------------------------------------------------------------------
@@ -80,6 +101,28 @@ const ORG_ADMIN_FOOTER =
  *  customer footer. */
 const VISIT_FOOTER =
   'You are receiving this because you are listed as a contact for {{building.name}} on Safentia. This is a service message about a visit to your building.';
+
+// ----------------------------------------------------------------------------
+// Footers for the bundled form. A digest spans several buildings and several
+// actions, and its variable vocabulary carries no {{building.name}}, so the
+// three building-scoped footers above cannot be reused verbatim: each is the
+// same sentence, generalised to the list the recipient is holding. The footers
+// with no building in them (JOB_FOOTER, ASSESSOR_FOOTER, ORG_ADMIN_FOOTER) are
+// reused as they stand.
+// ----------------------------------------------------------------------------
+
+/** The digest form of VISIT_FOOTER. */
+const VISIT_DIGEST_FOOTER =
+  'You are receiving this because you are listed as a contact for these buildings on Safentia. This is a service message about visits to them.';
+
+/** The digest form of the customer-contact footer used by the review reminder
+ *  and released-report emails. */
+const CONTACT_DIGEST_FOOTER =
+  'You are receiving this because you are a contact for these buildings on Safentia.';
+
+/** The digest form of the footer shared by the action emails. */
+const RESPONSIBLE_DIGEST_FOOTER =
+  'You are receiving this because you are recorded as responsible for these actions on Safentia.';
 
 // ----------------------------------------------------------------------------
 // Variable specs shared by several kinds.
@@ -177,6 +220,8 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       footerNote:
         'You are receiving this because an administrator at your organisation invited this email address to Safentia. If you were not expecting it, you can safely ignore this email.',
     },
+    // Immediate: a security email an org may never hold back.
+    delivery: 'immediate',
   },
 
   // --------------------------------------------------------------------------
@@ -252,6 +297,34 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: ORG_ADMIN_FOOTER,
     },
+    // Digest: a daily sweep by nature, and its cron runs before the flush.
+    delivery: 'digest',
+    digest: {
+      noun: ['building', 'buildings'],
+      ctaPath: '/app/customers',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} need a fire risk assessment review',
+        preheader:
+          '{{digest.countPhrase}} in your estate have a review approaching or overdue.',
+        heading: '{{org.name}}: fire risk assessment reviews',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: '{{digest.countPhrase}} in your estate have a fire risk assessment review approaching or overdue.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Reviews keep each assessment current; please arrange them before the due dates pass.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your customers', useKindLink: true },
+        ],
+        footerNote: ORG_ADMIN_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -313,6 +386,34 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote:
         'You are receiving this because you are a contact for {{building.name}} on Safentia.',
+    },
+    // Digest: the same sweep, seen from the customer’s side.
+    delivery: 'digest',
+    digest: {
+      noun: ['building', 'buildings'],
+      ctaPath: '/app',
+      defaultTemplate: {
+        subject: 'Fire risk assessment reviews: {{digest.countPhrase}}',
+        preheader:
+          '{{digest.countPhrase}} you are a contact for have a review approaching or overdue.',
+        heading: 'Fire risk assessment reviews',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: '{{digest.countPhrase}} you are a contact for have a fire risk assessment review approaching or overdue.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Your provider arranges these reviews; there is nothing you need to do unless they ask you to.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your buildings', useKindLink: true },
+        ],
+        footerNote: CONTACT_DIGEST_FOOTER,
+      },
     },
   },
 
@@ -393,6 +494,34 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: ASSESSOR_FOOTER,
     },
+    // Digest: the deadline sweep, which runs before the flush.
+    delivery: 'digest',
+    digest: {
+      noun: ['assessment', 'assessments'],
+      ctaPath: '/app/jobs',
+      defaultTemplate: {
+        subject: 'Information still required on {{digest.countPhrase}}',
+        preheader:
+          'Your response is approaching its deadline or overdue on {{digest.countPhrase}}.',
+        heading: 'Information still required',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'Your response to an auditor’s information request is approaching its deadline or overdue on {{digest.countPhrase}}.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Open each job, answer the flagged questions and resubmit. An assessment returns to the validation queue once you do.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'Open your jobs', useKindLink: true },
+        ],
+        footerNote: ASSESSOR_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -452,6 +581,34 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       footerNote:
         'You are receiving this because you are recorded as responsible for this action at {{building.name}} on Safentia.',
     },
+    // Digest: the same sweep, chasing the responsible contact.
+    delivery: 'digest',
+    digest: {
+      noun: ['action', 'actions'],
+      ctaPath: '/app',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} assigned to you need attention',
+        preheader:
+          '{{digest.countPhrase}} assigned to you are approaching their due dates or overdue.',
+        heading: 'Fire-safety actions need your attention',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'You have {{digest.countPhrase}} approaching their due dates or already overdue.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Please arrange the remedial work. Your provider signs each action off once it is complete.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your action plans', useKindLink: true },
+        ],
+        footerNote: RESPONSIBLE_DIGEST_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -506,6 +663,8 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: ORG_ADMIN_FOOTER,
     },
+    // Immediate: already one email per admin per day by construction.
+    delivery: 'immediate',
   },
 
   // --------------------------------------------------------------------------
@@ -554,6 +713,8 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: JOB_FOOTER,
     },
+    // Immediate: already one email per assessor per day by construction.
+    delivery: 'immediate',
   },
 
   // --------------------------------------------------------------------------
@@ -612,6 +773,33 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: JOB_FOOTER,
     },
+    delivery: 'collapse',
+    digest: {
+      noun: ['job', 'jobs'],
+      ctaPath: '/app/jobs',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} added to your diary',
+        preheader:
+          'You have {{digest.countPhrase}} newly booked into your diary.',
+        heading: 'New jobs in your diary',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'You have {{digest.countPhrase}} newly booked into your diary.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Open your jobs for the buildings, their records and the assessments you will be carrying out.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'Open your jobs', useKindLink: true },
+        ],
+        footerNote: JOB_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -663,6 +851,33 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: JOB_FOOTER,
     },
+    // Collapse; a visit within 48 hours is sent immediately as urgent.
+    delivery: 'collapse',
+    digest: {
+      noun: ['job', 'jobs'],
+      ctaPath: '/app/jobs',
+      defaultTemplate: {
+        subject: 'Diary changes: {{digest.countPhrase}}',
+        preheader: 'You have {{digest.countPhrase}} that changed today.',
+        heading: 'Your diary has changed',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'You have {{digest.countPhrase}} that changed today: moved to a new date, assigned to you, or taken off your diary.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Open your jobs to see where each one now stands.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'Open your jobs', useKindLink: true },
+        ],
+        footerNote: JOB_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -710,6 +925,34 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
         { id: 'cta', type: 'cta', label: 'Open the job', useKindLink: true },
       ],
       footerNote: JOB_FOOTER,
+    },
+    // Collapse; a visit within 48 hours is sent immediately as urgent.
+    delivery: 'collapse',
+    digest: {
+      noun: ['job', 'jobs'],
+      ctaPath: '/app/jobs',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} cancelled',
+        preheader:
+          'You have {{digest.countPhrase}} cancelled today, so there is nothing to attend.',
+        heading: 'Jobs cancelled',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'You have {{digest.countPhrase}} cancelled today, so there is nothing to attend.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Any reason the administrator gave is listed beside the job.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'Open your jobs', useKindLink: true },
+        ],
+        footerNote: JOB_FOOTER,
+      },
     },
   },
 
@@ -769,6 +1012,38 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: VISIT_FOOTER,
     },
+    delivery: 'collapse',
+    digest: {
+      noun: ['visit', 'visits'],
+      ctaPath: '/app',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} scheduled at your buildings',
+        preheader:
+          '{{org.name}} has scheduled {{digest.countPhrase}} at your buildings.',
+        heading: 'Visits at your buildings',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: '{{org.name}} has scheduled {{digest.countPhrase}} at your buildings to carry out fire risk assessments.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'There is nothing you need to do, other than making sure the assessor can get in and reach the areas being assessed.',
+          },
+          {
+            id: 'p3',
+            type: 'paragraph',
+            text: 'If a date does not suit, please contact {{org.name}} and another can be arranged.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your buildings', useKindLink: true },
+        ],
+        footerNote: VISIT_DIGEST_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -824,6 +1099,39 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: VISIT_FOOTER,
     },
+    // Collapse; a visit within 48 hours is sent immediately as urgent.
+    delivery: 'collapse',
+    digest: {
+      noun: ['visit', 'visits'],
+      ctaPath: '/app',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} rescheduled',
+        preheader:
+          '{{org.name}} has rescheduled {{digest.countPhrase}} at your buildings.',
+        heading: 'Visits have been rescheduled',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: '{{org.name}} has rescheduled {{digest.countPhrase}} at your buildings. The new dates are listed below.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'There is nothing you need to do, other than making sure the assessor can get in and reach the areas being assessed.',
+          },
+          {
+            id: 'p3',
+            type: 'paragraph',
+            text: 'If a date does not suit, please contact {{org.name}} and another can be arranged.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your buildings', useKindLink: true },
+        ],
+        footerNote: VISIT_DIGEST_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -874,6 +1182,34 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
         { id: 'cta', type: 'cta', label: 'View your building', useKindLink: true },
       ],
       footerNote: VISIT_FOOTER,
+    },
+    // Collapse; a visit within 48 hours is sent immediately as urgent.
+    delivery: 'collapse',
+    digest: {
+      noun: ['visit', 'visits'],
+      ctaPath: '/app',
+      defaultTemplate: {
+        subject: 'Visit updates: {{digest.countPhrase}}',
+        preheader:
+          'A different assessor will now attend {{digest.countPhrase}} at your buildings.',
+        heading: 'A different assessor will attend your visits',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'A different assessor will now attend {{digest.countPhrase}} at your buildings. The dates and times are unchanged.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'There is nothing you need to do, other than making sure the assessor can get in and reach the areas being assessed.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your buildings', useKindLink: true },
+        ],
+        footerNote: VISIT_DIGEST_FOOTER,
+      },
     },
   },
 
@@ -937,6 +1273,39 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: VISIT_FOOTER,
     },
+    // Collapse; a visit within 48 hours is sent immediately as urgent.
+    delivery: 'collapse',
+    digest: {
+      noun: ['visit', 'visits'],
+      ctaPath: '/app',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} cancelled',
+        preheader:
+          '{{org.name}} has cancelled {{digest.countPhrase}} at your buildings. Nobody will be attending.',
+        heading: 'Visits have been cancelled',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: '{{org.name}} has cancelled {{digest.countPhrase}} at your buildings. Nobody will be attending, and there is nothing you need to do.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Any reason given is listed beside the visit.',
+          },
+          {
+            id: 'p3',
+            type: 'paragraph',
+            text: '{{org.name}} will be in touch if a visit needs to be rearranged.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your buildings', useKindLink: true },
+        ],
+        footerNote: VISIT_DIGEST_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -988,6 +1357,34 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote:
         'You are receiving this because you are an auditor on Safentia.',
+    },
+    delivery: 'collapse',
+    digest: {
+      noun: ['assessment', 'assessments'],
+      ctaPath: '/app/validation',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} awaiting validation',
+        preheader:
+          'The validation queue has {{digest.countPhrase}} waiting for review.',
+        heading: 'Assessments awaiting validation',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'The validation queue has {{digest.countPhrase}} waiting for review.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Please review each one and accept it or request further information.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'Open the validation queue', useKindLink: true },
+        ],
+        footerNote:
+          'You are receiving this because you are an auditor on Safentia.',
+      },
     },
   },
 
@@ -1048,6 +1445,34 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       footerNote:
         'You are receiving this because you are an administrator on Safentia.',
     },
+    delivery: 'collapse',
+    digest: {
+      noun: ['assessment', 'assessments'],
+      ctaPath: '/app/customers',
+      defaultTemplate: {
+        subject: 'New fire risk assessment reports: {{digest.countPhrase}}',
+        preheader:
+          'Reports are now available for {{digest.countPhrase}} released today.',
+        heading: '{{org.name}}: assessments released',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'Your team has released {{digest.countPhrase}} today, and the reports are now available.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Open a customer to read a report or to share it with the building’s contacts.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your customers', useKindLink: true },
+        ],
+        footerNote:
+          'You are receiving this because you are an administrator on Safentia.',
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -1104,6 +1529,33 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       footerNote:
         'You are receiving this because you are a contact for {{building.name}} on Safentia.',
     },
+    delivery: 'collapse',
+    digest: {
+      noun: ['report', 'reports'],
+      ctaPath: '/app',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} ready to read in your portal',
+        preheader:
+          'You have {{digest.countPhrase}} to read and accept in your Safentia portal.',
+        heading: 'New fire risk assessment reports',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'You have {{digest.countPhrase}} waiting in your Safentia portal.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Sign in to read and accept each one. You will be asked to type your name to sign a report off, and it is available to download straight afterwards.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'Open your portal', useKindLink: true },
+        ],
+        footerNote: CONTACT_DIGEST_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -1159,6 +1611,33 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: ASSESSOR_FOOTER,
     },
+    delivery: 'collapse',
+    digest: {
+      noun: ['assessment', 'assessments'],
+      ctaPath: '/app/jobs',
+      defaultTemplate: {
+        subject: 'Updates on {{digest.countPhrase}} you submitted',
+        preheader:
+          'You have an update on {{digest.countPhrase}} you submitted.',
+        heading: 'Updates on your assessments',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'You have an update on {{digest.countPhrase}} you submitted.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Each has been accepted for release or released to the customer; the outcome is listed beside it. Nothing further is needed from you.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'Open your jobs', useKindLink: true },
+        ],
+        footerNote: ASSESSOR_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -1212,6 +1691,33 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote:
         'You are receiving this because you are recorded as responsible for these actions at {{building.name}} on Safentia.',
+    },
+    delivery: 'collapse',
+    digest: {
+      noun: ['action', 'actions'],
+      ctaPath: '/app',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} from newly released assessments',
+        preheader:
+          'You have {{digest.countPhrase}} recorded against you by assessments released today.',
+        heading: 'Actions from released assessments',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'You have {{digest.countPhrase}} recorded against you by fire risk assessments released today.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Please review the action plans and arrange the remedial work before the due dates pass.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your action plans', useKindLink: true },
+        ],
+        footerNote: RESPONSIBLE_DIGEST_FOOTER,
+      },
     },
   },
 
@@ -1276,6 +1782,33 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: ASSESSOR_FOOTER,
     },
+    delivery: 'collapse',
+    digest: {
+      noun: ['assessment', 'assessments'],
+      ctaPath: '/app/jobs',
+      defaultTemplate: {
+        subject: 'More information needed on {{digest.countPhrase}}',
+        preheader:
+          'An auditor has asked for more information on {{digest.countPhrase}} you submitted.',
+        heading: 'More information required',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'An auditor has asked for more information on {{digest.countPhrase}} you submitted.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Open each job, answer the flagged questions and resubmit it. An assessment returns to the validation queue once you do.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'Open your jobs', useKindLink: true },
+        ],
+        footerNote: ASSESSOR_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -1320,6 +1853,33 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote:
         'You are receiving this because you are recorded as responsible for this action at {{building.name}} on Safentia.',
+    },
+    delivery: 'collapse',
+    digest: {
+      noun: ['action', 'actions'],
+      ctaPath: '/app',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} assigned to you',
+        preheader:
+          'You have {{digest.countPhrase}} newly assigned to you on Safentia.',
+        heading: 'Actions assigned to you',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'You have {{digest.countPhrase}} newly assigned to you as the responsible party.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Please review the detail below and arrange the remedial work before the due dates pass.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your action plans', useKindLink: true },
+        ],
+        footerNote: RESPONSIBLE_DIGEST_FOOTER,
+      },
     },
   },
 
@@ -1382,6 +1942,33 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: ORG_ADMIN_FOOTER,
     },
+    delivery: 'collapse',
+    digest: {
+      noun: ['contact', 'contacts'],
+      ctaPath: '/app/customers',
+      defaultTemplate: {
+        subject: '{{digest.countPhrase}} added on site',
+        preheader:
+          'Assessors added {{digest.countPhrase}} to your customer records while on site.',
+        heading: '{{org.name}}: contacts added from the field',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'Assessors added {{digest.countPhrase}} to your customer records while on site. They can now be named as responsible parties and emailed about reports and actions.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Assessors can record who a person is, but not grant them access. If any of these people should be able to sign in and read their reports and action plan, invite them to the portal from the customer record.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your customers', useKindLink: true },
+        ],
+        footerNote: ORG_ADMIN_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -1443,6 +2030,34 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
         { id: 'cta', type: 'cta', label: 'View the customer', useKindLink: true },
       ],
       footerNote: ORG_ADMIN_FOOTER,
+    },
+    // Digest: the contract-end sweep, which runs before the flush.
+    delivery: 'digest',
+    digest: {
+      noun: ['customer', 'customers'],
+      ctaPath: '/app/customers',
+      defaultTemplate: {
+        subject: 'Contracts ended: {{digest.countPhrase}}',
+        preheader:
+          'Contracts with {{digest.countPhrase}} have ended, and their portal access has been withdrawn.',
+        heading: '{{org.name}}: customer contracts have ended',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'The contracts with {{digest.countPhrase}} have ended. They have been archived and their portal access has been withdrawn.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'Their sites, buildings and assessment history are unchanged and stay in your records. Restore a customer if the contract has been renewed - that returns the portal access this withdrew.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View your customers', useKindLink: true },
+        ],
+        footerNote: ORG_ADMIN_FOOTER,
+      },
     },
   },
 
@@ -1532,6 +2147,8 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: ORG_ADMIN_FOOTER,
     },
+    // Immediate: the only warning before an organisation’s access pauses.
+    delivery: 'immediate',
   },
 
   // --------------------------------------------------------------------------
@@ -1613,6 +2230,34 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: ORG_ADMIN_FOOTER,
     },
+    // Collapse: the first receipt of the day is news, the fifth is noise.
+    delivery: 'collapse',
+    digest: {
+      noun: ['payment', 'payments'],
+      ctaPath: '/app/billing',
+      defaultTemplate: {
+        subject: 'Receipts for {{digest.countPhrase}} — {{org.name}}',
+        preheader:
+          'We have received {{digest.countPhrase}} for your Safentia subscription. Thank you.',
+        heading: 'Thank you — payments received',
+        blocks: [
+          {
+            id: 'p1',
+            type: 'paragraph',
+            text: 'We have received {{digest.countPhrase}} for your Safentia subscription. Each one is listed below with its invoice.',
+          },
+          {
+            id: 'p2',
+            type: 'paragraph',
+            text: 'You can view or download any invoice from the Billing page.',
+          },
+          KIND_ROWS,
+          { id: 'more', type: 'paragraph', text: '{{digest.moreNote}}', omitIfEmpty: true },
+          { id: 'cta', type: 'cta', label: 'View billing', useKindLink: true },
+        ],
+        footerNote: ORG_ADMIN_FOOTER,
+      },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -1665,6 +2310,8 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
       ],
       footerNote: ORG_ADMIN_FOOTER,
     },
+    // Immediate: the organisation’s access has materially changed.
+    delivery: 'immediate',
   },
 
   // --------------------------------------------------------------------------
@@ -1702,6 +2349,8 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
         { id: 'p1', type: 'paragraph', text: 'Write your message here.' },
       ],
     },
+    // Immediate: an administrator composed it and pressed send.
+    delivery: 'immediate',
   },
 };
 

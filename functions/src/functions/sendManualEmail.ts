@@ -314,6 +314,11 @@ export const sendManualEmail = onCall<SendManualEmailInput>(
           enabled: true,
           template: templateDoc,
           templateId,
+          // 'manual' is an `immediate` kind and carries no digest block in the
+          // catalogue: an email an admin composed and pressed send on is never
+          // held back to be bundled with another. So there is no digest
+          // template to resolve, and the seam never asks for one.
+          digestTemplate: null,
           // From the plan context resolved at step 3, so the branding gate in
           // sendKindEmail applies to manual sends exactly as it does to the
           // automated kinds.

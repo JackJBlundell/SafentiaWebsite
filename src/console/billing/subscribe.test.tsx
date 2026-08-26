@@ -12,11 +12,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import { ThemeProvider } from '../../design/ThemeProvider';
-import type { Plan, UserOnboarding } from '../../types';
+import type { Plan, PlanLimits, UserOnboarding } from '../../types';
 
 const mocks = vi.hoisted(() => ({
   plansNode: null as Record<string, Plan> | null,
   loadStripeForEnv: vi.fn(async () => null),
+  isStripeConfiguredForEnv: vi.fn(() => true),
   callResult: undefined as unknown,
   call: vi.fn(async () => mocks.callResult),
 }));
@@ -52,6 +53,7 @@ vi.mock('../ui/useCallable', () => ({
 
 vi.mock('./stripeClient', () => ({
   loadStripeForEnv: mocks.loadStripeForEnv,
+  isStripeConfiguredForEnv: mocks.isStripeConfiguredForEnv,
 }));
 
 // Never the real wrapper: importing it is harmless, but the mock guarantees no
@@ -63,14 +65,17 @@ vi.mock('@stripe/react-stripe-js', () => ({
   useElements: () => null,
 }));
 
-import { pickNoMembershipView } from './gating';
+import { hasUnfinishedSubscription, pickNoMembershipView } from './gating';
 import { composeAddress, OrgDetailsPage, splitAddress } from './OrgDetailsPage';
-import { SubscribePlanPage } from './SubscribePlanPage';
+import { planMatrixRows, SubscribePlanPage } from './SubscribePlanPage';
 import { SubscribePaymentPage } from './SubscribePaymentPage';
+import { InvitedMidOnboardingNotice } from './InvitedMidOnboardingNotice';
 
 beforeEach(() => {
   mocks.callResult = undefined;
   mocks.call.mockClear();
+  // Stripe configured by default; the not-configured test opts out.
+  mocks.isStripeConfiguredForEnv.mockReturnValue(true);
 });
 
 /** The pages render Wordmark, which reads the theme context. */
@@ -86,18 +91,32 @@ function node(step: UserOnboarding['step'], completedAt?: number): UserOnboardin
   return { step, createdAt: 1, ...(completedAt ? { completedAt } : {}) };
 }
 
-function plan(name: string, order: number, priceMonthlyPence: number): Plan {
+function plan(
+  name: string,
+  order: number,
+  priceMonthlyPence: number,
+  overrides?: {
+    features?: Partial<Plan['features']>;
+    limits?: Partial<PlanLimits>;
+  },
+): Plan {
   return {
     name,
     stripePriceId: `price_${name.toLowerCase()}`,
     priceMonthlyPence,
     currency: 'gbp',
-    features: { branding: false, emailTemplates: false, prioritySupport: false },
+    features: {
+      branding: false,
+      emailTemplates: false,
+      prioritySupport: false,
+      ...overrides?.features,
+    },
     limits: {
       orgStaff: 3,
       customers: 10,
       notificationsPerMonth: 200,
       assessmentTemplates: 1,
+      ...overrides?.limits,
     },
     order,
   };
@@ -134,6 +153,60 @@ describe('pickNoMembershipView', () => {
   });
 });
 
+describe('hasUnfinishedSubscription', () => {
+  it('flags an org-holding session still carrying a payment-step node', () => {
+    // Invited mid-subscribe: the node stayed at 'payment' (only the webhook
+    // advances it, and it never ran), so the journey is left in flight.
+    expect(hasUnfinishedSubscription(node('payment'))).toBe(true);
+  });
+
+  it('is false for every other step and for no node', () => {
+    expect(hasUnfinishedSubscription(node('setup'))).toBe(false);
+    expect(hasUnfinishedSubscription(node('setup', 123))).toBe(false);
+    expect(hasUnfinishedSubscription(node('plan'))).toBe(false);
+    expect(hasUnfinishedSubscription(node('done', 123))).toBe(false);
+    expect(hasUnfinishedSubscription(null)).toBe(false);
+    expect(hasUnfinishedSubscription(undefined)).toBe(false);
+  });
+});
+
+describe('planMatrixRows', () => {
+  it('derives the fixed comparison rows, in order, from a plan\'s limits and flags', () => {
+    const rows = planMatrixRows(
+      plan('Silver', 2, 12950, {
+        features: { branding: true, emailTemplates: true, prioritySupport: false },
+        limits: {
+          orgStaff: 10,
+          customers: 50,
+          notificationsPerMonth: -1,
+          assessmentTemplates: 3,
+        },
+      }),
+    );
+    // Same row order on every tier - the one rule that lets the matrix read
+    // straight across.
+    expect(rows.map((row) => row.label)).toEqual([
+      'Staff members',
+      'Customers',
+      'Notifications each month',
+      'Custom branding',
+      'Custom email templates',
+      'Assessment templates',
+      'Priority support',
+    ]);
+    const value = (label: string) =>
+      rows.find((row) => row.label === label)?.value;
+    // Counts are strings; the -1 sentinel reads as a word.
+    expect(value('Staff members')).toBe('10');
+    expect(value('Notifications each month')).toBe('Unlimited');
+    expect(value('Assessment templates')).toBe('3');
+    // Feature flags stay boolean for tick/dash rendering.
+    expect(value('Custom branding')).toBe(true);
+    expect(value('Custom email templates')).toBe(true);
+    expect(value('Priority support')).toBe(false);
+  });
+});
+
 describe('SubscribePlanPage', () => {
   it('renders the catalogue sorted by order with display prices in pounds', () => {
     // Deliberately mis-ordered keys: `order` alone decides how the matrix reads.
@@ -164,6 +237,63 @@ describe('SubscribePlanPage', () => {
     expect(screen.getByText('£129.50')).toBeInTheDocument();
     expect(screen.getByText('£299')).toBeInTheDocument();
     expect(screen.getByText(/Prices exclude VAT/)).toBeInTheDocument();
+  });
+
+  it('shows the SAME comparison rows on every tier, marking what a plan lacks', () => {
+    mocks.plansNode = {
+      bronze: plan('Bronze', 1, 4900, {
+        features: { branding: false, emailTemplates: false, prioritySupport: false },
+        limits: { orgStaff: 3, notificationsPerMonth: 200 },
+      }),
+      silver: plan('Silver', 2, 12950, {
+        features: { branding: true, emailTemplates: true, prioritySupport: true },
+        limits: { orgStaff: 10, notificationsPerMonth: -1 },
+      }),
+    };
+    renderPage(
+      <SubscribePlanPage
+        env="test"
+        orgName="Acme"
+        onChoose={vi.fn()}
+        onEditDetails={vi.fn()}
+        onShowHolding={vi.fn()}
+      />,
+    );
+    // Both tiers carry every row - a lacking feature is shown, not dropped.
+    expect(screen.getAllByText('Custom branding')).toHaveLength(2);
+    expect(screen.getAllByText('Custom email templates')).toHaveLength(2);
+    expect(screen.getAllByText('Priority support')).toHaveLength(2);
+    // Bronze's three excluded flags read as "not included"; Silver's three
+    // included ones read as a tick.
+    expect(screen.getAllByLabelText('Not included')).toHaveLength(3);
+    expect(screen.getAllByLabelText('Included')).toHaveLength(3);
+    // The unlimited sentinel reads as a word, never "-1".
+    expect(screen.getByText('Unlimited')).toBeInTheDocument();
+    expect(screen.queryByText('-1')).not.toBeInTheDocument();
+  });
+
+  it('blocks the advance and shows the not-configured notice when Stripe is unconfigured', () => {
+    mocks.isStripeConfiguredForEnv.mockReturnValue(false);
+    const onChoose = vi.fn();
+    mocks.plansNode = { bronze: plan('Bronze', 1, 4900) };
+    renderPage(
+      <SubscribePlanPage
+        env="test"
+        orgName="Acme"
+        onChoose={onChoose}
+        onEditDetails={vi.fn()}
+        onShowHolding={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(/Payments are not available just yet/),
+    ).toBeInTheDocument();
+    // The choose button is disabled, and clicking it never advances into
+    // createSubscription (which would mint dead Stripe objects).
+    const choose = screen.getByRole('button', { name: 'Choose Bronze' });
+    expect(choose).toBeDisabled();
+    fireEvent.click(choose);
+    expect(onChoose).not.toHaveBeenCalled();
   });
 
   it('shows the not-seeded empty state when the plans node is absent', () => {
@@ -200,6 +330,21 @@ describe('SubscribePaymentPage', () => {
     expect(
       await screen.findByText(/Payments are not available just yet/),
     ).toBeInTheDocument();
+  });
+});
+
+describe('InvitedMidOnboardingNotice', () => {
+  it('surfaces the calm word and continues into the joined org on the button', () => {
+    const onContinue = vi.fn();
+    renderPage(<InvitedMidOnboardingNotice onContinue={onContinue} />);
+    expect(
+      screen.getByText(/You have joined an organisation/),
+    ).toBeInTheDocument();
+    // The choice is a single acknowledgement - the abandoned payment is never
+    // charged, said plainly.
+    expect(screen.getByText(/never charged/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(onContinue).toHaveBeenCalledTimes(1);
   });
 });
 

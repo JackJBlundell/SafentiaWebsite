@@ -69,8 +69,28 @@
   color: var(--color-text-secondary);
 }
 
+/* The label and, when the send was a bundle, its count beside it. Inline-flex
+   so the two stay on one line where there is room and drop to two where there
+   is not, without the label itself ever breaking mid-phrase. */
 .kind {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
   color: var(--color-text);
+  white-space: nowrap;
+}
+
+/* Deliberately quieter than the outcome badges next to it: a hairline outline
+   and muted text, not a status tint. This is a note about how the message was
+   assembled, and it must not compete with whether it actually left. */
+.bundle {
+  display: inline-block;
+  padding: 1px var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 

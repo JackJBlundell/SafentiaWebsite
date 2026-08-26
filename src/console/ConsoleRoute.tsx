@@ -33,7 +33,8 @@ import { Wordmark } from '../components/Wordmark';
 import { EmailVerificationScreen } from './EmailVerificationScreen';
 import { ConsoleShell } from './ConsoleShell';
 import { PortalShell } from './portal/PortalShell';
-import { pickNoMembershipView } from './billing/gating';
+import { hasUnfinishedSubscription, pickNoMembershipView } from './billing/gating';
+import { InvitedMidOnboardingNotice } from './billing/InvitedMidOnboardingNotice';
 import { useEntitlements } from './billing/useEntitlements';
 import { useOnboardingNode } from './billing/useOnboardingNode';
 import { ConfirmingScreen } from './billing/ConfirmingScreen';
@@ -209,6 +210,12 @@ function ConsoleGate() {
     null,
   );
 
+  // Acknowledged (this mount) the "you were invited mid-subscribe" notice
+  // below. A one-off like setupCelebration: the node self-expires server-side,
+  // so once the user has read the word once and continued, the session simply
+  // falls through to the org they joined.
+  const [midInviteSeen, setMidInviteSeen] = useState(false);
+
   if (status === 'initialising') {
     return (
       <ThemeProvider>
@@ -329,6 +336,21 @@ function ConsoleGate() {
             onCelebrate={setSetupCelebration}
           />
         </Suspense>
+      </ThemeProvider>
+    );
+  }
+
+  // A user invited into this org part-way through founding their OWN gets a
+  // calm one-time notice rather than being dropped straight into the shell with
+  // their half-finished subscription vanished (assessment 1.6). Detected on the
+  // RAW node (a payment attempt has no org to scope by), and BELOW the setup
+  // gate so a genuine founder finishing their own org is never diverted here.
+  // The onboarding node is left intact - the server cleans it up lazily and the
+  // incomplete subscription self-expires.
+  if (!midInviteSeen && hasUnfinishedSubscription(onboarding)) {
+    return (
+      <ThemeProvider>
+        <InvitedMidOnboardingNotice onContinue={() => setMidInviteSeen(true)} />
       </ThemeProvider>
     );
   }
