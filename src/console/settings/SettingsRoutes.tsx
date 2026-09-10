@@ -3,7 +3,8 @@
 //
 // Mirrors StaffRoutes: the shell hides the nav item from non-admins, and this
 // gate covers the direct-URL case. The sub-nav switches between the settings
-// surfaces (organisation profile / risk scoring / reminders): a left column of
+// surfaces (organisation profile / risk scoring / reminders / AI guidance /
+// billing): a left column of
 // links beside the content on desktop, collapsing to the familiar horizontal
 // tabs on smaller screens. Same links, same DOM, two presentations.
 // ============================================================================
@@ -16,6 +17,7 @@ import { Skeleton } from '../ui/Skeleton';
 import { OrganisationSettingsPage } from './OrganisationSettingsPage';
 import { RagSettingsPage } from './RagSettingsPage';
 import { NotificationSettingsPage } from './NotificationSettingsPage';
+import { AiGuidanceSettingsPage } from './AiGuidanceSettingsPage';
 import styles from './SettingsRoutes.module.css';
 
 // Code-split (CustomersRoutes precedent): the Billing page pulls in
@@ -34,6 +36,11 @@ const SUB_NAV = [
   // The path stays /reminders (it is bookmarked and linked from email footers)
   // while the surface now covers every scheduled reminder, not reviews alone.
   { to: '/app/settings/reminders', label: 'Reminders', end: false },
+  // The org's own steer for the AI summary writer. Its own surface rather than a
+  // card on another page: it is a different decision from risk banding or
+  // reminder schedules, and the copy explaining what it is - and what it is NOT,
+  // namely report wording - needs the room.
+  { to: '/app/settings/ai-guidance', label: 'AI guidance', end: false },
   { to: '/app/settings/billing', label: 'Billing', end: false },
 ] as const;
 
@@ -68,6 +75,7 @@ export function SettingsRoutes() {
           <Route index element={<OrganisationSettingsPage />} />
           <Route path="rag" element={<RagSettingsPage />} />
           <Route path="reminders" element={<NotificationSettingsPage />} />
+          <Route path="ai-guidance" element={<AiGuidanceSettingsPage />} />
           <Route
             path="billing"
             element={

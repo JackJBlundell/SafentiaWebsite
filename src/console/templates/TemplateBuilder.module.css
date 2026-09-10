@@ -361,6 +361,16 @@
   margin-bottom: var(--space-xs);
 }
 
+/* The shipped bank runs from one sentence to well over three thousand
+   characters, so the preview scrolls rather than pushing the rest of the
+   question editor off the screen. The whole paragraph stays reachable - it is
+   the exact wording the report will print, so it must be readable in full. */
+.paragraphPreviewBody {
+  display: block;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
 /* --- Inline confirm -------------------------------------------------------------- */
 
 .confirmGroup {

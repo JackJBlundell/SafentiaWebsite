@@ -102,12 +102,15 @@ import {
   MAX_BUNDLE_ITEMS,
   URGENT_VISIT_WINDOW_MS,
   claimDaySlot,
+  decodeQueuedEmail,
+  decodeVariableKey,
   deliverKindEmail,
+  encodeVariableKey,
   isBundlingEnabled,
   isImminentVisit,
   recipientHash,
 } from '../lib/emailDigest';
-import type { DeliverRequest } from '../lib/emailDigest';
+import type { DeliverRequest, StoredQueuedEmail } from '../lib/emailDigest';
 import { EMAIL_KINDS } from '../lib/emailKindCatalogue';
 import type { EmailKindDefinition } from '../lib/emailKindCatalogue';
 import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
@@ -637,15 +640,18 @@ describe('deliverKindEmail - failure posture', () => {
     );
   });
 
-  it('falls back to an immediate send when ONLY the item write is rejected, after the count has already advanced', async () => {
+  it('falls back to an immediate send when ONLY the item write is rejected, and gives the claimed count back', async () => {
     // The narrow window inside appendToBundle: the aborting count transaction
     // commits, then the multi-path item write is refused. The email still goes
     // out, which is the guarantee that matters.
     //
-    // NOTE for the flush: this leaves the bundle holding a count of 1 with no
-    // item behind it. The flush must therefore treat `count` as advisory and
-    // render from the items it can actually read, never emit a digest for a
-    // bundle whose items are empty, and reset the count when it clears one.
+    // The count is ROLLED BACK, because the cap is claimed before the item is
+    // written. A rejected write that kept its claim would creep the bundle
+    // towards MAX_BUNDLE_ITEMS on phantom items, and a bundle that reaches the
+    // cap starts discarding real sends. (The flush still treats `count` as
+    // advisory - it renders from the items it can actually read and clears a
+    // stray counter off an empty bundle - but that is the backstop, not the
+    // licence to leak.)
     mockThrowOn = '/items/';
     const logger = makeLogger();
 
@@ -654,7 +660,7 @@ describe('deliverKindEmail - failure posture', () => {
     expect(outcome).toBe('sent');
     expect(mockSend).toHaveBeenCalledTimes(1);
     expect(storedItemPaths()).toEqual([]);
-    expect(mockDbData[`${bundlePath(DIGEST_KIND)}/count`]).toBe(1);
+    expect(mockDbData[`${bundlePath(DIGEST_KIND)}/count`]).toBe(0);
   });
 
   it('falls back to an immediate send when the SLOT READ throws', async () => {
@@ -728,7 +734,8 @@ describe('deliverKindEmail - the queued item', () => {
     const item = storedItem() as Record<string, unknown>;
     expect(undefinedPathsIn(mockUpdateCalls[0])).toEqual([]);
     expect(item).toMatchObject({
-      variables: { 'org.name': 'Acme Fire Safety Ltd' },
+      // Escaped: RTDB rejects '.' in a key, and every variable name is dotted.
+      variables: { 'org~dname': 'Acme Fire Safety Ltd' },
       // The brand at QUEUE time, so a bundle renders in the colours the event
       // actually happened under.
       brand: { name: 'Acme Fire Safety Ltd', accent: '#336699' },
@@ -749,5 +756,57 @@ describe('deliverKindEmail - the queued item', () => {
         `${bundlePath(DIGEST_KIND)}/to`,
       ].sort(),
     );
+  });
+
+  // ==========================================================================
+  // Variable names are namespaced with dots ('info.dueDate', 'org.name') and
+  // RTDB rejects '.', '#', '$', '/', '[' and ']' in KEYS. An unescaped name
+  // made the whole bundle write throw, so every bundled send of that kind fell
+  // back to sending immediately - bundling silently off for that kind, for
+  // ever. The escape lives in the storage layer and is symmetric.
+  // ==========================================================================
+  it('escapes every RTDB-illegal character out of the stored variable names', async () => {
+    await deliverKindEmail(
+      request(DIGEST_KIND, {
+        variables: {
+          'info.subjectStagePhrase': 'due for review',
+          'org.name': 'Acme Fire Safety Ltd',
+          plain: 'no namespace',
+        },
+      }),
+      makeLogger(),
+    );
+
+    const item = storedItem() as StoredQueuedEmail;
+    const keys = Object.keys(item.variables);
+    expect(keys.sort()).toEqual(
+      ['info~dsubjectStagePhrase', 'org~dname', 'plain'].sort(),
+    );
+    for (const key of keys) expect(key).not.toMatch(/[.#$/[\]]/);
+  });
+
+  it('restores the exact names on the way out - the escape is reversible', async () => {
+    const variables = {
+      'info.subjectStagePhrase': 'due for review',
+      'action.severityLower': 'high',
+      // Not names any kind declares, but the storage layer is what stands
+      // between arbitrary keys and a rejected write, so it must hold for them.
+      'weird#key$with/every[illegal]char': 'x',
+      'tilde~name': 'y',
+    };
+    await deliverKindEmail(
+      request(DIGEST_KIND, { variables }),
+      makeLogger(),
+    );
+
+    const item = storedItem() as StoredQueuedEmail;
+    expect(decodeQueuedEmail(item).variables).toEqual(variables);
+  });
+
+  it('leaves an escape marker it does not recognise exactly as written', () => {
+    // Defensive: stored data is data. '~q' is not one of ours, so it survives
+    // rather than being guessed at.
+    expect(decodeVariableKey('info~qname')).toBe('info~qname');
+    expect(decodeVariableKey(encodeVariableKey('info~qname'))).toBe('info~qname');
   });
 });

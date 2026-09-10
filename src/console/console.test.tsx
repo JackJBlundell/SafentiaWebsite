@@ -22,6 +22,23 @@ import type { UserSpace } from '../types';
 // --- Module mocks -----------------------------------------------------------
 
 const mocks = vi.hoisted(() => {
+  // Declared ahead of the object so refreshSession (below) can read the switch
+  // that was actually requested; the console reaches it as mocks.callable.
+  const callable = vi.fn(async (_name: string, _input: unknown) => ({}) as unknown);
+
+  /** The space the most recent setActiveOrganisation call asked for, if any. */
+  const requestedSpace = ():
+    | { orgId: string; customerId?: string }
+    | undefined => {
+    for (let i = callable.mock.calls.length - 1; i >= 0; i -= 1) {
+      const [name, input] = callable.mock.calls[i];
+      if (name === 'setActiveOrganisation') {
+        return input as { orgId: string; customerId?: string };
+      }
+    }
+    return undefined;
+  };
+
   return {
     auth: {
       status: 'initialising' as string,
@@ -40,7 +57,31 @@ const mocks = vi.hoisted(() => {
       sendReset: vi.fn(),
       changePassword: vi.fn(),
       updateDisplayName: vi.fn(),
-      refreshSession: vi.fn(),
+      // Resolves the claims the session ENDS UP with, as the real one does: it
+      // re-reads the token after setActiveOrganisation has re-minted it.
+      // OrgSwitcher and SpacePicker VERIFY those claims name the space they
+      // asked for and treat anything else as a failed switch
+      // (auth/space-not-applied), so a mock resolving undefined would send
+      // every switch down the failure branch these tests are not about.
+      // Deriving the answer from the switch that was actually requested keeps
+      // the mock honest for whichever space a test clicks.
+      refreshSession: vi.fn(async (): Promise<SessionClaims> => {
+        const requested = requestedSpace();
+        // No switch yet: the session is still the one the test signed in with.
+        const orgId = requested?.orgId ?? testClaims.orgId;
+        const customerId = requested?.customerId;
+        return customerId
+          ? {
+              kind: 'portal',
+              orgId,
+              customerId,
+              // A portal session holds NO staff roles, by construction.
+              customerRoles: { viewer: true },
+              roles: {},
+              environment: 'test',
+            }
+          : { orgId, roles: { admin: true, assessor: true }, environment: 'test' };
+      }),
       refreshEmailVerification: vi.fn(() => Promise.resolve(true)),
       signOut: vi.fn(),
     },
@@ -56,7 +97,7 @@ const mocks = vi.hoisted(() => {
     // The caller's usersOnboarding node, as the mocked useOnboardingNode
     // delivers it. Null (the settled absence) is the overwhelming default.
     onboarding: null as unknown,
-    callable: vi.fn(async (_name: string, _input: unknown) => ({}) as unknown),
+    callable,
   };
 });
 

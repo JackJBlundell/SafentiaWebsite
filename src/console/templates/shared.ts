@@ -7,9 +7,19 @@
 
 import type { ReportStandard, Template, TemplateSection } from '../../types';
 
+/** The query parameter that asks the builder to open ON a question: expand it
+ *  and scroll it into view. Used by the paragraph library's "Go to reference",
+ *  so an admin who can see THAT a paragraph is referenced can reach WHERE. */
+export const BUILDER_QUESTION_PARAM = 'question';
+
 export const templateUrls = {
   list: '/app/templates',
-  builder: (templateId: string) => `/app/templates/builder/${templateId}`,
+  /** `questionId` opens the builder focused on that question (see
+   *  BUILDER_QUESTION_PARAM); omit it to open the template at the top. */
+  builder: (templateId: string, questionId?: string) =>
+    questionId
+      ? `/app/templates/builder/${templateId}?${BUILDER_QUESTION_PARAM}=${encodeURIComponent(questionId)}`
+      : `/app/templates/builder/${templateId}`,
   versions: (templateId: string) => `/app/templates/${templateId}/versions`,
   paragraphs: '/app/templates/paragraphs',
 } as const;

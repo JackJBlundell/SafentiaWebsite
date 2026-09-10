@@ -1515,6 +1515,18 @@ function renderRiskAssessment(
 ): Map<string, string> {
   layout.section('Fire Risk Assessment');
   layout.paragraph(profile.riskAssessmentIntro);
+  // The "Not applicable" convention is explained here, immediately above the
+  // tables that use it, and ONLY when this assessment actually contains such an
+  // item - a report that explains a convention it never uses invites the reader
+  // to go looking for one. Stating it once is what lets each row stay short: the
+  // rows carry the decision, this paragraph carries its meaning.
+  if (
+    model.sections.some((section) =>
+      section.rows.some((row) => row.notApplicable === true),
+    )
+  ) {
+    layout.paragraph(profile.notApplicableNote);
+  }
   // The numbered heading each subject was given, keyed by the template code the
   // action plan references. Section 3 prints "2.4 Fire Doors" rather than the
   // opaque code, so an action can be found in Section 2 without a decoder.
@@ -1685,7 +1697,16 @@ function rowSegments(row: ReportQuestionRow): {
 } {
   // A yesno answer is a compliance signal, so it reads in bold; every other
   // type renders as regular text. Unknown/custom types fall through to regular.
-  const answerBold = row.questionType === 'yesno';
+  //
+  // A "Not applicable" answer reads in bold for the same reason: it is a
+  // positive decision the assessor took about these premises, and the row it
+  // sits in must not be mistaken - by a reader scanning the column, or on a
+  // photocopy - for the "Not answered" of an item nobody reached. The words
+  // themselves carry the distinction (colour and weight are never the sole
+  // carrier of meaning, brief 18.5); the emphasis simply makes it findable. It
+  // gets no coloured tag on purpose: colour in this document is the RAG safety
+  // semantic, and a not-applicable item has no risk grade to signal.
+  const answerBold = row.questionType === 'yesno' || row.notApplicable === true;
   return {
     // The question cell: the question ALONE. The template's guidance is
     // deliberately not printed - it is prompting text written for the assessor

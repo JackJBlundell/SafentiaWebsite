@@ -15,7 +15,7 @@
 // route changes so returning to a screen paints instantly.
 // ============================================================================
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
   useQuery,
   useQueryClient,
@@ -102,6 +102,62 @@ function deliveryFor(id: string): FirstDelivery {
   return created;
 }
 
+// ----------------------------------------------------------------------------
+// Space-change reset (twin of FireRite/src/query/useRtdbQuery.ts).
+//
+// Clearing the cache on a space switch is right, but it is only half the job.
+// React commits effects CHILD-FIRST, so by the time the provider's effect runs,
+// the screens below have already detached from the old org's paths AND
+// re-attached to the new ones - and onValue fires immediately from RTDB's local
+// cache, so the new space's first snapshot can already be in the cache when
+// clear() wipes it.
+//
+// What that leaves is a deadlock, not a blank screen: the cleared query has no
+// data and its observer is still mounted at 'pending'/'idle', so nothing
+// re-fetches; and the listener has already delivered, so onValue will not fire
+// again for an unchanged node. The result was a page that loaded indefinitely
+// after switching organisation.
+//
+// So the clear is paired with this reset. Every recorded first delivery is
+// invalidated - a queryFn arriving after the clear must wait for a fresh
+// snapshot rather than answer with a value read under the old claims - and a
+// generation counter, which the subscription effect depends on, forces every
+// live listener to re-attach AFTER the clear. Ordering by construction rather
+// than by React's effect ordering.
+// ----------------------------------------------------------------------------
+
+let subscriptionGeneration = 0;
+const generationListeners = new Set<() => void>();
+
+function subscribeGeneration(listener: () => void): () => void {
+  generationListeners.add(listener);
+  return () => {
+    generationListeners.delete(listener);
+  };
+}
+
+function getGeneration(): number {
+  return subscriptionGeneration;
+}
+
+/**
+ * Force every live RTDB subscription to detach and re-attach, and stop any
+ * pre-existing first delivery from answering a fetch.
+ *
+ * Call this immediately AFTER clearing the query cache on a space change (see
+ * auth/AuthProvider). It is the half that makes the clear safe.
+ */
+export function resetRtdbSubscriptions(): void {
+  for (const delivery of deliveries.values()) {
+    delivery.delivered = false;
+    delivery.value = undefined;
+  }
+  subscriptionGeneration += 1;
+  for (const listener of [...generationListeners]) {
+    listener();
+  }
+}
+
 export interface RtdbQueryOptions<T> {
   /** The hierarchical cache key (from the `keys` factory). */
   key: QueryKey;
@@ -135,6 +191,9 @@ export function useRtdbQuery<T>(
   // switch) would leave the screen dead until a full remount. The delay keeps a
   // persistent denial from becoming a hammering loop.
   const [retryNonce, setRetryNonce] = useState(0);
+  // Re-subscribes every listener after a space change clears the cache; see the
+  // space-change reset above.
+  const generation = useSyncExternalStore(subscribeGeneration, getGeneration);
 
   useEffect(() => {
     if (!enabled) {
@@ -216,7 +275,7 @@ export function useRtdbQuery<T>(
     // path). Re-subscription is driven by the path/key/enabled triple, plus the
     // error-retry nonce.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, JSON.stringify(key), path, enabled, retryNonce]);
+  }, [client, JSON.stringify(key), path, enabled, retryNonce, generation]);
 
   return useQuery<unknown, Error, T>({
     queryKey: key as readonly unknown[],

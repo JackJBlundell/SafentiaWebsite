@@ -53,7 +53,13 @@ vi.mock('../../query/useRtdbQuery', () => ({
   subscribeToQuery: vi.fn(() => () => undefined),
 }));
 
-import { fileIsDocument, fileIsFloorPlan, fileIsImage } from '../lib/upload';
+import {
+  fileIsDocument,
+  fileIsFloorPlan,
+  fileIsImage,
+  floorPlanKindForFile,
+  FLOOR_PLAN_TYPES_SENTENCE,
+} from '../lib/upload';
 import { FloorPlansPanel } from './FloorPlansPanel';
 import { ServiceSchedulePanel } from './ServiceSchedulePanel';
 
@@ -107,14 +113,58 @@ describe('upload validators', () => {
     expect(check.ok).toBe(true);
   });
 
-  it('rejects a floor plan of the wrong type', () => {
+  it('rejects a floor plan of the wrong type, naming what is allowed', () => {
     const check = fileIsFloorPlan(makeFile('plan.txt', 'text/plain', 1 * MB));
     expect(check.ok).toBe(false);
     if (!check.ok) {
-      expect(check.reason).toBe(
-        'Floor plans can be an image up to 10 MB or a PDF up to 25 MB.',
+      expect(check.reason).toBe(FLOOR_PLAN_TYPES_SENTENCE);
+    }
+  });
+
+  // Browsers have no registered type for CAD, so these arrive with an empty or
+  // octet-stream content type: matching on the extension is what admits them.
+  it('accepts a CAD drawing that the browser could not type', () => {
+    expect(fileIsFloorPlan(makeFile('Block A.dwg', '', 20 * MB)).ok).toBe(true);
+    expect(
+      fileIsFloorPlan(makeFile('Block A.dxf', 'application/octet-stream', 5 * MB)).ok,
+    ).toBe(true);
+  });
+
+  it('accepts an office document as a floor plan within 25 MB', () => {
+    expect(
+      fileIsFloorPlan(
+        makeFile(
+          'schedule.xlsx',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          24 * MB,
+        ),
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('holds an image floor plan to the 10 MB ceiling and others to 25 MB', () => {
+    const oversizedImage = fileIsFloorPlan(makeFile('plan.png', 'image/png', 11 * MB));
+    expect(oversizedImage.ok).toBe(false);
+    if (!oversizedImage.ok) {
+      expect(oversizedImage.reason).toBe(
+        'This image is larger than 10 MB. Please choose a smaller image.',
       );
     }
+    const oversizedDrawing = fileIsFloorPlan(makeFile('plan.dwg', '', 26 * MB));
+    expect(oversizedDrawing.ok).toBe(false);
+    if (!oversizedDrawing.ok) {
+      expect(oversizedDrawing.reason).toBe(
+        'This file is larger than 25 MB. Please choose a smaller file.',
+      );
+    }
+  });
+
+  it('derives the plan kind from the file', () => {
+    expect(floorPlanKindForFile(makeFile('plan.png', 'image/png', 1 * MB))).toBe('image');
+    expect(
+      floorPlanKindForFile(makeFile('plan.pdf', 'application/pdf', 1 * MB)),
+    ).toBe('pdf');
+    expect(floorPlanKindForFile(makeFile('plan.dwg', '', 1 * MB))).toBe('file');
   });
 
   it('rejects a non-image passed to the image validator', () => {

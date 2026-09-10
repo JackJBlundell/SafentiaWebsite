@@ -115,8 +115,6 @@ export const onAssessmentCreate = onValueCreated(
             current: template.version,
           });
         } else {
-          // Overwrite the snapshot with the canonical copy. Deterministic, so a
-          // re-fire is harmless (it writes the same value).
           await db
             .ref(`${envPaths.db.assessment(orgId, assessmentId)}/templateSnapshot`)
             .set(template);

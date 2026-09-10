@@ -398,7 +398,7 @@ export function OrganisationSettingsPage() {
             removeLabel="Remove logo"
             cropTitle="Position your logo"
             cropConfirmLabel="Use this logo"
-            hint="PNG, JPEG, SVG or WebP. You will crop it to a square; it appears in the console header and on your reports."
+            hint="PNG, JPEG, SVG or WebP. You will place it in a square - fill the square, or fit a wide wordmark whole; it appears in the console header and on your reports."
           />
 
           <OrgImageField

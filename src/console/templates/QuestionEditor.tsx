@@ -18,6 +18,11 @@ import type {
 } from '../../types';
 import { QUESTION_TYPES } from '../../types';
 import {
+  allParagraphs,
+  resolveParagraph,
+  subjectOf,
+} from '../../standardParagraphs';
+import {
   defaultMatrix,
   hasMatrix,
   hasOptions,
@@ -72,10 +77,16 @@ export function InlineConfirm({
 }
 
 // ----------------------------------------------------------------------------
-// ParagraphPicker - a searchable select over the org's Standard Paragraphs
-// library, by reference and title. 'None' is a first-class choice; the chosen
-// paragraph's body renders as a muted preview so the author sees exactly what
-// wording the question will feed into the AI summary of findings.
+// ParagraphPicker - a searchable select over the WHOLE paragraph library: the
+// BS 9792 bank Safentia ships (held in code) and the organisation's own (RTDB),
+// as one list grouped by subject. `paragraphs` is the org node alone, so both
+// the list and the resolution of the current choice go through the shared
+// helpers - indexing that node directly would hide every shipped paragraph and
+// report a reference to one as dangling.
+//
+// 'None' is a first-class choice; the chosen paragraph's body renders as a
+// muted preview so the author sees the exact wording this question will print
+// against a finding.
 // ----------------------------------------------------------------------------
 
 function ParagraphPicker({
@@ -91,22 +102,35 @@ function ParagraphPicker({
 }) {
   const [search, setSearch] = useState('');
 
-  const entries = Object.entries(paragraphs ?? {}).sort((a, b) =>
-    a[1].reference.localeCompare(b[1].reference, 'en-GB', { numeric: true }),
-  );
+  const entries = allParagraphs(paragraphs);
   const needle = search.trim().toLowerCase();
   const filtered = needle
     ? entries.filter(
-        ([paragraphId, paragraph]) =>
+        (entry) =>
           // The current choice always stays listed, or filtering would appear
           // to deselect it.
-          paragraphId === value ||
-          paragraph.reference.toLowerCase().includes(needle) ||
-          (paragraph.title ?? '').toLowerCase().includes(needle),
+          entry.id === value ||
+          entry.paragraph.reference.toLowerCase().includes(needle) ||
+          (entry.paragraph.title ?? '').toLowerCase().includes(needle) ||
+          (entry.paragraph.subject ?? '').toLowerCase().includes(needle) ||
+          entry.paragraph.body.toLowerCase().includes(needle),
       )
     : entries;
 
-  const chosen = value ? (paragraphs?.[value] ?? null) : null;
+  // Grouped for the select, in the order the library lists subjects, so a
+  // 127-entry bank reads as subjects rather than as one wall of numbers.
+  const grouped: Array<[string, typeof filtered]> = [];
+  for (const entry of filtered) {
+    const subject = subjectOf(entry);
+    const last = grouped[grouped.length - 1];
+    if (last && last[0] === subject) {
+      last[1].push(entry);
+    } else {
+      grouped.push([subject, [entry]]);
+    }
+  }
+
+  const chosen = value ? (resolveParagraph(value, paragraphs) ?? null) : null;
 
   return (
     <>
@@ -135,12 +159,16 @@ function ParagraphPicker({
             onChange={(event) => onChange(event.target.value || undefined)}
           >
             <option value="">None</option>
-            {filtered.map(([paragraphId, paragraph]) => (
-              <option key={paragraphId} value={paragraphId}>
-                {paragraph.title
-                  ? `${paragraph.reference} ${paragraph.title}`
-                  : paragraph.reference}
-              </option>
+            {grouped.map(([subject, group]) => (
+              <optgroup key={subject} label={subject}>
+                {group.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.paragraph.title
+                      ? `${entry.paragraph.reference} ${entry.paragraph.title}`
+                      : entry.paragraph.reference}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -157,8 +185,12 @@ function ParagraphPicker({
             {chosen.title
               ? `${chosen.reference} ${chosen.title}`
               : chosen.reference}
+            {chosen.subject ? ` · ${chosen.subject}` : ''}
           </span>
-          {chosen.body}
+          {/* The bank's wording carries its own line breaks - lists, tables of
+              separation distances - and a paragraph collapsed onto one line is
+              not the wording the report will print. */}
+          <span className={styles.paragraphPreviewBody}>{chosen.body}</span>
         </blockquote>
       )}
     </>

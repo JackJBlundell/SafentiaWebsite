@@ -46,6 +46,7 @@ import {
 } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
+import { resolveParagraph } from '../shared/standardParagraphs';
 import { resolvePlanContext } from '../lib/planContext';
 import {
   assertWithinTemplateLimit,
@@ -645,10 +646,14 @@ export const publishTemplate = onCall<PublishTemplateInput>(
           },
         );
 
-        // 3b. Every standardParagraphRef must point at a REAL entry in the
-        // org's Standard Paragraphs library - the AI summary and the report
-        // resolve these refs later, and a dangling one would surface as a hole
-        // in a released report. One library read validates all of them.
+        // 3b. Every standardParagraphRef must resolve to a REAL paragraph, or a
+        // question would point at nothing. The library has TWO populations and
+        // this has to check both: the BS 9792 bank Safentia ships lives in code
+        // (shared/standardParagraphs), the organisation's own live in RTDB.
+        // Reading only the org node - as this did before the shipped bank
+        // existed - rejects every template that references shipped wording,
+        // which is most of them. One library read still validates all of them;
+        // resolveParagraph checks the shipped bank first and never needs one.
         if (paragraphRefs.size > 0) {
           const librarySnap = await db
             .ref(paths.db.standardParagraphs(orgId))
@@ -656,7 +661,7 @@ export const publishTemplate = onCall<PublishTemplateInput>(
           const library =
             (librarySnap.val() as Keyed<StandardParagraph> | null) ?? {};
           for (const [ref, at] of paragraphRefs) {
-            if (!library[ref]) {
+            if (!resolveParagraph(ref, library)) {
               throw fail.invalidArgument(
                 'A question references a standard paragraph that does not exist.',
                 { ...at, standardParagraphRef: ref },

@@ -66,6 +66,15 @@
   outline-offset: 2px;
 }
 
+/* The two framings (fit the whole image / fill the square) sit directly under
+   the stage: dragging alone never reveals that zooming out is possible, so the
+   affordance has to be visible rather than discovered. */
+.modes {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
 .field {
   display: flex;
   flex-direction: column;

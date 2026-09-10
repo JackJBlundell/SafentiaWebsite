@@ -413,6 +413,17 @@ export interface RagConfig {
 /** Organisation-level configuration, distinct from the public profile. */
 export interface OrgSettings {
   ragConfig?: RagConfig;
+  /**
+   * House guidance appended to the AI summary prompt for THIS organisation -
+   * "we always cite the Welsh regulations", "call out PV panels".
+   *
+   * Distinct from `/platform/aiContext`, which is one global record only
+   * Safentia can write and which supplies the regulatory framework itself.
+   * This is the customer's own steer on top of it, and it is guidance for the
+   * model - never the verbatim wording of a standard paragraph, which is
+   * printed as written and never paraphrased.
+   */
+  aiGuidance?: string;
   /** How many days ahead of a building's FRA review date the reminder sweep
    *  warns (story 2046 AC1). Descending, e.g. [60, 30, 7]. Absent falls back to
    *  the built-in default in lib/reviewWindows, so an org that never configures
@@ -711,13 +722,51 @@ export interface Building {
 // Floor plans (section 6) - optional per building; absence is a first-class path
 // ----------------------------------------------------------------------------
 
+/** What a stored floor-plan file IS, which decides what can be done with it:
+ *
+ *  - `image` - a photo/screenshot/scan. Renders in the annotator and supports a
+ *    flattened pin composite.
+ *  - `pdf`   - renders in the annotator, annotated with pins only.
+ *  - `file`  - any other drawing the practice actually holds: a CAD export
+ *    (DWG/DXF/DWF), a TIFF, an office document. It is stored, listed and
+ *    downloadable, but NOT renderable on a phone, so it is never offered for
+ *    pin annotation. Admitting these was the point: a plan that cannot be
+ *    annotated is still the drawing the assessor needs on site.
+ *
+ *  Absent defaults to 'image' (every plan predating this field is one). */
+export type FloorPlanKind = 'image' | 'pdf' | 'file';
+
+/** The floor-plan kinds the pin annotator can actually render. */
+export const ANNOTATABLE_FLOOR_PLAN_KINDS: readonly FloorPlanKind[] = [
+  'image',
+  'pdf',
+];
+
+/** Whether a plan of this kind can be opened in the pin annotator. Absent kind
+ *  is an image (see FloorPlan.kind), so it is annotatable. */
+export function isAnnotatableFloorPlan(kind?: FloorPlanKind): boolean {
+  return kind === undefined || ANNOTATABLE_FLOOR_PLAN_KINDS.includes(kind);
+}
+
 export interface FloorPlan {
   name: string;
   description?: string;
   imageUrl: string;
-  /** Source kind: 'image' (photo/screenshot, supports flattened composites) or
-   *  'pdf' (annotated with pins only). Absent defaults to 'image'. */
-  kind?: 'image' | 'pdf';
+  /** See FloorPlanKind. Absent defaults to 'image'. */
+  kind?: FloorPlanKind;
+  /** The uploaded file's own name, kept so a non-renderable drawing can be
+   *  named and downloaded as the thing the practice recognises ("Block A
+   *  ground floor.dwg") rather than as an opaque object id. */
+  fileName?: string;
+  /** The content type the object was uploaded with, so a viewer can decide how
+   *  to present it without sniffing bytes. */
+  contentType?: string;
+  /** The uploaded file's size in bytes. DISPLAY ONLY: a drawing that cannot be
+   *  previewed is judged before download by what it is and how big it is, so
+   *  the tile can say so instead of asking someone to find out by fetching it.
+   *  Absent on every plan predating this field - show nothing rather than a
+   *  guessed or zero size. */
+  sizeBytes?: number;
   /** Display order within a building (story 2021), ascending. Absent sorts
    *  after ordered plans, then by name, so plans predating this field keep a
    *  stable position until an admin reorders them. */
@@ -814,6 +863,42 @@ export interface TemplateQuestion {
   type: QuestionType;
   /** For select / multiselect. */
   options?: string[];
+  /**
+   * Quick-fill answers for a FREE-TEXT question (`text` / `longtext`), offered
+   * as one-tap chips above the input. Tapping one writes it into the answer,
+   * which the assessor is then free to edit - they are a starting point, never a
+   * constraint, and the field stays fully editable.
+   *
+   * These must be QUESTION-SPECIFIC. A generic set ("Satisfactory", "N/A") under
+   * a field that wants a storey count or a person's name is noise at best and a
+   * wrong answer at worst, which is why free-text questions carried no presets
+   * at all until now. Authored per question in the template, so a custom
+   * template can carry its own and nothing is hard-coded in the app.
+   *
+   * Distinct from `options`: those are the CLOSED set a select question may
+   * answer with; these are open suggestions for a field that accepts anything.
+   */
+  presets?: string[];
+  /**
+   * How a FREE-TEXT question (`text` / `longtext`) should be presented. A
+   * RENDERING HINT ONLY: the answer is still stored in `answer.text` exactly as
+   * a plain text answer is, so completion, validation, the report and the
+   * server's own submission gate are all unaffected by it. That is deliberate -
+   * these could have been new question TYPES, but every one of those layers
+   * would then need to learn about them, for no gain in what is actually
+   * recorded.
+   *
+   * It exists because the fields that CANNOT have sensible quick-fill presets
+   * are exactly the ones that need a better input instead. A pre-written
+   * occupancy figure or travel distance would be a fabricated measurement in a
+   * compliance document, so those questions get a numeric keypad rather than
+   * suggestions; a date gets a picker; a duty-holder gets the customer's own
+   * contacts. Absent means a plain text field.
+   */
+  inputKind?: 'date' | 'number' | 'person';
+  /** For `inputKind: 'number'` - the unit shown beside the field (e.g. 'm',
+   *  'persons'). Display only; it is not appended to the stored answer. */
+  unit?: string;
   /** Required for `matrix` questions; ignored for every other type. */
   matrix?: QuestionMatrix;
   /** When true, the assessor may pin this answer's location on a floor plan. */
@@ -831,25 +916,44 @@ export interface TemplateQuestion {
    */
   observation?: string;
   recommendation?: string;
-  /** Id of the StandardParagraph this question references (the client's
-   *  Question Reference Number mapping); feeds the AI summary of findings. */
+  /** Id of the StandardParagraph this question references - either one Safentia
+   *  ships (`sp-bs9792-...`) or one the organisation wrote (an RTDB push key).
+   *  Resolve it through shared/standardParagraphs, never by reading one node. */
   standardParagraphRef?: string;
 }
 
 /**
- * One entry in the organisation's Standard Paragraphs library (FR-E21): the
- * client-authored reference text a template question can point at via
- * `standardParagraphRef`. Stored per organisation at
- * /{env}/standardParagraphs/{orgId}/{paragraphId}; the AI summary of findings
- * is generated from the paragraphs the flagged questions reference. `reference`
- * is the client's own numbering (e.g. "4.2.1") - it is display data, never a
- * key (RTDB keys cannot carry dots).
+ * One entry in the Standard Paragraphs library (FR-E21): settled reference
+ * wording a template question can point at via `standardParagraphRef`.
+ *
+ * The library has TWO populations and an id says which is which:
+ *   - the BS 9792 bank Safentia SHIPS, held in code (shared/standardParagraphs)
+ *     with fixed `sp-bs9792-` ids. One source, never copied per organisation,
+ *     so a wording correction lands for everyone on the next deploy.
+ *   - the organisation's OWN, at /{env}/standardParagraphs/{orgId}/{paragraphId}
+ *     under RTDB push keys (which always begin "-", so the two cannot collide).
+ * Resolve a ref through shared/standardParagraphs, never by indexing one node.
+ *
+ * `reference` is the client's own numbering (e.g. "4.2.1") - display data,
+ * never a key (RTDB keys cannot carry dots).
+ *
+ * WHAT READS THESE TODAY: the library screen and the template builder's picker,
+ * and publishTemplate validates that a ref resolves. Nothing downstream consumes
+ * them yet - they are not printed into the report, not shown to the assessor and
+ * not fed to the AI summary. Said plainly because the previous version of this
+ * comment claimed the AI summary was generated from them, which was never true,
+ * and that claim reached the UI before anyone noticed.
  */
 export interface StandardParagraph {
   reference: string;
   title?: string;
   body: string;
   updatedAt: number;
+  /** The subject heading this paragraph sits under in the library, e.g.
+   *  "Means of escape". Set on every paragraph in the built-in bank, which is
+   *  grouped by it; optional on an organisation's own, which fall under
+   *  "Your paragraphs" when they leave it unset. Display data, never a key. */
+  subject?: string;
 }
 
 /** A section code is an OPAQUE, template-defined identifier for a subject within
@@ -1080,6 +1184,21 @@ export interface AssessmentAnswer {
   flags?: AnswerFlag[];
   /** Present when this answer is a non-conformity. */
   severity?: Severity;
+  /** The assessor has explicitly judged this item NOT APPLICABLE to these
+   *  premises. Mutually exclusive with `severity`: setting either one clears the
+   *  other, so an answer can never be both a graded finding and not applicable.
+   *
+   *  It exists because "not applicable" and "not yet looked at" were previously
+   *  the SAME state - an untouched non-conformity counts as answered - so the
+   *  record could not distinguish an item the assessor had considered and
+   *  dismissed from one they had never reached. It also removes the main source
+   *  of friction in filling the form: once any part of a finding is started, both
+   *  a severity AND an observation are required, so an item that simply does not
+   *  apply had to be argued for in prose. N/A satisfies completion on its own.
+   *
+   *  A not-applicable answer is NOT a finding: it produces no action on release
+   *  and carries no severity into the action plan. */
+  notApplicable?: boolean;
   observation?: string;
   infoRequest?: InfoRequest;
   /** Server timestamp of the last write - the basis for last-write-wins conflict
@@ -1862,6 +1981,10 @@ export interface UpdateOrgProfileResult {
 
 // --- updateOrgSettings (admin) ---
 export interface UpdateOrgSettingsInput {
+  /** House guidance for the AI summary writer, this organisation's own. Explicit
+   *  null clears it; absent leaves the stored value unchanged. Guidance FOR the
+   *  model - never report wording, which is the standard paragraphs' job. */
+  aiGuidance?: string | null;
   /** The full RAG config, replaced whole when present. Optional so a caller can
    *  save the reminder schedule on its own without resending scoring thresholds
    *  (and vice versa); each field written only when supplied. */

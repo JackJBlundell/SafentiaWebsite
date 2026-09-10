@@ -31,6 +31,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { activateSpace } from '../auth/activateSpace';
+import type { SessionClaims } from '../auth/claims';
 import { rememberSpaceChoice } from '../auth/spaceChoice';
 import { useUserSpaces } from '../auth/useUserSpaces';
 import type { UserSpace } from '../types';
@@ -42,6 +43,49 @@ import styles from './OrgSwitcher.module.css';
  *  at the same organisation as a staff space must not collide with it. */
 function spaceId(space: UserSpace): string {
   return `${space.kind}:${space.orgId}:${space.customerId ?? ''}`;
+}
+
+/**
+ * Whether the freshly refreshed token actually names the space we asked for.
+ *
+ * The space IS the (orgId, customerId) pair, exactly as spaceId above says: a
+ * customer portal and the staff console of the firm that assesses it share an
+ * orgId, and a staff session carries `customerId: undefined`, so comparing the
+ * org alone would read "switched to the portal" off a token still holding the
+ * staff claims. Both sides are normalised to null so undefined and absent are
+ * the same thing.
+ */
+function claimsMatchSpace(
+  claims: SessionClaims | null,
+  space: UserSpace,
+): boolean {
+  // Falsy rather than `!== null`: null is the documented "no session / no
+  // membership" answer, and guarding on the value itself also survives a caller
+  // that never resolved one at all.
+  if (!claims) {
+    return false;
+  }
+  return (
+    claims.orgId === space.orgId &&
+    (claims.customerId ?? null) === (space.customerId ?? null)
+  );
+}
+
+/** How a space reads in a log line: org and customer, never a name (names are
+ *  display strings and two spaces can share one). */
+function describeSpace(orgId?: string, customerId?: string): string {
+  return `${orgId ?? 'none'}/${customerId ?? '-'}`;
+}
+
+/** The code a person can read out to support. Every Firebase and callable error
+ *  carries one; anything else is reported without a code rather than with a
+ *  meaningless placeholder. */
+function errorCode(error: unknown): string | undefined {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const { code } = error as { code: unknown };
+    return typeof code === 'string' ? code : undefined;
+  }
+  return undefined;
 }
 
 export function OrgSwitcher() {
@@ -111,7 +155,30 @@ export function OrgSwitcher() {
         // the space transition, in an effect that runs after the old space's
         // listeners have detached. Clearing here, mid-transition, would let a
         // late old-space snapshot repopulate the cache behind the clear.
-        await refreshSession();
+        const resolved = await refreshSession();
+        // VERIFY THE OUTCOME - a catch alone is not enough here.
+        //
+        // setActiveOrganisation answers 200 on every attempt (confirmed in the
+        // live logs), and the forced token refresh resolves happily whatever the
+        // token turns out to contain. So there is a real path where the re-mint
+        // has not reached the token we just fetched, NOTHING throws, and the
+        // console silently carries on in the old space while the switcher closes
+        // as though it had worked. A person hit exactly that, and because the
+        // only failure handling was a catch, it left no trace at all.
+        //
+        // Treat a token that does not name the requested space as a failed
+        // switch: it is one. The claims are the session, and they still say we
+        // are somewhere else.
+        if (!claimsMatchSpace(resolved, space)) {
+          console.error(
+            '[Safentia auth] switch space claims mismatch',
+            `requested ${describeSpace(space.orgId, space.customerId)}, active ${describeSpace(resolved?.orgId, resolved?.customerId)}`,
+          );
+          setError(
+            'Could not switch space. Your sign-in is still in the previous space. Please try again. (auth/space-not-applied)',
+          );
+          return;
+        }
         if (user?.uid) {
           // A deliberate switch answers the picker's question too, so a reload
           // does not immediately ask again where they wanted to be.
@@ -120,8 +187,16 @@ export function OrgSwitcher() {
         if (navigateTo) {
           navigate(navigateTo);
         }
-      } catch {
-        setError('Could not switch space. Please try again.');
+      } catch (error) {
+        // Keep the error. Discarding it is what made the reported failure
+        // undiagnosable: the console had the cause in hand and threw it away.
+        console.error('[Safentia auth] switch space', error);
+        const code = errorCode(error);
+        setError(
+          code
+            ? `Could not switch space. Please try again. (${code})`
+            : 'Could not switch space. Please try again.',
+        );
       } finally {
         setPending(false);
       }

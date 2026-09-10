@@ -15,6 +15,7 @@
 
 import {
   SERVICE_SCHEDULE_KEYS,
+  SEVERITIES,
   type Template,
   type TemplateQuestion,
   type MatrixAnswer,
@@ -22,6 +23,71 @@ import {
   type Building,
   type Keyed,
 } from '../shared/types';
+
+// ----------------------------------------------------------------------------
+// "Not applicable" - the shared reading of the flag, for every server surface.
+//
+// `AssessmentAnswer.notApplicable` records that the assessor CONSIDERED an item
+// and judged it does not apply to these premises. The app offers it on
+// non-conformities and on free-text questions (`text` / `longtext`), so a
+// question that wants prose about something the building does not have can be
+// closed with a tap rather than an argument in the box. The contract makes it
+// mutually exclusive with the answer it replaces - `severity` on a finding,
+// typed text on a free-text question (typing clears the flag) - so in
+// well-formed data exactly one of them is ever present.
+//
+// Answers arrive from a client, and a client can be tampered with or can sync a
+// record written by an older build, so the server states its PRECEDENCE for the
+// contract-violating case where both are set. The rule, applied everywhere:
+//
+//   - A graded severity ALWAYS wins for anything that reports risk: the action
+//     plan, the finding distribution and the report all keep treating such an
+//     answer as the finding it is graded as. Suppressing a graded finding
+//     because a flag says "not applicable" is the dangerous direction of error
+//     on a fire-safety record; creating a visible action for an item somebody
+//     also flagged N/A is merely a nuisance somebody can see and correct.
+//   - The SUBMISSION GATE is the one exception: there the bare flag satisfies
+//     completion, exactly as the app's rule does (see the note on
+//     isNotApplicableAnswer). The gate must never be stricter than the app or a
+//     legitimate assessment is refused at submit.
+// ----------------------------------------------------------------------------
+
+/** True when the answer carries a real L/M/H grade - i.e. it IS a finding. */
+export function hasGradedFinding(answer: AssessmentAnswer | undefined): boolean {
+  return Boolean(
+    answer?.severity && (SEVERITIES as readonly string[]).includes(answer.severity),
+  );
+}
+
+/**
+ * The raw flag, unqualified - the COMPLETION rule.
+ *
+ * This deliberately mirrors the app's `isNotApplicableAnswer`
+ * (FireRite/src/features/assessment/data/completion.ts) exactly - same name on
+ * both sides because the two must agree: the app treats an answer as answered
+ * when `notApplicable === true`, with no further conditions, so the server
+ * accepts it on the same terms. WHICH question types may use it is a separate
+ * decision, made once at the call site below. Adding a "and no
+ * severity" qualifier here would make the server STRICTER than the app and
+ * refuse an assessment the assessor was told was complete - the one failure
+ * this pair of rules exists to prevent (brief 18.4 re-validates the app's rules,
+ * it does not invent harsher ones).
+ */
+export function isNotApplicableAnswer(answer: AssessmentAnswer | undefined): boolean {
+  return answer?.notApplicable === true;
+}
+
+/**
+ * The flag as the RISK-REPORTING surfaces read it: not applicable, and not
+ * graded. This is the predicate that suppresses actions, finding counts and
+ * finding styling, and it is qualified by severity on purpose - see the
+ * precedence note above.
+ */
+export function isEffectiveNotApplicable(
+  answer: AssessmentAnswer | undefined,
+): boolean {
+  return isNotApplicableAnswer(answer) && !hasGradedFinding(answer);
+}
 
 /** A single unmet requirement, named so the UI can point the assessor at it. */
 export interface MissingItem {
@@ -123,7 +189,45 @@ export function findMissingForSubmission(
   for (const section of template.sections ?? []) {
     for (const question of section.questions ?? []) {
       const answer = answerMap[question.id];
-      if (question.required === true && !hasAnswerValue(answer)) {
+      // An answer marked "not applicable" is ANSWERED: the assessor considered
+      // the item and judged it does not apply to these premises, and that
+      // judgement satisfies completion on its own - there is no severity to
+      // grade and nothing to describe, so `hasAnswerValue` (which looks for text
+      // or a typed value) would otherwise refuse a complete assessment at
+      // submit.
+      //
+      // SCOPED to the four question types the app offers the N/A control on:
+      // `nonConformity`; the two free-text types (`text` / `longtext` - a
+      // question that wants prose can be one the premises make meaningless, so
+      // it carries the same control; see TextInputQuestion); and `photo`, where
+      // an item that is not there has nothing to photograph and demanding
+      // evidence of it is demanding evidence of nothing (see PhotoQuestion - it
+      // exempts BOTH gates below, the answer and the mandatory photo). The scope
+      // is the point of this constant, and it cuts both ways:
+      //
+      //   - Wider than the app would be LOOSER than the app, and would hand a
+      //     tampered client a way to submit a required yes/no, select or matrix
+      //     question blank by setting one flag.
+      //   - Narrower than the app would be STRICTER than the app, and would
+      //     refuse at submit every assessment in which an assessor used a
+      //     control the app itself offered them - the exact failure this
+      //     re-validation exists to prevent (brief 18.4 re-validates the app's
+      //     rules, it does not invent harsher ones).
+      //
+      // The app's twin of this list is `offersNotApplicable` in
+      // FireRite/src/features/assessment/data/completion.ts. The two change
+      // together or not at all.
+      const notApplicableSatisfies =
+        (question.type === 'nonConformity' ||
+          question.type === 'text' ||
+          question.type === 'longtext' ||
+          question.type === 'photo') &&
+        isNotApplicableAnswer(answer);
+      if (
+        question.required === true &&
+        !hasAnswerValue(answer) &&
+        !notApplicableSatisfies
+      ) {
         missing.push({
           kind: 'answer',
           ref: question.id,
@@ -140,10 +244,20 @@ export function findMissingForSubmission(
       }
       // A question that requires photos (allowsPhotos AND required) must have one.
       // We treat a required photo question as one whose answer must include media.
+      //
+      // A photo question is gated TWICE - once by the generic answer check above
+      // and once here - so the not-applicable exemption has to be applied twice
+      // as well, or a question the app counts as complete is refused at submit
+      // by the second gate with the first one satisfied. Same flag, same
+      // reasoning: there is nothing to photograph at premises where the item does
+      // not exist. Photos are still ACCEPTED under the flag (the app keeps
+      // offering the camera as evidence for the decision); they are simply no
+      // longer demanded.
       if (
         question.type === 'photo' &&
         question.required === true &&
-        !hasPhoto(answer)
+        !hasPhoto(answer) &&
+        !notApplicableSatisfies
       ) {
         missing.push({
           kind: 'photo',

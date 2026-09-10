@@ -238,7 +238,7 @@ export function CustomerImageField({
       )}
       <p className={shared.note}>
         {image.hintOverride ??
-          'PNG, JPEG, SVG or WebP. You will crop it to a square; it appears where this customer is identified.'}
+          'PNG, JPEG, SVG or WebP. You will place it in a square - fill the square, or fit a wide logo whole; it appears where this customer is identified.'}
       </p>
       {image.cropSource && (
         <ImageCropDialog

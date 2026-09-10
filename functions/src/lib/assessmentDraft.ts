@@ -38,7 +38,14 @@ import {
 const DUE_DAYS: Record<Severity, number> = { H: 7, M: 30, L: 90 };
 
 /** A non-conformity is a real finding only when it carries both a severity and an
- *  observation - an untouched one is "no finding", not an issue. */
+ *  observation - an untouched one is "no finding", not an issue.
+ *
+ *  An item marked NOT APPLICABLE is likewise not a finding, and is excluded here
+ *  by construction rather than by a second test: `notApplicable` is mutually
+ *  exclusive with `severity` in the contract, so such an answer carries no grade
+ *  and fails the first condition. Keep that property if this test is ever
+ *  loosened - a not-applicable item must never reach the draft's issue list,
+ *  where it would be written up as a non-conformity to remedy. */
 function isFinding(answer: AssessmentAnswer | undefined): answer is AssessmentAnswer & {
   severity: Severity;
   observation: string;
@@ -98,7 +105,12 @@ export function extractIssues(
   return issues;
 }
 
-/** True counts of findings by severity (the building's proportional RAG). */
+/** True counts of findings by severity (the building's proportional RAG).
+ *
+ *  Only a graded answer is counted, so an item marked not applicable adds to
+ *  neither a band nor the total. That is deliberate: the shares this feeds are
+ *  finding-against-finding, and an item that does not apply to the premises is
+ *  not a finding of any colour. */
 export function ragDistribution(
   answers: Keyed<AssessmentAnswer> | null | undefined,
 ): RagDistribution {

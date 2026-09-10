@@ -55,6 +55,7 @@ import { firebase, startFirebase } from '../firebase';
 import { forEnv } from '../paths';
 import type { EnvPaths } from '../paths';
 import { queryClient } from '../query/queryClient';
+import { resetRtdbSubscriptions } from '../query/useRtdbQuery';
 import { authErrorMessage } from './errors';
 import { resolveClaims, type SessionClaims } from './claims';
 import { forgetSpaceChoice } from './spaceChoice';
@@ -88,8 +89,17 @@ export interface AuthContextValue {
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   updateDisplayName: (name: string) => Promise<void>;
   /** Force an ID-token refresh so a server-side claims change (e.g. switching the
-   *  active organisation) takes effect immediately, re-scoping the session. */
-  refreshSession: () => Promise<void>;
+   *  active organisation) takes effect immediately, re-scoping the session.
+   *
+   *  Resolves with the claims the refreshed token ACTUALLY carries, so a caller
+   *  that asked for a specific outcome can check it got one. That matters for
+   *  the space switch: `setActiveOrganisation` answering 200 and this refresh
+   *  resolving are both true of a switch that silently did not land (the re-mint
+   *  had not reached the token we fetched), and nothing throws on that path.
+   *  Null means no session or no membership - including the two early exits,
+   *  where there is no user left to resolve claims for. Callers with nothing to
+   *  verify (the invite flow, the staleness watcher) may ignore it. */
+  refreshSession: () => Promise<SessionClaims | null>;
   /** Re-read the account record from Firebase and republish `emailVerified`.
    *  The client's copy is a snapshot taken at sign-in, so an operator setting
    *  the flag server-side is invisible until this runs - without it a user
@@ -325,6 +335,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       : null;
     if (previousSpace.current && nextSpace && previousSpace.current !== nextSpace) {
       queryClient.clear();
+      // Must FOLLOW the clear, never precede it: it is what re-attaches the
+      // listeners whose data the clear just removed. Without it the console sat
+      // on its loading state indefinitely after a switch - see the space-change
+      // reset in query/useRtdbQuery.
+      resetRtdbSubscriptions();
     }
     previousSpace.current = nextSpace;
   }, [claims]);
@@ -334,10 +349,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [claims],
   );
 
-  const refreshSession = useCallback(async () => {
+  const refreshSession = useCallback(async (): Promise<SessionClaims | null> => {
     const current = firebase.auth().currentUser;
     if (!current) {
-      return;
+      return null;
     }
     // Force a fresh token so a just-written claims change applies now rather than
     // on the next hourly refresh. onIdTokenChanged also fires and re-runs the full
@@ -348,13 +363,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // the forced refresh was in flight (org switch racing a sign-out), setting
     // "authenticated" here would resurrect the dead session.
     if (firebase.auth().currentUser !== current) {
-      return;
+      return null;
     }
     const resolved = resolveClaims(result);
     setUser(current);
     setEmailVerified(current.emailVerified);
     setClaims(resolved);
     setStatus(resolved ? 'authenticated' : 'noMembership');
+    // Returned as well as published: the state update is asynchronous, so a
+    // caller awaiting this call cannot read the new claims off the context it
+    // was rendered with. Handing back the resolved value is the only way a
+    // switch can check, in the same breath, that it actually happened.
+    return resolved;
   }, []);
 
   const refreshEmailVerification = useCallback(async () => {

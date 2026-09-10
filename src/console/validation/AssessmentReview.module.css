@@ -1,6 +1,8 @@
 /* AssessmentReview - PageGrid master/aside; section Cards in the main column,
-   sticky facts/basket/decisions on the right (stickiness comes from the kit's
-   Grid aside). 44px targets on every control. */
+   facts/basket/decisions on the right. The page has ONE scroll - the main column
+   scrolls with it - while the kit's Grid pins the ASIDE so the facts and the
+   decision controls follow the reader down a long section list (see
+   Grid.module.css). 44px targets on every control. */
 
 .root {
   display: flex;
@@ -309,4 +311,171 @@
   display: flex;
   gap: var(--space-md);
   flex-wrap: wrap;
+}
+
+/* --- Send bar ---------------------------------------------------------------
+   Fixed to the foot of the viewport whenever the basket holds anything, so the
+   send action cannot fall below the fold of the aside's own scroll container
+   (or, under 1024px, below every section card). Sits below the guided tour's
+   overlay (z-index 100) and level with the console's other dialogs. */
+.sendBar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 90;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border-strong);
+  padding: var(--space-md) var(--container-gutter);
+  padding-bottom: max(var(--space-md), env(safe-area-inset-bottom));
+}
+
+.sendBarInner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  max-width: var(--container-max);
+  margin-inline: auto;
+}
+
+.sendBarCount {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  min-width: 0;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+}
+
+.sendBarNote {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.sendBarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+/* The bar overlays the foot of the page, so the columns give back the height it
+   takes rather than hiding their last control underneath it. */
+.root:has(.sendBar) {
+  padding-bottom: 5.5rem;
+}
+
+/* --- Unanswered-questions warning on accept -------------------------------- */
+.unansweredWarning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--status-warning);
+  border-radius: var(--radius-md);
+  background: var(--status-warning-surface);
+}
+
+.unansweredTitle {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.unansweredList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* A template can leave a lot blank; the list scrolls rather than pushing the
+     acknowledgement and the buttons off the panel. */
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.unansweredItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text);
+}
+
+.unansweredSection {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+}
+
+.acknowledge {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-sm);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.acknowledge input {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.15rem;
+}
+
+/* --- Leave-with-unsent-messages dialog ------------------------------------- */
+.leaveOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background: var(--color-overlay);
+}
+
+.leaveDialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+  max-width: 30rem;
+  padding: var(--space-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.leaveTitle {
+  margin: 0;
+  font-size: 1.125rem;
+  letter-spacing: -0.012em;
+  color: var(--color-text);
+}
+
+.leaveCopy {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.leaveActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.leaveHint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
 }

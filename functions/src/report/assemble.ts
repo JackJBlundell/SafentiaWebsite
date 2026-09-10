@@ -22,6 +22,7 @@ import type { EnvPaths } from '../lib/paths';
 import type { Logger } from '../lib/logging';
 import { applyBrandingEntitlement, resolvePlanContext } from '../lib/planContext';
 import { resolveResponsibleParty } from '../lib/responsibleParty';
+import { isEffectiveNotApplicable } from '../lib/assessmentChecks';
 import { SEVERITIES } from '../shared/types';
 import type {
   Action,
@@ -69,6 +70,19 @@ export interface ReportQuestionRow {
   observation?: string;
   /** Severity letter when the answer is a non-conformity, for styling. */
   severity?: Severity;
+  /** The assessor explicitly judged this item NOT APPLICABLE to these premises.
+   *
+   *  Carried as its own flag rather than inferred from `answerText` because the
+   *  two facts it separates are the point of the feature: an item that reads
+   *  "Not answered" was never reached, while this one was CONSIDERED and
+   *  dismissed on the assessor's judgement. That distinction is what defends the
+   *  assessment when the record is examined - an assessor who is asked why a
+   *  subject carries no finding can point at a positive decision instead of a
+   *  gap - so the renderer marks it rather than leaving it to look like silence.
+   *
+   *  Never set together with `severity`: a graded answer is a finding and is
+   *  rendered as one whatever flag accompanies it (see lib/assessmentChecks). */
+  notApplicable?: boolean;
   /** The template's declared question type, so the renderer can present the
    *  answer richly (Yes/No emphasis, choices against options, photo strip) and
    *  fall back to plain text for any unknown/custom type. */
@@ -216,6 +230,11 @@ export interface ReportModel {
 
 /** Standardised placeholder for an absent value - one phrase everywhere. */
 const NOT_RECORDED = 'Not recorded';
+
+/** Standardised phrase for an item the assessor judged not applicable. One
+ *  phrase everywhere, and deliberately NOT the "Not answered" placeholder: the
+ *  report must never present a considered judgement as an unanswered question. */
+const NOT_APPLICABLE = 'Not applicable';
 
 /** Trim a string and return undefined if it is empty, so callers can coalesce. */
 function clean(value: unknown): string | undefined {
@@ -374,6 +393,16 @@ function answerToText(
   const text = clean(answer.text);
   if (text) {
     return text;
+  }
+  // "Not applicable" is a RECORDED answer, so it is resolved before the typed
+  // value is inspected. It has to be: a non-conformity stores its extras
+  // (responsible party, due date, life-protection flag) on `value` as an object,
+  // and an object falls through every branch below to "Not answered" - which is
+  // the one thing an item the assessor deliberately dismissed must never read
+  // as. Literal answer text still wins over it (above), so a recorded answer is
+  // never hidden behind the flag.
+  if (isEffectiveNotApplicable(answer)) {
+    return NOT_APPLICABLE;
   }
   const value = answer.value;
   if (typeof value === 'boolean') {
@@ -620,6 +649,12 @@ async function buildSections(
         }
         if (answer?.severity && SEVERITIES.includes(answer.severity)) {
           row.severity = answer.severity;
+        }
+        // Mutually exclusive with the severity above by the same precedence the
+        // rest of the pipeline applies: a graded answer is a finding and is
+        // styled as one, so the N/A mark is only carried when there is no grade.
+        if (isEffectiveNotApplicable(answer)) {
+          row.notApplicable = true;
         }
         // Resolve any answer photographs to embeddable bytes. Each download
         // degrades independently; an unavailable photo is simply dropped here so

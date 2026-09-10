@@ -11,8 +11,9 @@ rules_version = '2';
 //      only live/; both cross-environment directions denied (brief 4.8).
 //   2. ORG ISOLATION - the {orgId} segment must equal the caller's orgId claim,
 //      so cross-org reads and writes are impossible (story 1011).
-//   3. CONTENT + SIZE - images must be image/* and <= 10MB, documents (any type)
-//      <= 25MB, validated at the rules layer so an oversized or wrong-type upload
+//   3. CONTENT + SIZE - images must be image/* and <= 10MB; documents and floor
+//      plans (any type) <= 25MB, with an image plan still held to the 10MB image
+//      ceiling. Validated at the rules layer so an oversized or wrong-type upload
 //      is rejected before it lands (story 1011 AC).
 //
 // Storage rules cannot read RTDB, so membership is asserted from the custom claim
@@ -65,12 +66,24 @@ service firebase.storage {
       return request.resource.size <= 25 * 1024 * 1024;
     }
 
-    // Helper: a floor plan file - an image (<=10MB) OR a PDF (<=25MB). Lets an
-    // assessor upload a PDF plan while keeping the image ceiling for photos.
+    // Helper: a floor plan file - an image (<=10MB) OR any other drawing type
+    // (<=25MB). A fire-risk practice's plans are not only photographs and PDFs:
+    // they are commonly CAD exports (DWG, DXF, DWF) or office documents, and
+    // browsers report those with an empty or application/octet-stream content
+    // type, so pinning the type list here would reject them at the boundary
+    // however the client was widened.
+    //
+    // Admitting any type up to 25MB is NOT a new class of exposure: it is
+    // exactly the shape of validDocument() above, which building documents have
+    // always used, under the same env + org boundaries and the same ceiling.
+    // The image ceiling is kept deliberately: an image plan is still an image.
+    function isImageUpload() {
+      return request.resource.contentType != null
+        && request.resource.contentType.matches('image/.*');
+    }
+
     function validFloorPlanFile() {
-      return validImage()
-        || (request.resource.contentType == 'application/pdf'
-          && request.resource.size <= 25 * 1024 * 1024);
+      return isImageUpload() ? validImage() : validDocument();
     }
 
     // --- Building media: photos, floor plans, flag composites (images) --------

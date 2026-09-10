@@ -62,6 +62,7 @@ export const changeAssessmentTemplate = onCall<ChangeAssessmentTemplateInput>(
         const claims = getClaims(request);
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
+        const logger = createLogger({ fn: 'changeAssessmentTemplate', orgId });
 
         // 2. Validate input. Both ids are interpolated into database paths, so
         // they are validated as KEYS: a value carrying '/' would address a node
@@ -161,10 +162,11 @@ export const changeAssessmentTemplate = onCall<ChangeAssessmentTemplateInput>(
           }),
         });
 
-        createLogger({ fn: 'changeAssessmentTemplate', orgId }).info(
-          'Assessment template changed',
-          { assessmentId, templateId, answersRemoved },
-        );
+        logger.info('Assessment template changed', {
+          assessmentId,
+          templateId,
+          answersRemoved,
+        });
 
         return {
           templateName: template.name,

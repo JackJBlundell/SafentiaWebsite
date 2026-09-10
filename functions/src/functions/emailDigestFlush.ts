@@ -59,13 +59,13 @@ import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import { EMAIL_KINDS } from '../lib/emailKindCatalogue';
 import { loadKindConfig, sendKindEmail } from '../lib/templatedEmail';
 import { renderTemplate } from '../lib/emailVariableEngine';
-import { claimDaySlot } from '../lib/emailDigest';
+import { claimDaySlot, decodeQueuedEmail } from '../lib/emailDigest';
 import { ops } from '../lib/paths';
 import { ukDay } from '../lib/ukCalendar';
 import { WEB_ORIGIN } from '../lib/webOrigin';
 import type { KindConfig } from '../lib/templatedEmail';
 import type { EmailTemplateShape } from '../lib/emailVariableEngine';
-import type { QueuedEmail } from '../lib/emailDigest';
+import type { QueuedEmail, StoredQueuedEmail } from '../lib/emailDigest';
 import type { Logger } from '../lib/logging';
 import type { EmailKindId, Environment } from '../shared/types';
 
@@ -102,7 +102,7 @@ const MAX_BUNDLE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 /** One batch of items a flush has claimed but not yet finished sending. */
 interface InflightBatch {
   at?: number;
-  items?: Record<string, QueuedEmail>;
+  items?: Record<string, StoredQueuedEmail>;
 }
 
 /** The stored shape of one (recipient, kind) bundle - lib/emailDigest writes it. */
@@ -113,12 +113,12 @@ interface Bundle {
   count?: number;
   /** Sends counted rather than stored once the bundle hit MAX_BUNDLE_ITEMS. */
   dropped?: number;
-  items?: Record<string, QueuedEmail>;
+  items?: Record<string, StoredQueuedEmail>;
   inflight?: Record<string, InflightBatch>;
 }
 
 /** Corrupt or missing timestamps sort first rather than poisoning the order. */
-function queuedAt(item: QueuedEmail): number {
+function queuedAt(item: StoredQueuedEmail): number {
   return typeof item.at === 'number' ? item.at : 0;
 }
 
@@ -137,7 +137,7 @@ function fallbackDigestRow(
 ): { label: string; value: string } {
   const rendered = renderTemplate(
     singleTemplate,
-    item.variables ?? {},
+    item.variables,
     'send',
     item.kindRows,
     item.kindLink,
@@ -157,14 +157,22 @@ async function sendBundleEmail(
     orgId: string;
     to: string;
     /** Oldest first: a digest reads in the order things happened. */
-    items: QueuedEmail[];
+    items: StoredQueuedEmail[];
     dropped: number;
     config: KindConfig;
   },
   logger: Logger,
 ): Promise<boolean> {
-  const { kind, env, orgId, to, items, dropped, config } = args;
+  const { kind, env, orgId, to, dropped, config } = args;
   const def = EMAIL_KINDS[kind];
+  // ====
+  // The one crossing from stored to renderable, for the whole batch. Items are
+  // held in their STORED form everywhere else in this sweep - moved into
+  // inflight, restored to the queue on a refusal - so that what goes back on
+  // the queue goes back byte for byte as it was written. Only rendering needs
+  // the real, dotted variable names, and only here.
+  // ====
+  const items = args.items.map(decodeQueuedEmail);
 
   /** One stored item, sent exactly as its send site would have sent it. */
   const sendAlone = (item: QueuedEmail): Promise<boolean> =>
@@ -174,7 +182,7 @@ async function sendBundleEmail(
         env,
         orgId,
         to,
-        variables: item.variables ?? {},
+        variables: item.variables,
         brand: item.brand,
         kindLink: item.kindLink,
         kindRows: item.kindRows,
@@ -343,14 +351,14 @@ export const emailDigestFlush = onSchedule(
               // The items this run would take: what is queued now, plus
               // whatever a dead run left behind. Recovered ids came out of
               // this same `items` node, so they cannot collide with it.
-              const moving: Record<string, QueuedEmail> = {
+              const moving: Record<string, StoredQueuedEmail> = {
                 ...(bundle.items ?? {}),
               };
               for (const staleId of staleFlushIds) {
                 Object.assign(moving, bundle.inflight?.[staleId]?.items ?? {});
               }
               const items = Object.values(moving)
-                .filter((item): item is QueuedEmail => typeof item === 'object' && item !== null)
+                .filter((item): item is StoredQueuedEmail => typeof item === 'object' && item !== null)
                 .sort((a, b) => queuedAt(a) - queuedAt(b));
 
               // ====

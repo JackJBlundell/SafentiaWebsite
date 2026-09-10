@@ -1,5 +1,7 @@
-/* ParagraphLibrary - toolbar sizing, cell details and the add/edit panel.
-   The table itself is the shared DataTable. */
+/* ParagraphLibrary - the explainer block, the origin filter, the collapsible
+   subject groups and the cell details. The tables themselves are the shared
+   DataTable, and the form fields are the shared customers/shared.module.css
+   primitives; nothing here repaints either. */
 
 .root {
   display: flex;
@@ -7,21 +9,217 @@
   gap: var(--space-xl);
 }
 
+/* --- What this page is ------------------------------------------------------
+   Three checkable facts, not marketing: an admin who has never met a standard
+   paragraph should be able to use the page after reading this once. Laid out as
+   a term/description grid so it is scanned, not read, on the tenth visit. */
+
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.aboutLead {
+  margin: 0;
+  max-width: var(--reading-measure);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.aboutPoints {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--space-lg) var(--space-xl);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aboutPoint {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-inline-start: var(--space-lg);
+  /* A quiet rule rather than a bullet: three equal facts, no order implied. */
+  border-inline-start: 2px solid var(--color-border);
+}
+
+.aboutTerm {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.aboutBody {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+/* --- Toolbar ---------------------------------------------------------------- */
+
 .search {
   width: 100%;
 }
 
 @media (min-width: 768px) {
   .search {
-    width: 20rem;
+    width: 22rem;
   }
 }
 
-.panelTitle {
-  margin: 0;
-  font-size: 1.125rem;
+/* Single-choice origin filter. Each option carries its own count, which is why
+   this is three buttons rather than a select: "Included 127 / Yours 2" answers
+   the first question an admin has about this page before they touch anything. */
+.originFilter {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+}
+
+.originOption {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 34px;
+  padding-inline: var(--space-md);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.originOption:hover {
   color: var(--color-text);
 }
+
+.originOption[aria-pressed='true'] {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.originOption:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+}
+
+.originCount {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.originOption[aria-pressed='true'] .originCount {
+  color: var(--color-text-secondary);
+}
+
+.matchNote {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+/* --- Subject groups ---------------------------------------------------------- */
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.group {
+  min-width: 0;
+}
+
+.groupHeading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.groupToggle,
+.groupStatic {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  min-height: var(--min-touch-target);
+  padding: var(--space-md) var(--space-xl);
+  border: none;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: start;
+}
+
+.groupToggle {
+  cursor: pointer;
+}
+
+.groupToggle:hover {
+  background: var(--color-surface-alt);
+}
+
+.groupToggle:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: -2px;
+}
+
+/* The same chevron the DataTable disclosure uses, so one gesture reads the same
+   at both levels of this page. */
+.caret {
+  flex: none;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-right: 2px solid var(--color-text-muted);
+  border-bottom: 2px solid var(--color-text-muted);
+  transform: rotate(-45deg);
+  transition: transform var(--motion-fast) var(--easing);
+}
+
+.groupToggle[aria-expanded='true'] .caret {
+  transform: rotate(45deg);
+}
+
+.groupTitle {
+  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.006em;
+}
+
+.groupCount {
+  margin-inline-start: auto;
+  flex: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.groupBody {
+  border-block-start: 1px solid var(--color-border);
+}
+
+.groupBody[hidden] {
+  display: none;
+}
+
+/* --- Cells -------------------------------------------------------------------- */
 
 .reference {
   font-weight: 600;
@@ -30,35 +228,181 @@
   white-space: nowrap;
 }
 
+.paragraphCell {
+  display: block;
+  min-width: 0;
+}
+
+.paragraphTitle {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 .bodyPreview {
   color: var(--color-text-secondary);
 }
 
-.bodyInput {
-  min-height: 44px;
-  resize: vertical;
-  line-height: 1.5;
+.badgeIncluded,
+.badgeOwn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
 }
+
+.badgeIncluded {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+
+/* The org's own wording is the half of the library they can act on, so it takes
+   the brand ink; the word still carries the meaning without the colour. */
+.badgeOwn {
+  border: 1px solid var(--brand-ink);
+  background: var(--color-surface);
+  color: var(--brand-ink);
+}
+
+.used {
+  color: var(--color-text-secondary);
+}
+
+/* Not an error - a library may legitimately hold wording nothing points at yet
+   - so it is muted and italic rather than a warning colour. */
+.unused {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* --- The expanded row: the full wording ---------------------------------------- */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* pre-line, because a shipped paragraph is several sentences on their own lines
+   and that shape is part of the wording. */
+.detailBody {
+  margin: 0;
+  max-width: var(--reading-measure);
+  white-space: pre-line;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+
+/* --- Row actions and the add/edit panel ----------------------------------------- */
 
 /* Edit + Delete together on the cell's end edge; the guard/error message
    reads before the controls and is allowed to wrap. */
+/* Buttons on one line, any guard message on its own beneath them. */
 .rowActions {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-xs);
+}
+
+.rowButtons {
   display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
   white-space: nowrap;
 }
 
+/* THE MESSAGE STATES ITS OWN WIDTH, and turns off the table's break-anywhere.
+ *
+ * The actions column is shrink-to-fit (`width: '1%'`) and DataTable sets
+ * `overflow-wrap: anywhere` on every cell, so that a long unbroken token cannot
+ * push the table past its container. `anywhere` - unlike `break-word` - also
+ * feeds into MIN-CONTENT sizing, so the narrowest this cell can be became one
+ * character, and the delete guard's sentence rendered as a tower of single
+ * letters. A `max-width` cannot fix that: the column was already collapsing to
+ * its minimum, not overflowing a maximum.
+ *
+ * So the message states a real measure to wrap inside, and restores wrapping at
+ * spaces. The column widens only while a guard message is actually showing -
+ * which is a click the admin just made, and the whole point is that they read
+ * it. `max-width: 100%` keeps it honest in the card layout under 900px, where
+ * the cell is a stacked block rather than a table column. */
 .rowError {
   font-size: 0.8125rem;
   color: var(--status-error);
+  overflow-wrap: normal;
   white-space: normal;
-  max-width: 18rem;
+  width: 16rem;
+  max-width: 100%;
   text-align: right;
 }
 
+.panelTitle {
+  margin: 0;
+  font-size: 1.125rem;
+  color: var(--color-text);
+}
+
+.bodyInput {
+  min-height: 44px;
+  padding-block: var(--space-sm);
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* --- Nothing matched ------------------------------------------------------------ */
+
 .noMatches {
   margin: 0;
-  padding: var(--space-lg);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
   color: var(--color-text-muted);
+}
+
+.clearSearch {
+  border: none;
+  background: none;
+  padding: 0 var(--space-sm);
+  min-height: var(--min-touch-target);
+  color: var(--brand-ink);
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.clearSearch:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* "Used by" lists each referencing template with its own way in. A list rather
+   than a joined string because each entry carries an action, and the column is
+   desktop-only, where the extra height costs nothing. */
+.usedList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.usedEntry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.usedName {
+  overflow-wrap: normal;
 }

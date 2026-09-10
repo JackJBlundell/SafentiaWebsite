@@ -16,6 +16,7 @@ import {
   type TemplateQuestion,
   type TemplateSection,
 } from '../../types';
+import { resolveParagraph } from '../../standardParagraphs';
 
 // ----------------------------------------------------------------------------
 // Ids.
@@ -460,9 +461,13 @@ export function validateTemplate(
       } else {
         seenIds.set(question.id, questionLabel);
       }
+      // `paragraphs` is the ORGANISATION's node alone, so this must resolve
+      // through the shared helper rather than index it: a reference to one of
+      // the paragraphs Safentia ships lives in code, not in that node, and a
+      // bare lookup would report every built-in reference as a dangling one.
       if (
         question.standardParagraphRef &&
-        !(paragraphs && paragraphs[question.standardParagraphRef])
+        !resolveParagraph(question.standardParagraphRef, paragraphs)
       ) {
         issues.push({
           message: `${questionLabel}: the referenced standard paragraph no longer exists.`,

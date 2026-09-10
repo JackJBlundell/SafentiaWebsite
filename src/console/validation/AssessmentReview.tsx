@@ -17,14 +17,31 @@
 // transition back, so the UI state after a call is whatever the server says.
 //
 // Flag basket: drafts live here (question id -> message) as the single source;
-// the inline composer on each AnswerCard and the editable basket in the aside
-// edit the same entry. "Send to assessor" submits every request in ONE
-// requestInfo call - the contract takes the batch so the assessor is notified
-// once, not per question.
+// the inline composer on each AnswerCard, the editable basket in the aside and
+// the send bar all edit the same entry. "Send to assessor" submits every request
+// in ONE requestInfo call - the contract takes the batch so the assessor is
+// notified once, not per question.
+//
+// WHY THE SEND BAR IS FIXED TO THE VIEWPORT. The basket and its send button used
+// to live only in the aside, which above 1024px is its own scroll container
+// capped to the viewport (see ui/Grid.module.css) - so behind the Facts and
+// Progress cards the send button could sit below the fold inside a nested
+// scroller with no visible scrollbar, and below 1024px the aside is not "on the
+// right" at all but under every section card. An auditor wrote a message on
+// every unanswered question, never found the button, and reported that they did
+// not know how to send the assessment back. The bar makes the action impossible
+// to lose: the moment a first question is flagged it appears at the foot of the
+// screen with the count and the send button, at every width.
+//
+// Leaving with a full basket is a THREE-way choice (send / keep editing /
+// discard), not a window.confirm. The old OK/Cancel prompt read like a generic
+// "are you sure you want to leave", and clicking through it silently destroyed
+// the auditor's written messages - which is how that same review ended up
+// accepted with the questions still unanswered.
 // ============================================================================
 
-import { useEffect, useMemo, useState, type MouseEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
 import { urls } from '../customers/shared';
@@ -61,7 +78,15 @@ import {
 } from './AnswerCard';
 import { actorName } from '../lib/actorName';
 import { useReportDownload } from './releaseShared';
+import { ValidationGuide } from './ValidationGuide';
+import { hasSeenValidationGuide, rememberValidationGuideSeen } from './guideSeen';
 import styles from './AssessmentReview.module.css';
+
+/** The message a bulk flag pre-fills, so "flag every unanswered question" is one
+ *  click that still leaves the auditor an editable sentence rather than an empty
+ *  box per question. */
+const UNANSWERED_PROMPT =
+  'This question was not answered. Please complete it and resubmit.';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -196,8 +221,9 @@ function ReportDownload({ report }: { report: Report | null }) {
 
 export function AssessmentReview() {
   const { assessmentId = '' } = useParams();
-  const { claims, paths } = useAuth();
+  const { claims, paths, user } = useAuth();
   const orgId = claims?.orgId ?? '';
+  const uid = user?.uid;
   const enabled = Boolean(orgId && paths && assessmentId);
 
   // --- Live reads -----------------------------------------------------------
@@ -304,6 +330,9 @@ export function AssessmentReview() {
   // question id -> draft message. Insertion order is presentation order.
   const [basket, setBasket] = useState<Record<string, string>>({});
   const basketIds = Object.keys(basket);
+  // The aside's basket card, so "Review basket" on the send bar can bring it
+  // into view inside its own scroll container rather than describing where it is.
+  const basketCardRef = useRef<HTMLDivElement | null>(null);
   // ONE deadline for the whole batch: a round of questions is one conversation,
   // so the assessor works to a single date rather than a per-question spread.
   // Held as the date input's yyyy-mm-dd string (its native value) and converted
@@ -346,8 +375,18 @@ export function AssessmentReview() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [basketDirty]);
 
-  /** Confirm before any in-app link (the crumb back to the queue included)
-   *  discards a non-empty basket. New-tab links (photos) are never blocked. */
+  /** Where an in-app link wanted to go, held while we ask what to do with the
+   *  unsent basket. Null when nothing is pending. */
+  const [pendingLeave, setPendingLeave] = useState<string | null>(null);
+
+  /** Intercept any in-app link (the crumb back to the queue included) that would
+   *  discard a non-empty basket, and ask properly. New-tab links (photos) are
+   *  never blocked.
+   *
+   *  Deliberately NOT window.confirm: its only choices are OK and Cancel, so the
+   *  auditor's real intent - "actually, send these" - was not on offer, and the
+   *  prompt read like a routine leave warning. Clicking through it destroyed
+   *  written work silently. */
   const guardNavigation = (event: MouseEvent<HTMLElement>) => {
     if (!basketDirty) {
       return;
@@ -356,12 +395,23 @@ export function AssessmentReview() {
     if (!anchor || anchor.target === '_blank') {
       return;
     }
-    const leave = window.confirm(
-      'The flag basket has unsent requests. Leave this page and discard them?',
-    );
-    if (!leave) {
-      event.preventDefault();
-      event.stopPropagation();
+    const href = anchor.getAttribute('href');
+    event.preventDefault();
+    event.stopPropagation();
+    setPendingLeave(href && href.startsWith('/') ? href : '/app/validation');
+  };
+
+  const navigate = useNavigate();
+
+  // The explainer introduces itself to an auditor who has not dismissed it on
+  // this device, and collapses to a "How validation works" button afterwards.
+  const [guideOpen, setGuideOpen] = useState(() =>
+    uid ? !hasSeenValidationGuide(uid) : false,
+  );
+  const dismissGuide = () => {
+    setGuideOpen(false);
+    if (uid) {
+      rememberValidationGuideSeen(uid);
     }
   };
 
@@ -375,6 +425,9 @@ export function AssessmentReview() {
   );
   const [confirming, setConfirming] = useState<null | 'accept' | 'release'>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Accepting with unanswered questions is allowed but never accidental: the
+  // confirm step lists them and waits for an explicit tick (see the panel below).
+  const [acceptAcknowledged, setAcceptAcknowledged] = useState(false);
   const anyPending =
     requestInfo.pending || acceptAssessment.pending || releaseAssessment.pending;
 
@@ -401,8 +454,25 @@ export function AssessmentReview() {
     }
   };
 
+  /** Put every unanswered question in the basket at once, pre-filled with an
+   *  editable sentence. This is the job the auditor was doing by hand, one
+   *  question at a time, when they lost the lot. Existing drafts are kept. */
+  const flagAllUnanswered = () => {
+    setConfirming(null);
+    setBasket((prev) => {
+      const next = { ...prev };
+      for (const question of unansweredQuestions) {
+        if (next[question.id] === undefined) {
+          next[question.id] = UNANSWERED_PROMPT;
+        }
+      }
+      return next;
+    });
+  };
+
   const confirmAccept = async () => {
     setConfirming(null);
+    setAcceptAcknowledged(false);
     const result = await acceptAssessment.call({ assessmentId });
     if (result) {
       setNotice(`Accepted. The assessment is now '${ASSESSMENT_STAGE_LABELS.readyForRelease}'.`);
@@ -434,6 +504,24 @@ export function AssessmentReview() {
   );
   const answeredTotal = sectionProgress.reduce((sum, s) => sum + s.answered, 0);
   const questionTotal = sectionProgress.reduce((sum, s) => sum + s.total, 0);
+
+  /** Every question the assessor left blank, with enough context to name it in
+   *  the accept warning and to flag the lot in one action. Accepting asserts
+   *  there is nothing outstanding, so these have to be said out loud rather than
+   *  left as a count in a side panel nobody has to read. */
+  const unansweredQuestions = useMemo(
+    () =>
+      (snapshot?.sections ?? []).flatMap((section) =>
+        section.questions
+          .filter((question) => !isAnswered(answers[question.id]))
+          .map((question) => ({
+            id: question.id,
+            text: question.text,
+            sectionTitle: section.title,
+          })),
+      ),
+    [snapshot, answers],
+  );
 
   /** Question lookup for the basket aside (text + section, from the snapshot). */
   const questionIndex = useMemo(() => {
@@ -568,6 +656,7 @@ export function AssessmentReview() {
             </Card>
 
             {canFlag && basketIds.length > 0 && (
+              <div ref={basketCardRef}>
               <Card>
                 <CardHeader
                   title="Flag basket"
@@ -639,15 +728,6 @@ export function AssessmentReview() {
                       `The assessor is reminded as this date approaches. Defaults to ${INFO_REQUEST_DUE_DAYS} days.`}
                   </p>
                 </div>
-                {requestInfo.error && <ErrorNotice message={requestInfo.error} />}
-                <Button
-                  type="button"
-                  block
-                  disabled={!basketComplete || anyPending}
-                  onClick={sendBasket}
-                >
-                  {requestInfo.pending ? 'Sending' : 'Send to assessor'}
-                </Button>
                 {!basketComplete && (
                   <p className={styles.decisionHint}>
                     {dueByValid
@@ -656,6 +736,7 @@ export function AssessmentReview() {
                   </p>
                 )}
               </Card>
+              </div>
             )}
 
             <Card>
@@ -704,14 +785,71 @@ export function AssessmentReview() {
                       Accept this assessment? It will move to '
                       {ASSESSMENT_STAGE_LABELS.readyForRelease}'.
                     </p>
+                    {/* Accepting asserts there is nothing outstanding, so a gap
+                        the assessor left has to be met head on. Neither this
+                        screen nor acceptAssessment blocked it, and an auditor
+                        accepted two assessments with questions still blank
+                        believing the flow had handled it. Named, listed, and
+                        ticked - or flagged back in one action. */}
+                    {unansweredQuestions.length > 0 && (
+                      <div className={styles.unansweredWarning}>
+                        <p className={styles.unansweredTitle}>
+                          {unansweredQuestions.length === 1
+                            ? '1 question was not answered by the assessor.'
+                            : `${unansweredQuestions.length} questions were not answered by the assessor.`}
+                        </p>
+                        <ul className={styles.unansweredList}>
+                          {unansweredQuestions.map((question) => (
+                            <li key={question.id} className={styles.unansweredItem}>
+                              <span className={styles.unansweredSection}>
+                                {question.sectionTitle}
+                              </span>
+                              {question.text}
+                            </li>
+                          ))}
+                        </ul>
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          block
+                          onClick={flagAllUnanswered}
+                        >
+                          {unansweredQuestions.length === 1
+                            ? 'Flag it for the assessor instead'
+                            : `Flag all ${unansweredQuestions.length} for the assessor instead`}
+                        </Button>
+                        <label className={styles.acknowledge}>
+                          <input
+                            type="checkbox"
+                            checked={acceptAcknowledged}
+                            onChange={(event) =>
+                              setAcceptAcknowledged(event.target.checked)
+                            }
+                          />
+                          <span>
+                            I have reviewed these and am accepting the assessment
+                            with them unanswered.
+                          </span>
+                        </label>
+                      </div>
+                    )}
                     <div className={styles.confirmActions}>
-                      <Button type="button" onClick={confirmAccept}>
+                      <Button
+                        type="button"
+                        disabled={
+                          unansweredQuestions.length > 0 && !acceptAcknowledged
+                        }
+                        onClick={confirmAccept}
+                      >
                         Confirm accept
                       </Button>
                       <Button
                         variant="secondary"
                         type="button"
-                        onClick={() => setConfirming(null)}
+                        onClick={() => {
+                          setConfirming(null);
+                          setAcceptAcknowledged(false);
+                        }}
                       >
                         Cancel
                       </Button>
@@ -777,6 +915,14 @@ export function AssessmentReview() {
       >
         {answersQuery.isError && (
           <ErrorNotice message="Could not load the assessment's answers. Please try again." />
+        )}
+
+        {canFlag && (
+          <ValidationGuide
+            open={guideOpen}
+            onOpen={() => setGuideOpen(true)}
+            onDismiss={dismissGuide}
+          />
         )}
 
         {narrativePresent.length > 0 && (
@@ -855,6 +1001,116 @@ export function AssessmentReview() {
           </Card>
         ))}
       </PageGrid>
+
+      {/* The send bar. Fixed to the viewport so the one action that moves work
+          back to the assessor can never be below the fold, at any width. It
+          mirrors the aside basket exactly - same completeness test, same call -
+          rather than being a second way to send. */}
+      {canFlag && basketIds.length > 0 && (
+        <div className={styles.sendBar} role="region" aria-label="Flag basket">
+          <div className={styles.sendBarInner}>
+            <p className={styles.sendBarCount}>
+              <strong>
+                {basketIds.length === 1
+                  ? '1 question flagged'
+                  : `${basketIds.length} questions flagged`}
+              </strong>
+              <span className={styles.sendBarNote}>
+                {requestInfo.error
+                  ? requestInfo.error
+                  : basketComplete
+                    ? 'Not sent yet. The assessor is notified once, for all of them.'
+                    : 'Open the basket to finish them: each needs a message and a deadline.'}
+              </span>
+            </p>
+            <div className={styles.sendBarActions}>
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() =>
+                  basketCardRef.current?.scrollIntoView({ block: 'nearest' })
+                }
+              >
+                Review basket
+              </Button>
+              <Button
+                type="button"
+                disabled={!basketComplete || anyPending}
+                onClick={sendBasket}
+              >
+                {requestInfo.pending ? 'Sending' : 'Send to assessor'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leaving with unsent messages: three real choices, because "discard" was
+          never the only thing the auditor might have meant. */}
+      {pendingLeave !== null && (
+        <div className={styles.leaveOverlay} role="presentation">
+          <div
+            className={styles.leaveDialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="leave-title"
+          >
+            <h2 id="leave-title" className={styles.leaveTitle}>
+              You have unsent messages
+            </h2>
+            <p className={styles.leaveCopy}>
+              {basketIds.length === 1
+                ? 'One flagged question has a message the assessor has not been sent.'
+                : `${basketIds.length} flagged questions have messages the assessor has not been sent.`}{' '}
+              Leaving now discards them.
+            </p>
+            <div className={styles.leaveActions}>
+              <Button
+                type="button"
+                disabled={!basketComplete || anyPending}
+                onClick={async () => {
+                  const target = pendingLeave;
+                  setPendingLeave(null);
+                  await sendBasket();
+                  if (target) {
+                    navigate(target);
+                  }
+                }}
+              >
+                Send, then leave
+              </Button>
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setPendingLeave(null)}
+              >
+                Keep editing
+              </Button>
+              <Button
+                variant="ghost"
+                type="button"
+                onClick={() => {
+                  const target = pendingLeave;
+                  setBasket({});
+                  setPendingLeave(null);
+                  if (target) {
+                    navigate(target);
+                  }
+                }}
+              >
+                Discard and leave
+              </Button>
+            </div>
+            {!basketComplete && (
+              <p className={styles.leaveHint}>
+                {dueByValid
+                  ? 'Every flagged question needs a message before it can be sent.'
+                  : 'Set a valid response deadline before it can be sent.'}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -132,6 +132,8 @@ export const startAssessment = onCall<StartAssessmentInput>(
           );
         }
 
+        const logger = createLogger({ fn: 'startAssessment', orgId });
+
         // 4b. Resolve the responsible party the assessment inherits from its
         // building, so the default is PERSISTED at birth rather than re-derived
         // by each reader (the report, the action plan and the portal all read
@@ -168,7 +170,6 @@ export const startAssessment = onCall<StartAssessmentInput>(
         };
         await db.ref().update(update);
 
-        const logger = createLogger({ fn: 'startAssessment', orgId });
         logger.info('Created assessment from pinned template', {
           jobId,
           assessmentId,

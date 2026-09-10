@@ -103,6 +103,11 @@ const PHRASES: Record<string, string> = {
     'updated the action reminder schedule',
   'orgSettings.actionReminders.enabled': 'turned action reminders on',
   'orgSettings.actionReminders.disabled': 'turned action reminders off',
+  // The org's own steer for the AI summary writer. A clear is recorded
+  // separately from a change: removing the guidance alters what every future
+  // draft is told, and the feed should not report that as an edit.
+  'orgSettings.aiGuidance.updated': 'updated the AI guidance for draft summaries',
+  'orgSettings.aiGuidance.cleared': 'cleared the AI guidance for draft summaries',
   'template.published': 'published a template',
   'report.generated': 'generated an assessment report',
   // Written by the acceptReport callable. The actor is a customer-portal

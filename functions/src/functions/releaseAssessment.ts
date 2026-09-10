@@ -58,6 +58,7 @@ import { orgEmailBrand } from '../lib/emailTemplates';
 import { loadKindConfig } from '../lib/templatedEmail';
 import { deliverKindEmail } from '../lib/emailDigest';
 import { resolveResponsibleAssignment } from '../lib/responsibleParty';
+import { isEffectiveNotApplicable } from '../lib/assessmentChecks';
 import { SEVERITIES } from '../shared/types';
 import type { EnvPaths } from '../shared/paths';
 import type { Logger } from '../lib/logging';
@@ -399,6 +400,21 @@ export const releaseAssessment = onCall<ReleaseAssessmentInput>(
               continue;
             }
             const answer = answers[question.id];
+            // An item the assessor judged NOT APPLICABLE to these premises is
+            // not a finding, so it can never become an action. The severity
+            // test below already excludes it (the contract makes `severity` and
+            // `notApplicable` mutually exclusive, so an N/A answer carries no
+            // severity, and an action built from one would be malformed: no
+            // grade, hence no due window, hence a nonsense deadline). This is
+            // stated explicitly all the same, so that the exclusion survives any
+            // future loosening of the severity test rather than depending on it.
+            // It is `isEffectiveNotApplicable`, not the bare flag: a
+            // contract-violating answer that somehow carries BOTH a grade and
+            // the flag keeps its action - see the precedence note in
+            // lib/assessmentChecks.
+            if (isEffectiveNotApplicable(answer)) {
+              continue;
+            }
             if (!answer?.severity || !SEVERITIES.includes(answer.severity)) {
               continue;
             }
@@ -464,6 +480,13 @@ export const releaseAssessment = onCall<ReleaseAssessmentInput>(
         // severity (the same "any answer with a valid severity is a finding"
         // reading the report's Section 2 uses), including no-action-required
         // findings that produced no action - the meter reflects what was FOUND.
+        //
+        // A not-applicable answer contributes NOTHING here, and must not: it is
+        // not a finding of any grade, so counting it would inflate the
+        // denominator of the RAG shares and make a building with many N/A items
+        // read as safer than one where the same items were genuinely assessed as
+        // low risk. Counting by severity alone already achieves that (an N/A
+        // answer has none), which is why there is no extra test below.
         const distribution: RagDistribution = { low: 0, medium: 0, high: 0 };
         const bucketOf: Record<Severity, keyof RagDistribution> = {
           L: 'low',

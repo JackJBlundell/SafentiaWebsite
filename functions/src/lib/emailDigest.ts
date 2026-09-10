@@ -30,6 +30,9 @@
 // may not contain '.', and hashing also keeps addresses out of path strings and
 // therefore out of the logs that quote them (brief 18.4). The address lives in
 // the bundle's `to` child, transiently, and goes when the bundle is flushed.
+// The same RTDB rule applies to the variable names an item carries, which are
+// namespaced with dots - they are escaped on the way in and unescaped on the
+// way out, in one place, below.
 //
 // FAILURE POSTURE, inherited whole from sendKindEmail: this function NEVER
 // THROWS and a business send must never fail over configuration. Every error
@@ -61,18 +64,140 @@ export const MAX_BUNDLE_ITEMS = 200;
  *  none of them branch on it, but the sweeps log the tally. */
 export type DeliveryOutcome = 'sent' | 'queued' | 'skipped';
 
+// ============================================================================
+// VARIABLE NAMES ARE NAMESPACED, RTDB KEYS CANNOT BE.
+//
+// Every template variable in emailKindCatalogue is `namespace.field` -
+// 'org.name', 'info.dueDate', 'action.subjectStagePhrase', 'digest.countPhrase'
+// - and that dot is the convention, not an accident: it is what separates the
+// server-derived namespaces from the rest (sendManualEmail refuses caller keys
+// under 'org.' and 'recipient.'). RTDB, meanwhile, rejects '.', '#', '$', '/',
+// '[' and ']' in KEYS, and a queued item stores its variable map as a child
+// node - so an unescaped name makes the whole bundle write throw and every
+// bundled send of that kind falls back to sending immediately, for ever.
+//
+// So the storage layer escapes the names going in and unescapes them coming
+// out, symmetrically and in this one place. It is the value-side twin of the
+// recipient hash above, which exists for exactly the same RTDB rule.
+//
+// The escape character is '~', which RTDB allows in keys and which no variable
+// name uses: 'info.dueDate' is stored as 'info~ddueDate' - still legible in the
+// console, which base64 or percent-encoding would not be. Escaping '~' itself
+// first is what keeps the mapping reversible.
+//
+// The two branded types below are what stop this being a thing a caller has to
+// remember: a StoredVariables map is not assignable to a decoded one or vice
+// versa, so the compiler - not a reviewer - catches an item written without
+// encoding or rendered without decoding.
+// ============================================================================
+
+/** char -> escape. '~' MUST come first when read as an ordered table: it is
+ *  the escape itself, and encoding it after the others would double-escape. */
+const KEY_ESCAPES: ReadonlyArray<readonly [string, string]> = [
+  ['~', '~~'],
+  ['.', '~d'],
+  ['#', '~h'],
+  ['$', '~s'],
+  ['/', '~f'],
+  ['[', '~l'],
+  [']', '~r'],
+];
+
+const ESCAPE_BY_CHAR = new Map<string, string>(KEY_ESCAPES);
+const CHAR_BY_MARKER = new Map<string, string>(
+  KEY_ESCAPES.map(([char, escape]) => [escape[1], char]),
+);
+
+/** RTDB rejects the empty key too. No declared variable is nameless, but the
+ *  storage layer must not be the thing that throws if one ever is. Unambiguous
+ *  because a literal '~z' in a name encodes to '~~z'. */
+const EMPTY_KEY = '~z';
+
+/** One variable name, made safe to use as an RTDB key. */
+export function encodeVariableKey(name: string): string {
+  if (name === '') return EMPTY_KEY;
+  let out = '';
+  for (const char of name) out += ESCAPE_BY_CHAR.get(char) ?? char;
+  return out;
+}
+
+/** The exact inverse of encodeVariableKey. An escape marker this table does
+ *  not know is left as written rather than guessed at - stored data is data,
+ *  and a name that round-trips oddly is better than one silently mangled. */
+export function decodeVariableKey(key: string): string {
+  if (key === EMPTY_KEY) return '';
+  let out = '';
+  for (let i = 0; i < key.length; i += 1) {
+    const char = key[i];
+    if (char !== '~') {
+      out += char;
+      continue;
+    }
+    const decoded = CHAR_BY_MARKER.get(key[i + 1] ?? '');
+    if (decoded === undefined) {
+      out += char;
+      continue;
+    }
+    out += decoded;
+    i += 1;
+  }
+  return out;
+}
+
+declare const storedKeysTag: unique symbol;
+declare const decodedKeysTag: unique symbol;
+
+/** A variable map whose KEYS are escaped for RTDB. Only ever produced by
+ *  encodeVariables and only ever consumed by decodeVariables. */
+export type StoredVariables = Record<string, string> & {
+  readonly [storedKeysTag]: true;
+};
+
+/** A variable map with real, dotted names - what a send site computes and what
+ *  the renderer substitutes. Structurally a plain map, so it still satisfies
+ *  every Record<string, string> the renderer takes. */
+export type DecodedVariables = Record<string, string> & {
+  readonly [decodedKeysTag]: true;
+};
+
+/** Names -> RTDB-safe keys. Values are untouched: only keys are constrained. */
+export function encodeVariables(
+  variables: Record<string, string>,
+): StoredVariables {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(variables)) {
+    out[encodeVariableKey(name)] = value;
+  }
+  return out as StoredVariables;
+}
+
+/** RTDB-safe keys -> names. Tolerant of what it finds: stored state is read
+ *  back as untyped JSON, and one malformed entry must not cost a whole bundle
+ *  its send (the flush's failure posture, applied at the boundary). */
+export function decodeVariables(stored: StoredVariables): DecodedVariables {
+  const source: Record<string, unknown> = stored ?? {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value === 'string') out[decodeVariableKey(key)] = value;
+  }
+  return out as DecodedVariables;
+}
+
 /**
  * One queued send, holding everything the flush needs to render it later
  * WITHOUT re-reading the world: a bundle of one is rendered through the kind's
  * ordinary template with these exact values, so a quiet day looks precisely as
  * it does today. Deliberately server-only operational state, not tenant
  * schema, so it is typed here rather than in the mirrored types contract.
+ *
+ * This is the DECODED form, as the renderer wants it. What actually sits in
+ * RTDB is StoredQueuedEmail; decodeQueuedEmail is the only way across.
  */
 export interface QueuedEmail {
   /** Epoch millis at queue time; the flush renders items oldest-first. */
   at: number;
   /** The kind's declared {{variables}}, exactly as the send site computed them. */
-  variables: Record<string, string>;
+  variables: DecodedVariables;
   /** The org's brand at queue time. Stored rather than re-read so a bundle
    *  renders in the colours the event actually happened under. */
   brand: EmailBrand;
@@ -84,6 +209,20 @@ export interface QueuedEmail {
    *  rendered subject and preheader - so every kind bundles usefully from day
    *  one and send sites can be sharpened one at a time. */
   digestRow?: { label: string; value: string };
+}
+
+/** The stored form of a queued send: identical but for the escaped variable
+ *  keys. This is what is written to, moved within and restored to RTDB - the
+ *  flush handles items in this form throughout, and decodes only at the point
+ *  of rendering, so an item that goes back on the queue goes back exactly as
+ *  it was stored. */
+export interface StoredQueuedEmail extends Omit<QueuedEmail, 'variables'> {
+  variables: StoredVariables;
+}
+
+/** The one crossing from stored to renderable. */
+export function decodeQueuedEmail(stored: StoredQueuedEmail): QueuedEmail {
+  return { ...stored, variables: decodeVariables(stored.variables) };
 }
 
 /** Everything a send site supplies to have one email delivered. */
@@ -208,7 +347,7 @@ async function appendToBundle(
   hash: string,
   kind: EmailKindId,
   to: string,
-  item: QueuedEmail,
+  item: StoredQueuedEmail,
 ): Promise<boolean> {
   const { db } = await import('../admin');
   const bundlePath = ops.emailBundle(env, orgId, hash, kind);
@@ -239,19 +378,40 @@ async function appendToBundle(
   if (itemId === null) {
     throw new Error('RTDB push() returned no key for an email bundle item');
   }
-  await db.ref().update({
-    [`${bundlePath}/to`]: to,
-    [`${bundlePath}/items/${itemId}`]: item,
-  });
+  try {
+    await db.ref().update({
+      [`${bundlePath}/to`]: to,
+      [`${bundlePath}/items/${itemId}`]: item,
+    });
+  } catch (error) {
+    // ====
+    // The cap was claimed BEFORE the item was written, so a failed write has
+    // to give it back. Without this, every rejected write creeps the bundle
+    // one closer to MAX_BUNDLE_ITEMS with nothing to show for it, and a
+    // bundle whose count reaches the cap on phantom items starts discarding
+    // real sends - the one outcome this module exists to prevent. The
+    // rollback's own failure is swallowed: the caller must see the write
+    // error, which is what sends the email immediately.
+    // ====
+    try {
+      await db
+        .ref(`${bundlePath}/count`)
+        .transaction((current: number | null) => Math.max(0, (current ?? 1) - 1));
+    } catch {
+      /* The original error is the one that matters. */
+    }
+    throw error;
+  }
   return true;
 }
 
-/** The stored form of a request: RTDB rejects `undefined`, so every optional
- *  field is spread in only when the send site actually supplied it. */
-function toQueuedEmail(req: DeliverRequest): QueuedEmail {
+/** The stored form of a request: variable names escaped for RTDB (see the key
+ *  escaping above), and - because RTDB rejects `undefined` - every optional
+ *  field spread in only when the send site actually supplied it. */
+function toQueuedEmail(req: DeliverRequest): StoredQueuedEmail {
   return {
     at: Date.now(),
-    variables: req.variables,
+    variables: encodeVariables(req.variables),
     brand: req.brand,
     ...(req.kindLink !== undefined ? { kindLink: req.kindLink } : {}),
     ...(req.kindRows !== undefined ? { kindRows: req.kindRows } : {}),

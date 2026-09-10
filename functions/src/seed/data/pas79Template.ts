@@ -34,6 +34,13 @@ import { PAS79_TEMPLATE_VERSION } from '../ids';
 
 interface QuestionOpts {
   options?: string[];
+  /** Quick-fill chips for a `text` / `longtext` question - see TemplateQuestion. */
+  presets?: string[];
+  /** How to present a free-text question - see TemplateQuestion.inputKind. Used
+   *  for the fields where a preset would be a fabricated measurement. */
+  inputKind?: 'date' | 'number' | 'person';
+  /** Display-only unit for `inputKind: 'number'`. */
+  unit?: string;
   required?: boolean;
   allowsFlagLocation?: boolean;
   allowsPhotos?: boolean;
@@ -54,6 +61,9 @@ function makeQuestion(
     guidance,
   };
   if (opts.options) q.options = opts.options;
+  if (opts.presets) q.presets = opts.presets;
+  if (opts.inputKind) q.inputKind = opts.inputKind;
+  if (opts.unit) q.unit = opts.unit;
   if (opts.required) q.required = true;
   if (opts.allowsFlagLocation) q.allowsFlagLocation = true;
   if (opts.allowsPhotos) q.allowsPhotos = true;
@@ -76,7 +86,16 @@ const SECTION_01 = section('01', 'Persons at Risk', [
     'longtext',
     'Describe the people likely to be present and their characteristics',
     'Record employees, visitors, contractors and members of the public, peak occupancy and any patterns of use. Persons at risk are central to the assessment under the Regulatory Reform (Fire Safety) Order 2005.',
-    { required: true },
+    {
+      required: true,
+      presets: [
+        'Employees and occasional visiting contractors only, all able-bodied and familiar with the premises. Occupied during normal working hours.',
+        'Employees together with members of the public who are unfamiliar with the layout, present throughout opening hours. Occupancy peaks at midday.',
+        'Residents who sleep on the premises, a number of whom have mobility or cognitive impairment, supported by staff on duty at all times.',
+        'Staff, visitors and contractors during the day, with a small number of lone workers and cleaning staff present outside core hours.',
+        'Pupils and teaching staff during term-time hours, with evening lettings to third parties outside school hours.',
+      ],
+    },
   ),
   makeQuestion(
     '01',
@@ -84,7 +103,9 @@ const SECTION_01 = section('01', 'Persons at Risk', [
     'text',
     'Estimated maximum number of persons present at any one time',
     'Give the realistic peak figure used to size means of escape. Where occupancy varies, state the worst-case scenario.',
-    { required: true },
+    // A numeric keypad, not presets: this figure sizes the means of escape, so a
+    // suggested occupancy would be a fabricated measurement in a safety record.
+    { required: true, inputKind: 'number', unit: 'persons' },
   ),
   makeQuestion(
     '01',
@@ -163,6 +184,15 @@ const SECTION_02 = section('02', 'Sources of Ignition', [
     'longtext',
     'Describe the controls in place to reduce the risk of arson',
     'Consider external waste storage away from the building, secure perimeters, lighting and removal of combustible materials from accessible areas. Arson is a leading cause of fire in commercial premises.',
+    {
+      presets: [
+        'Waste bins are held in a locked compound away from the building, the perimeter is secure and external areas are lit after dark.',
+        'The site is fenced and gated out of hours, entry is controlled by fob and CCTV covers the external elevations and the bin store.',
+        'Access is supervised by reception during opening hours, visitors are signed in and the premises are alarmed when unoccupied.',
+        'No combustible materials are stored externally and doors and windows are checked and secured at close of business.',
+        'Wheeled bins stand against the external wall and the yard is accessible to the public; no specific arson controls are in place.',
+      ],
+    },
   ),
   makeQuestion(
     '02',
@@ -219,6 +249,15 @@ const SECTION_03 = section('03', 'Sources of Fuel', [
     'longtext',
     'Describe how combustible waste is managed and removed',
     'Record collection frequency, interim storage location and whether waste is kept clear of the building and ignition sources.',
+    {
+      presets: [
+        'Waste is bagged at the end of each shift, moved to a locked external bin store away from the building and collected weekly by a licensed contractor.',
+        'General and recycled waste is held in wheeled bins in a gated external compound, emptied twice weekly.',
+        'Cardboard and packaging are broken down and baled in a segregated area, with collection arranged as volumes require.',
+        'Waste is removed from work areas daily and stored well clear of the building and any ignition source until collection.',
+        'Waste accumulates in circulation areas and against the external wall between collections; storage arrangements need to be improved.',
+      ],
+    },
   ),
 ]);
 
@@ -271,6 +310,15 @@ const SECTION_04 = section('04', 'Construction, Layout and Compartmentation', [
     'text',
     'Note any concealed voids or cavities of concern',
     'Concealed spaces can allow undetected fire spread. Record any voids lacking cavity barriers.',
+    {
+      presets: [
+        'No concealed voids or cavities of concern identified during the assessment.',
+        'Suspended ceiling void runs continuously over the line of the compartment wall.',
+        'Roof void is undivided over the full length of the building.',
+        'Service risers and ducts were opened up and cavity barriers appear to be in place.',
+        'Void above the corridor ceiling was not accessible for inspection at the time of the visit.',
+      ],
+    },
   ),
 ]);
 
@@ -306,6 +354,9 @@ const SECTION_05 = section('05', 'Means of Escape', [
     'text',
     'Maximum travel distance to a place of relative safety (metres)',
     'Record the longest travel distance observed and compare against the guidance figure for single-direction and multi-direction escape.',
+    // Measured on site and compared against a guidance limit - a suggested
+    // distance would be a fabricated measurement, so this gets a keypad instead.
+    { inputKind: 'number', unit: 'm' },
   ),
   makeQuestion(
     '05',
@@ -412,6 +463,7 @@ const SECTION_07 = section('07', 'Fire Detection and Warning', [
     'text',
     'Date of last fire alarm service',
     'Record the date of the most recent maintenance visit (servicing is recommended at least every six months).',
+    { inputKind: 'date' },
   ),
 ]);
 
@@ -474,6 +526,15 @@ const SECTION_09 = section('09', 'Provisions for the Fire and Rescue Service', [
     'longtext',
     'Describe the premises information provided to the fire and rescue service',
     'Note any premises information box, asset plans or building information available to assist the fire service on arrival.',
+    {
+      presets: [
+        'A premises information box is provided at the main entrance and holds current floor plans and service isolation details.',
+        'Floor plans showing escape routes, risers and isolation points are displayed adjacent to the fire alarm panel.',
+        'Site plans, a hazardous substances inventory and utility isolation details are held in the fire file at reception.',
+        'Building information is held by the site manager and would be made available to the fire service on arrival.',
+        'No premises information box, plans or building information are provided for the fire and rescue service.',
+      ],
+    },
   ),
   makeQuestion(
     '09',
@@ -492,7 +553,9 @@ const SECTION_10 = section('10', 'Management of Fire Safety', [
     'text',
     'Name and role of the Responsible Person',
     'Identify the duty-holder under the Fire Safety Order who has overall responsibility for fire safety at the premises.',
-    { required: true },
+    // Offered from the customer's own contacts rather than typed from memory:
+    // this is a legal identification, and the record already holds the people.
+    { required: true, inputKind: 'person' },
   ),
   makeQuestion(
     '10',
@@ -559,6 +622,15 @@ const SECTION_11 = section('11', 'Fire Safety Signs and Notices', [
     'text',
     'Location of the designated assembly point',
     'Record the assembly point and confirm it is at a safe distance and signed.',
+    {
+      presets: [
+        'Car park to the front of the building, signed and clear of the escape routes.',
+        'Rear yard beyond the bin store, signed at each final exit.',
+        'Grassed area to the side of the building, at a safe distance and signed.',
+        'Pavement opposite the main entrance, away from the building and clear of the access route for fire appliances.',
+        'No assembly point has been designated or signed.',
+      ],
+    },
   ),
   makeQuestion(
     '11',
@@ -578,6 +650,15 @@ const SECTION_12 = section('12', 'Effects on the Environment', [
     'longtext',
     'Describe any environmental risks arising from a fire at the premises',
     'Consider the potential for fire water run-off, release of hazardous substances, and pollution of drains or watercourses, and any controls in place.',
+    {
+      presets: [
+        'Limited environmental risk: only small quantities of cleaning materials are held and there is no watercourse in the vicinity.',
+        'Fire water run-off would discharge to the surface water drainage system, which connects to a nearby watercourse. No interception is provided.',
+        'Oils and fuels are held in bunded containers within a sealed compound, containing any spillage or fire water run-off.',
+        'Smoke from a fire would affect adjoining residential properties; no significant risk of ground or water pollution is identified.',
+        'Battery storage and refrigerant plant on site could release harmful products of combustion; containment measures should be reviewed.',
+      ],
+    },
   ),
   makeQuestion(
     '12',

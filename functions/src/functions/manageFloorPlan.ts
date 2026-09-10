@@ -10,6 +10,12 @@
 // inside this org's own Storage root, never another tenant's or an external
 // host.
 //
+// A "floor plan" is not always renderable. A practice's drawing may be a CAD
+// export or an office document, so `kind` spans image / pdf / file, and the
+// descriptive fileName + contentType + sizeBytes travel with the record so a
+// plan that cannot be previewed is still named and described wherever it is
+// listed. Only image and pdf can carry location pins (isAnnotatableFloorPlan).
+//
 // Remove deletes the PLAN RECORD ONLY. Past assessments' flag composites (the
 // plan flattened with R/A/G pins) are separate stored images under
 // /flags/{flagId}, so historic reports keep their annotated plans after the
@@ -45,10 +51,49 @@ import type {
 } from '../shared/types';
 
 /** The plan fields an admin may set; anything else is rejected, never dropped. */
-const PLAN_FIELDS = ['name', 'description', 'imageUrl', 'kind'] as const;
-const PLAN_KINDS = ['image', 'pdf'] as const;
+const PLAN_FIELDS = [
+  'name',
+  'description',
+  'imageUrl',
+  'kind',
+  'fileName',
+  'contentType',
+  'sizeBytes',
+] as const;
+/** 'file' is a drawing that is stored and downloadable but NOT renderable or
+ *  annotatable (a CAD export, a TIFF, an office document); the console offers
+ *  those types now, so the callable has to accept the kind that describes them.
+ *  See FloorPlanKind / isAnnotatableFloorPlan in the contract. */
+const PLAN_KINDS = ['image', 'pdf', 'file'] as const;
 
 const ACTIONS = ['create', 'update', 'remove', 'reorder'] as const;
+
+/**
+ * Validate the uploaded file's byte size: absent leaves it, null CLEARS it (the
+ * clearableString intents), and a present value must be a non-negative finite
+ * integer. It is DISPLAY ONLY - nothing is enforced against it here, because
+ * the size that matters is the one Storage actually accepted, and the upload
+ * rules are what police that. Rejecting nonsense still matters: a stored NaN or
+ * negative would be rendered to an admin as a fact about their drawing.
+ */
+function clearableSizeBytes(
+  payload: Record<string, unknown>,
+  field: string,
+): number | null | undefined {
+  const value = payload[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw fail.invalidArgument(`The ${field} field must be a size in bytes.`, {
+      field,
+    });
+  }
+  return value;
+}
 
 export const manageFloorPlan = onCall<ManageFloorPlanInput>(
   callableOptions,
@@ -113,6 +158,13 @@ export const manageFloorPlan = onCall<ManageFloorPlanInput>(
                 : payload.kind !== undefined
                   ? requireEnum(payload, 'kind', PLAN_KINDS)
                   : undefined,
+            // Descriptive only: the originating file's own name, content type
+            // and size, so a plan that cannot be rendered is still nameable and
+            // describable in a list. None is trusted for anything but display -
+            // the tenancy boundary is imageUrl, checked above.
+            fileName: clearableString(payload, 'fileName', TEXT_LIMITS.shortText),
+            contentType: clearableString(payload, 'contentType', TEXT_LIMITS.shortText),
+            sizeBytes: clearableSizeBytes(payload, 'sizeBytes'),
           };
         };
 
@@ -156,6 +208,14 @@ export const manageFloorPlan = onCall<ManageFloorPlanInput>(
             order: nextOrder,
             ...(fields.description ? { description: fields.description } : {}),
             ...(fields.kind ? { kind: fields.kind } : {}),
+            ...(fields.fileName ? { fileName: fields.fileName } : {}),
+            ...(fields.contentType ? { contentType: fields.contentType } : {}),
+            // Written on its own value, not on truthiness: a 0-byte upload is a
+            // real (if useless) file, and dropping the key would report it as
+            // "size unknown" rather than as the empty drawing it is.
+            ...(typeof fields.sizeBytes === 'number'
+              ? { sizeBytes: fields.sizeBytes }
+              : {}),
           };
           const planId = db.ref(paths.db.floorPlans(orgId, buildingId)).push()
             .key as string;
@@ -277,6 +337,15 @@ export const manageFloorPlan = onCall<ManageFloorPlanInput>(
             update[`${planPath}/imageUrl`] = fields.imageUrl;
           }
           if (fields.kind !== undefined) update[`${planPath}/kind`] = fields.kind;
+          if (fields.fileName !== undefined) {
+            update[`${planPath}/fileName`] = fields.fileName;
+          }
+          if (fields.contentType !== undefined) {
+            update[`${planPath}/contentType`] = fields.contentType;
+          }
+          if (fields.sizeBytes !== undefined) {
+            update[`${planPath}/sizeBytes`] = fields.sizeBytes;
+          }
           if (Object.keys(update).length === 0) {
             throw fail.invalidArgument('No floor plan fields were provided.');
           }

@@ -24,6 +24,7 @@ import { useCallback, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { activateSpace } from '../auth/activateSpace';
+import type { SessionClaims } from '../auth/claims';
 import { rememberSpaceChoice } from '../auth/spaceChoice';
 import { Button } from '../components/Button';
 import { Wordmark } from '../components/Wordmark';
@@ -44,6 +45,49 @@ interface SpacePickerProps {
  *  space at the same org as a staff space must not collide with it. */
 function spaceId(space: UserSpace): string {
   return `${space.kind}:${space.orgId}:${space.customerId ?? ''}`;
+}
+
+/**
+ * Whether the freshly refreshed token actually names the space that was chosen.
+ *
+ * The space IS the (orgId, customerId) pair, exactly as spaceId above says: a
+ * customer portal and the staff console of the firm that assesses it share an
+ * orgId, and a staff session carries `customerId: undefined`, so comparing the
+ * org alone would read "opened the portal" off a token still holding the staff
+ * claims. Both sides are normalised to null so undefined and absent are the
+ * same thing.
+ */
+function claimsMatchSpace(
+  claims: SessionClaims | null,
+  space: UserSpace,
+): boolean {
+  // Falsy rather than `!== null`: null is the documented "no session / no
+  // membership" answer, and guarding on the value itself also survives a caller
+  // that never resolved one at all.
+  if (!claims) {
+    return false;
+  }
+  return (
+    claims.orgId === space.orgId &&
+    (claims.customerId ?? null) === (space.customerId ?? null)
+  );
+}
+
+/** How a space reads in a log line: org and customer, never a name (names are
+ *  display strings and two spaces can share one). */
+function describeSpace(orgId?: string, customerId?: string): string {
+  return `${orgId ?? 'none'}/${customerId ?? '-'}`;
+}
+
+/** The code a person can read out to support. Every Firebase and callable error
+ *  carries one; anything else is reported without a code rather than with a
+ *  meaningless placeholder. */
+function errorCode(error: unknown): string | undefined {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const { code } = error as { code: unknown };
+    return typeof code === 'string' ? code : undefined;
+  }
+  return undefined;
 }
 
 /**
@@ -198,16 +242,44 @@ export function SpacePicker({ spaces, onChosen }: SpacePickerProps) {
       setError(null);
       try {
         await activateSpace(space.orgId, space.customerId);
-        await refreshSession();
+        const resolved = await refreshSession();
+        // VERIFY THE OUTCOME - a catch alone is not enough here.
+        //
+        // setActiveOrganisation answers 200 on every attempt (confirmed in the
+        // live logs), and the forced token refresh resolves happily whatever the
+        // token turns out to contain. So there is a real path where the re-mint
+        // has not reached the token we just fetched, NOTHING throws, and this
+        // screen calls onChosen and steps aside - dropping the person into a
+        // space they did not pick, having apparently done as they asked. The
+        // claims ARE the session, so a token naming somewhere else is a failed
+        // switch, and the picker must say so and stay put.
+        if (!claimsMatchSpace(resolved, space)) {
+          console.error(
+            '[Safentia auth] open space claims mismatch',
+            `requested ${describeSpace(space.orgId, space.customerId)}, active ${describeSpace(resolved?.orgId, resolved?.customerId)}`,
+          );
+          setError(
+            `We could not open ${space.name} just now - your sign-in is still in its previous space. Please try again, or choose a different space. (auth/space-not-applied)`,
+          );
+          setEntering(null);
+          return;
+        }
         if (uid) {
           rememberSpaceChoice(uid);
         }
         onChosen();
-      } catch {
+      } catch (error) {
+        // Keep the error. Discarding it is what made the reported failure
+        // undiagnosable: the cause was in hand and thrown away, leaving nothing
+        // for support to work from beyond "it didn't work".
+        console.error('[Safentia auth] open space', error);
         // The person is still signed in and still holds every space, so the
         // screen stays put with its options live rather than stranding them.
+        const code = errorCode(error);
         setError(
-          `We could not open ${space.name} just now. Please try again, or choose a different space.`,
+          `We could not open ${space.name} just now. Please try again, or choose a different space.${
+            code ? ` (${code})` : ''
+          }`,
         );
         setEntering(null);
       }

@@ -1,0 +1,55 @@
+/* ValidationGuide - the numbered explainer card, and the quiet button it
+   collapses to once the auditor has read it. */
+
+.collapsed {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-md);
+}
+
+/* The number carries the sequence visually; the <ol> carries it for a screen
+   reader, so the glyph itself is aria-hidden rather than read twice. */
+.number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepTitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.stepBody {
+  margin: var(--space-xs) 0 0;
+  max-width: var(--reading-measure);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}

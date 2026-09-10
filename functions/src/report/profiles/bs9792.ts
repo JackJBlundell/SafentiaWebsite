@@ -19,6 +19,14 @@ export const bs9792Profile: ReportProfile = {
   methodologyLabel: 'BS 9792 housing fire risk assessment',
   riskAssessmentIntro:
     'The following tables record each subject assessed under the BS 9792 housing methodology, the questions considered, the answers given and the assessor observations. Subjects are presented in the order defined by the assessment template and cover the communal parts of the premises.',
+  // Housing framing. On a BS 9792 assessment "not applicable" carries a second,
+  // very common meaning the PAS 79 wording does not cover: the item belongs to
+  // the individual dwellings rather than the communal parts being assessed. The
+  // scope boundary is exactly what a housing FRA is challenged on, so the note
+  // states it - an item outside the assessed scope was still considered, and the
+  // reader can see that it was.
+  notApplicableNote:
+    "Some items in the tables below are recorded as 'Not applicable'. In a housing fire risk assessment an item may be judged not to apply because these premises do not have the provision in question, or because it falls within the individually occupied dwellings rather than the communal parts assessed here. 'Not applicable' records a decision by the assessor that the item was considered and judged not to apply; it is not an item left unassessed. No finding arises from such an item, it produces no remedial action, and it does not form part of the risk profile shown above.",
   standardNotes: [
     'This housing fire risk assessment has been carried out in accordance with the principles of BS 9792 and the Regulatory Reform (Fire Safety) Order 2005 as it applies to the communal parts of residential premises. It records the significant findings of the assessment and the remedial actions considered necessary to reduce risk to an acceptable level.',
     'The assessment is based on the conditions observed on the date it was carried out and on the information made available to the assessor at that time. Areas that were inaccessible, concealed or could not reasonably be inspected, and the interiors of individually occupied dwellings, are not covered unless expressly stated.',

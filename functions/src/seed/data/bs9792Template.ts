@@ -38,6 +38,12 @@ import { BS9792_TEMPLATE_VERSION } from '../ids';
 
 interface QuestionOpts {
   options?: string[];
+  presets?: string[];
+  /** How to present a free-text question - see TemplateQuestion.inputKind. Used
+   *  for the fields where a preset would be a fabricated figure. */
+  inputKind?: 'date' | 'number' | 'person';
+  /** Display-only unit for `inputKind: 'number'`. */
+  unit?: string;
   matrix?: QuestionMatrix;
   required?: boolean;
   allowsFlagLocation?: boolean;
@@ -59,6 +65,9 @@ function makeQuestion(
     guidance,
   };
   if (opts.options) q.options = opts.options;
+  if (opts.presets) q.presets = opts.presets;
+  if (opts.inputKind) q.inputKind = opts.inputKind;
+  if (opts.unit) q.unit = opts.unit;
   if (opts.matrix) q.matrix = opts.matrix;
   if (opts.required) q.required = true;
   if (opts.allowsFlagLocation) q.allowsFlagLocation = true;
@@ -110,6 +119,16 @@ const SECTION_01 = section('01', 'General Information', [
     'text',
     'Person(s) consulted',
     'Record who was consulted during the assessment (e.g. managing agent, caretaker, residents). The responsible person, Article 5(3) duty-holders, premises address, assessor and the assessment dates are taken from the building record, the assigned responsible party and the assessment itself - they are not re-entered here.',
+    {
+      presets: [
+        'Managing agent',
+        'Managing agent and caretaker',
+        'Caretaker / site manager',
+        'Responsible person and managing agent',
+        'Residents present at the time of the inspection',
+        'No person was available on site at the time of the inspection',
+      ],
+    },
   ),
 ]);
 
@@ -121,7 +140,9 @@ const SECTION_02 = section('02', 'The Premises', [
     'text',
     '1.1 Approximate floor area (gross), m²',
     'Record the approximate gross internal floor area of the building in square metres.',
-    { required: true },
+    // A keypad, not presets: a suggested floor area is a fabricated measurement
+    // on a compliance record.
+    { required: true, inputKind: 'number', unit: 'm2' },
   ),
   makeQuestion(
     '02',
@@ -129,7 +150,17 @@ const SECTION_02 = section('02', 'The Premises', [
     'longtext',
     '1.2 Number of floors: (i) at ground level and above; (ii) entirely below ground level; (iii) on which car parking is provided',
     'State the number of storeys above ground, any basement storeys, and any floors on which car parking is provided.',
-    { required: true },
+    {
+      required: true,
+      presets: [
+        '(i) 2 storeys at ground level and above; (ii) none below ground level; (iii) no car parking within the building',
+        '(i) 3 storeys at ground level and above; (ii) none below ground level; (iii) no car parking within the building',
+        '(i) 4 storeys at ground level and above; (ii) none below ground level; (iii) no car parking within the building',
+        '(i) 5 storeys at ground level and above; (ii) one basement level containing plant and storage; (iii) no car parking within the building',
+        '(i) 6 storeys at ground level and above; (ii) none below ground level; (iii) undercroft car parking at ground floor level',
+        '(i) 8 storeys at ground level and above; (ii) one basement level; (iii) car parking within the basement',
+      ],
+    },
   ),
   makeQuestion(
     '02',
@@ -137,6 +168,7 @@ const SECTION_02 = section('02', 'The Premises', [
     'text',
     '1.3 Number of flats',
     'Total number of dwellings within the building.',
+    { inputKind: 'number', unit: 'flats' },
   ),
   makeQuestion(
     '02',
@@ -144,6 +176,16 @@ const SECTION_02 = section('02', 'The Premises', [
     'longtext',
     '1.4 Brief details of construction and approximate age of the building',
     'Describe the form of construction and the approximate age. Age can be a factor when considering external walls, but note combustible materials may have been added over time.',
+    {
+      presets: [
+        'Purpose-built block of traditional masonry construction with concrete floors, circa 1960s-1970s.',
+        'Purpose-built block of reinforced concrete frame construction with masonry infill, circa 1990s.',
+        'Large panel system (LPS) concrete construction, circa 1960s-1970s.',
+        'Victorian/Edwardian house of load-bearing masonry with timber floors, since converted into self-contained flats.',
+        'Modern purpose-built block of concrete frame construction, circa 2010 onwards, with a rendered or rainscreen external wall system; the external wall build-up was not verified during this assessment.',
+        'Timber-frame construction with a brick outer leaf, circa 2000 onwards.',
+      ],
+    },
   ),
   makeQuestion(
     '02',
@@ -151,6 +193,16 @@ const SECTION_02 = section('02', 'The Premises', [
     'text',
     '1.5 Number and type of escape stairs',
     'Record the number and type of escape stairs serving the building (e.g. single protected stair, external stair).',
+    {
+      presets: [
+        'One protected internal escape stair serving all floors',
+        'Two protected internal escape stairs serving all floors',
+        'One protected internal escape stair with lobby approach at each level',
+        'One internal escape stair and one external metal escape stair',
+        'One unprotected internal stair serving the converted flats',
+        'One protected internal escape stair discharging directly to open air at ground floor',
+      ],
+    },
   ),
   makeQuestion(
     '02',
@@ -158,6 +210,16 @@ const SECTION_02 = section('02', 'The Premises', [
     'text',
     '1.6 Number and type of lift',
     'Record the number and type of any lifts, including firefighting or evacuation lifts.',
+    {
+      presets: [
+        'No lift is provided',
+        'One passenger lift serving all floors',
+        'Two passenger lifts serving all floors',
+        'One passenger lift; no firefighting or evacuation lift is provided',
+        'One firefighting lift within the firefighting shaft',
+        'One evacuation lift serving all floors',
+      ],
+    },
   ),
   makeQuestion(
     '02',
@@ -182,6 +244,16 @@ const SECTION_02 = section('02', 'The Premises', [
     'longtext',
     '1.8 Other matters that may be relevant',
     'Include, for example, hours of work or working practices, tenure of flats if known, and management arrangements (e.g. no regular presence on site). Note the format may not apply to single-family dwellings, premises under construction, short-term lets, peer-to-peer lets, non-domestic premises or residential care homes.',
+    {
+      presets: [
+        'There is no regular staff presence on site; the building is managed remotely by the managing agent.',
+        'A caretaker attends on weekdays only; there is no staff presence at night or at weekends.',
+        'Mixed tenure: a combination of social rented, private rented and leasehold flats.',
+        'All flats are held on long leases, a proportion of which are sub-let on assured shorthold tenancies.',
+        'Commercial premises occupy the ground floor but do not share the means of escape serving the flats.',
+        'Refurbishment works are in progress; contractors are on site during normal working hours.',
+      ],
+    },
   ),
 ]);
 
@@ -193,6 +265,14 @@ const SECTION_03 = section('03', 'The Occupants', [
     'text',
     '2.1 Approximate maximum number of employees at any one time',
     'Give the realistic peak number of employees present at any one time.',
+    {
+      presets: [
+        'None - no employees are based at the premises',
+        'None permanently based; contractors attend as required',
+        '1 - caretaker/concierge present during weekday working hours',
+        '2 - cleaning and maintenance staff attending periodically',
+      ],
+    },
   ),
   makeQuestion(
     '03',
@@ -200,6 +280,7 @@ const SECTION_03 = section('03', 'The Occupants', [
     'text',
     '2.2 Approximate maximum number of residents and visitors at any one time',
     'Give the realistic peak number of residents and visitors present at any one time.',
+    { inputKind: 'number', unit: 'persons' },
   ),
 ]);
 
@@ -241,6 +322,16 @@ const SECTION_04 = section('04', 'Occupants Especially at Risk from Fire', [
     'longtext',
     '3.5 Other persons especially at risk',
     'Record any other groups especially at risk and the nature of the risk.',
+    {
+      presets: [
+        'Residents living with dementia or cognitive impairment who may not respond appropriately to a fire or to an alarm.',
+        'Residents who smoke within their flats, including any who smoke in bed or use paraffin-based emollient creams.',
+        'Residents receiving oxygen therapy or using other medical equipment within their flats.',
+        'Residents living alone with limited mobility who would be unable to evacuate without assistance.',
+        'Children resident within the building.',
+        'Contractors and maintenance staff working within the common parts.',
+      ],
+    },
   ),
   makeQuestion(
     '04',
@@ -273,6 +364,15 @@ const SECTION_05 = section('05', 'Fire Loss Experience', [
     'longtext',
     '4 Details of any recorded fire loss incidents',
     'Where incidents have occurred, record the details and any lessons learned.',
+    {
+      presets: [
+        'No fire loss incidents have been reported by the responsible person or the managing agent.',
+        'A kitchen fire within a flat, contained by the flat entrance door with no spread into the common parts.',
+        'A deliberate fire involving refuse stored in the bin store; refuse storage arrangements have since been reviewed.',
+        'A small fire involving discarded smoking materials in the external areas; no injuries and no damage to the building.',
+        'Repeated unwanted fire signals from the communal detection system; the cause has been investigated by the maintenance contractor.',
+      ],
+    },
   ),
 ]);
 
@@ -284,6 +384,16 @@ const SECTION_06 = section('06', 'Other Relevant Information', [
     'longtext',
     '5 Other relevant information',
     'Record any further information relevant to the fire risk assessment not captured elsewhere.',
+    {
+      presets: [
+        'No further information relevant to this fire risk assessment was identified.',
+        'A fire risk appraisal of the external wall (FRAEW) has been carried out and should be read alongside this assessment.',
+        'External wall remediation works are programmed; the interim measures in place should remain until those works are complete.',
+        'A simultaneous evacuation strategy supported by a waking watch is currently in place pending remedial works.',
+        'Actions from the previous fire risk assessment remain outstanding and have been carried forward into the action plan.',
+        'The building is managed by a resident management company on behalf of the leaseholders.',
+      ],
+    },
   ),
 ]);
 
@@ -295,6 +405,14 @@ const SECTION_07 = section('07', 'Relevant Fire Safety Legislation', [
     'longtext',
     '6.1 The following fire safety legislation applies to these premises',
     'The Building Safety Act 2022 amends the Fire Safety Order to add detailed provisions about the responsibilities of Responsible Persons - including that all Responsible Persons must record their completed fire risk assessment and fire safety arrangements in full.',
+    {
+      presets: [
+        'The Regulatory Reform (Fire Safety) Order 2005, as amended by the Fire Safety Act 2021 and the Building Safety Act 2022.',
+        'The Regulatory Reform (Fire Safety) Order 2005, as amended, together with the Fire Safety (England) Regulations 2022.',
+        'The Regulatory Reform (Fire Safety) Order 2005, as amended, which applies to the communal parts; the Housing Act 2004 applies to the individually occupied flats.',
+        'The Regulatory Reform (Fire Safety) Order 2005, as amended. The building is a higher-risk building and is also subject to the in-occupation duties of the Building Safety Act 2022.',
+      ],
+    },
   ),
   makeQuestion(
     '07',
@@ -309,6 +427,15 @@ const SECTION_07 = section('07', 'Relevant Fire Safety Legislation', [
     'longtext',
     '6.3 Other legislation making significant requirements for fire precautions (other than the Building Regulations 2010, as amended)',
     'Record any other legislation imposing significant fire precaution requirements at these premises.',
+    {
+      presets: [
+        'No other legislation making significant requirements for fire precautions was identified.',
+        'The Housing Act 2004 (Housing Health and Safety Rating System), in respect of the individually occupied dwellings.',
+        'The Health and Safety at Work etc. Act 1974, in respect of persons employed at the premises.',
+        'The Licensing of Houses in Multiple Occupation regulations, the premises being a licensed HMO.',
+        'The Electricity at Work Regulations 1989, in respect of the fixed electrical installation.',
+      ],
+    },
   ),
   makeQuestion(
     '07',
@@ -316,6 +443,15 @@ const SECTION_07 = section('07', 'Relevant Fire Safety Legislation', [
     'text',
     '6.4 The other legislation referred to above is enforced by',
     'Name the authority enforcing any other relevant legislation.',
+    {
+      presets: [
+        'The local housing authority',
+        'The local authority as HMO licensing authority',
+        'The local authority environmental health department',
+        'The Health and Safety Executive',
+        'The Building Safety Regulator',
+      ],
+    },
   ),
   makeQuestion(
     '07',
@@ -337,7 +473,17 @@ const SECTION_07 = section('07', 'Relevant Fire Safety Legislation', [
     'longtext',
     'Risk assessor’s summary',
     'Provide a written exposition summarising the key points of the assessment.',
-    { required: true },
+    {
+      required: true,
+      presets: [
+        'The premises are a purpose-built block of flats served by a single protected stair and operating a stay put evacuation strategy. The standard of fire precautions within the communal parts was found to be generally satisfactory, subject to the minor deficiencies recorded in the action plan.',
+        'The premises are a purpose-built block of flats operating a stay put evacuation strategy. A number of deficiencies were identified in respect of compartmentation and the protection of the communal escape route; these should be addressed within the timescales given in the action plan.',
+        'The premises are a converted house in multiple occupation. The means of escape rely on the protection of the common escape route and on automatic fire detection within the dwellings; deficiencies were identified in both and are set out in the action plan.',
+        'Significant deficiencies were identified in the fire precautions at these premises, including the condition of the flat entrance doors and the protection of the communal escape route. The high-priority recommendations in the action plan should be implemented without delay.',
+        'The communal parts were found to be well managed and free of combustible materials and obstructions. The principal deficiencies relate to the recording of routine testing and maintenance rather than to the physical fire precautions.',
+        'This is a Type 1 assessment and is limited to the communal parts. The individually occupied flats were not inspected, other than a sample of flat entrance doors viewed from the communal side.',
+      ],
+    },
   ),
 ]);
 
@@ -617,6 +763,7 @@ const SECTION_14 = section('14', 'Lightning', [
     'text',
     '13.1 If yes, date of last inspection of the LPS',
     'An LPS should be inspected by a licensed professional to remain compliant with BS EN/IEC 62305.',
+    { inputKind: 'date' },
   ),
   makeQuestion(
     '14',
@@ -1374,6 +1521,16 @@ const SECTION_26 = section(
       'longtext',
       '25.1 Type of fixed system and areas covered',
       'Where automatic fire suppression is fitted, indicate the type of system and the areas covered, plus other relevant fire protection systems and facilities to assist firefighters. (Relevant to life safety, as opposed to property protection.)',
+      {
+        presets: [
+          'No fixed automatic fire extinguishing system is installed within the building.',
+          'A residential sprinkler system to BS 9251 is installed throughout the flats and the communal parts.',
+          'A residential sprinkler system to BS 9251 is installed within the individual flats only; the communal parts are not covered.',
+          'A commercial sprinkler system to BS EN 12845 protects the basement car park.',
+          'An automatic water mist system protects the communal parts, installed as part of previous remedial works.',
+          'A fixed gaseous extinguishing system protects the electrical intake room.',
+        ],
+      },
     ),
     makeQuestion(
       '26',
@@ -1490,6 +1647,10 @@ const SECTION_28 = section('28', 'Procedures and Arrangements', [
     'text',
     '27.2 a) Fire safety at the premises is managed by',
     'Record the name of the person responsible for managing fire safety at the premises.',
+    // Offered from the customer's own contacts: the guidance asks for a NAMED
+    // person, and a role-shaped suggestion would put a category where a named
+    // duty-holder belongs.
+    { inputKind: 'person' },
   ),
   makeQuestion(
     '28',
@@ -1832,7 +1993,16 @@ const SECTION_34 = section('34', 'Fire Risk Evaluation and Summary', [
     'longtext',
     'Risk assessor comments',
     'Provide concluding comments on the fire risk and the priority/timescale for the recommended actions in the action plan.',
-    { required: true },
+    {
+      required: true,
+      presets: [
+        'Taking into account the fire precautions observed and the nature of the premises and their occupants, the risk to life from fire is considered to be tolerable. The recommendations in the action plan should be implemented within the timescales stated in order to maintain this level of risk.',
+        'The risk to life from fire is considered to be moderate. The recommendations in the action plan should be implemented within the timescales stated in order to reduce the risk to tolerable.',
+        'The risk to life from fire is considered to be substantial, principally as a result of the deficiencies identified in compartmentation and in the protection of the communal escape route. The high-priority recommendations should be actioned without delay.',
+        'The fire precautions within the communal parts were found to be well managed. The recommendations that follow are largely administrative and should be completed within the timescales stated.',
+        'This assessment should be reviewed within 12 months, or sooner in the event of a material change to the building, its occupants or its fire precautions.',
+      ],
+    },
   ),
   makeQuestion(
     '34',

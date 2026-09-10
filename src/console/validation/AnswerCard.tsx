@@ -23,7 +23,7 @@
 //
 // Flagging: while the assessment is readyForValidation the auditor can open an
 // inline "Request more information" composer per question; the draft lives in
-// the review's flag basket (single source), so edits here and in the basket
+// the review's flag basket (single source), so edits here, in the basket
 // aside are the same edit. In infoRequired the card instead shows the open
 // InfoRequest as a read-only thread - the auditor's message, and the
 // assessor's response once present.
@@ -519,8 +519,8 @@ export function AnswerCard({
               Remove from basket
             </Button>
             <p className={styles.composerHint}>
-              Added to the flag basket. Send every request together from the panel
-              on the right.
+              Added to the flag basket. This is NOT sent yet - send every request
+              together from the bar at the foot of the screen.
             </p>
           </div>
         </div>

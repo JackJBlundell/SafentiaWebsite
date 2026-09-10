@@ -21,6 +21,13 @@
 //                                    summary is used instead - drafting never hard-
 //                                    depends on the model.
 //
+// The summary prompt also carries the ORGANISATION's own house guidance
+// (OrgSettings.aiGuidance, edited by its admins in the console's settings area):
+// the regulations this firm always cites, the features it always calls out, its
+// tone. It is layered LAST, below the platform's regulatory grounding and strict
+// rules, and is sanitised like every other free-text value that reaches the
+// prompt - see buildSummarySystemPrompt for why the order is the safeguard.
+//
 // Trust nothing from the client (brief 18.4): the caller passes only the
 // assessmentId; the server loads the authoritative answers, building, customer and
 // site itself, and authorises against the originating job's assessor.
@@ -64,6 +71,7 @@ import type {
   Building,
   Customer,
   Job,
+  OrgSettings,
   Site,
   Keyed,
 } from '../shared/types';
@@ -77,14 +85,30 @@ const OPENAI_API_KEY = defineSecret('OPENAI_API_KEY');
 const MODEL = 'gpt-4o';
 
 /**
+ * How much of the organisation's own AI guidance reaches the prompt. Mirrors the
+ * ceiling updateOrgSettings stores against (AI_GUIDANCE_MAX_LENGTH), so a value
+ * that got past validation is never silently truncated here; it is a second
+ * bound, not a second policy, and exists so that guidance written before any
+ * future ceiling change still cannot swamp the system prompt.
+ */
+const AI_GUIDANCE_PROMPT_LIMIT = 1500;
+
+/**
  * Sanitise a free-text value before it is interpolated into the LLM prompt. The
  * building name is assessor-controlled, so we (a) strip control characters and
  * newlines that could be used for prompt injection ("\n\nIgnore previous
  * instructions..."), (b) collapse whitespace, and (c) cap the length so a long
  * value cannot dominate or overflow the prompt. This is defence-in-depth on top
  * of the strong system-prompt guardrails (use ONLY the findings provided).
+ *
+ * `maxLength` defaults to the building name's 120 characters. The organisation's
+ * house AI guidance runs through this SAME function - it is admin-controlled
+ * free text reaching the same prompt, and stripping its newlines is exactly the
+ * point, since a guidance block that could open a new line could forge a new
+ * prompt section - but it is a paragraph rather than a name, so it passes its
+ * own ceiling instead of being cut off mid-sentence at 120.
  */
-function sanitizeForPrompt(value: string): string {
+function sanitizeForPrompt(value: string, maxLength = 120): string {
   return value
     // Strip ASCII control characters (incl. newlines/tabs) and DEL.
     // eslint-disable-next-line no-control-regex
@@ -92,7 +116,7 @@ function sanitizeForPrompt(value: string): string {
     // Collapse any remaining whitespace runs to single spaces.
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 120);
+    .slice(0, maxLength);
 }
 
 export const generateAssessmentDraft = onCall<GenerateAssessmentDraftInput>(
@@ -148,22 +172,31 @@ export const generateAssessmentDraft = onCall<GenerateAssessmentDraftInput>(
         }
 
         // 3. Load the authoritative context (answers + building/customer/site +
-        //    the admin-editable AI regulatory context).
-        const [answersSnap, buildingSnap, customerSnap, siteSnap, aiCtxSnap] =
-          await Promise.all([
-            db.ref(paths.db.assessmentAnswers(orgId, assessmentId)).get(),
-            db
-              .ref(paths.db.building(orgId, job.siteId, assessment.buildingId))
-              .get(),
-            db.ref(paths.db.customer(orgId, assessment.customerId)).get(),
-            db.ref(paths.db.site(orgId, job.customerId, job.siteId)).get(),
-            db.ref(platform.aiContext()).get(),
-          ]);
+        //    the admin-editable AI regulatory context + this organisation's own
+        //    settings, which carry its house guidance for the summary writer).
+        const [
+          answersSnap,
+          buildingSnap,
+          customerSnap,
+          siteSnap,
+          aiCtxSnap,
+          orgSettingsSnap,
+        ] = await Promise.all([
+          db.ref(paths.db.assessmentAnswers(orgId, assessmentId)).get(),
+          db
+            .ref(paths.db.building(orgId, job.siteId, assessment.buildingId))
+            .get(),
+          db.ref(paths.db.customer(orgId, assessment.customerId)).get(),
+          db.ref(paths.db.site(orgId, job.customerId, job.siteId)).get(),
+          db.ref(platform.aiContext()).get(),
+          db.ref(paths.db.orgSettings(orgId)).get(),
+        ]);
         const answers = (answersSnap.val() as Keyed<AssessmentAnswer> | null) ?? {};
         const building = buildingSnap.val() as Building | null;
         const customer = customerSnap.val() as Customer | null;
         const site = siteSnap.val() as Site | null;
         const aiContext = (aiCtxSnap.val() as AiContext | null) ?? {};
+        const orgSettings = (orgSettingsSnap.val() as OrgSettings | null) ?? {};
 
         const logger = createLogger({ fn: 'generateAssessmentDraft', orgId });
 
@@ -177,6 +210,16 @@ export const generateAssessmentDraft = onCall<GenerateAssessmentDraftInput>(
         //    context and the deterministic findings; deterministic fallback when
         //    the model is unavailable so the draft is always usable.
         const buildingName = sanitizeForPrompt(building?.name ?? 'this building');
+        // The organisation's own steer, sanitised exactly like every other piece
+        // of free text that reaches the prompt: control characters and newlines
+        // out (a guidance block must not be able to forge a prompt section),
+        // whitespace collapsed, length bounded. Empty guidance sanitises to an
+        // empty string, which the prompt builder simply omits, so an org that
+        // has never opened the settings page gets the prompt it always got.
+        const orgGuidance = sanitizeForPrompt(
+          orgSettings.aiGuidance ?? '',
+          AI_GUIDANCE_PROMPT_LIMIT,
+        );
         let summary = fallbackSummary(issues, dist);
         const apiKey = OPENAI_API_KEY.value();
         if (apiKey) {
@@ -198,6 +241,7 @@ export const generateAssessmentDraft = onCall<GenerateAssessmentDraftInput>(
                   content: buildSummarySystemPrompt(
                     aiContext.regulatoryContext,
                     aiContext.additionalGuidance,
+                    orgGuidance,
                   ),
                 },
                 {

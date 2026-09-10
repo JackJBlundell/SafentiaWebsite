@@ -470,6 +470,9 @@
             "updatedAt": {
               ".validate": "newData.isNumber()"
             },
+            "subject": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
             "$other": {
               ".validate": false
             }

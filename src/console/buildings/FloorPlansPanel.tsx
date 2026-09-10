@@ -23,14 +23,25 @@ import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
-import type {
-  FloorPlan,
-  ManageFloorPlanInput,
-  ManageFloorPlanResult,
+import {
+  isAnnotatableFloorPlan,
+  type FloorPlan,
+  type ManageFloorPlanInput,
+  type ManageFloorPlanResult,
 } from '../../types';
 import { EmptyState, ErrorNotice } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
-import { fileIsFloorPlan, newObjectId, uploadFile } from '../lib/upload';
+import {
+  fileIsFloorPlan,
+  floorPlanKindForFile,
+  floorPlanTypeBadge,
+  floorPlanTypeLabel,
+  formatFileSize,
+  newObjectId,
+  uploadFile,
+  FLOOR_PLAN_ACCEPT,
+  FLOOR_PLAN_TYPES_SENTENCE,
+} from '../lib/upload';
 import { Lightbox } from './Lightbox';
 import styles from './FloorPlansPanel.module.css';
 
@@ -214,6 +225,16 @@ function PlanRow({
     }
   };
 
+  // A drawing the browser cannot render (CAD export, office document) is stored
+  // and downloadable, but it can never be previewed here or pinned in the
+  // annotator - kind === 'file' in the contract. isAnnotatableFloorPlan is the
+  // one place that decision is made, so no screen re-tests kind strings.
+  const annotatable = isAnnotatableFloorPlan(plan.kind);
+  const typeLabel = floorPlanTypeLabel(plan.fileName, plan.contentType);
+  // Null for a plan stored before sizeBytes existed, so the meta line simply
+  // says less rather than claiming a size nobody recorded.
+  const sizeLabel = formatFileSize(plan.sizeBytes);
+
   return (
     <li className={styles.row}>
       {plan.kind === 'pdf' ? (
@@ -227,6 +248,18 @@ function PlanRow({
           aria-label={`Download ${plan.name} (PDF)`}
         >
           PDF
+        </a>
+      ) : !annotatable ? (
+        // No preview is possible, so the tile states the format instead of
+        // pretending to be a thumbnail, and downloads on activation.
+        <a
+          className={styles.fileTile}
+          href={plan.imageUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Download ${plan.name} (${typeLabel})`}
+        >
+          {floorPlanTypeBadge(plan.fileName)}
         </a>
       ) : (
         <button
@@ -301,6 +334,34 @@ function PlanRow({
             <p className={styles.planName}>{plan.name}</p>
             {plan.description && (
               <p className={styles.planDescription}>{plan.description}</p>
+            )}
+            {!annotatable && (
+              // The honest account of a non-renderable drawing: what it is, the
+              // file it came from, how big it is, the fact that it cannot be
+              // previewed or pinned, and a way to open it. Size matters here in
+              // particular: it is the one clue to what a download will cost on
+              // site, and it is all this tile can offer in place of a preview.
+              <div className={styles.fileNote}>
+                <p className={styles.fileMeta}>
+                  {typeLabel}
+                  {plan.fileName ? ` · ${plan.fileName}` : ''}
+                  {sizeLabel ? ` · ${sizeLabel}` : ''}
+                </p>
+                <p className={styles.fileCopy}>
+                  This format cannot be previewed in the console, and location
+                  pins can only be placed on image and PDF plans. Download it to
+                  open it in your own drawing software.
+                </p>
+                <Button
+                  variant="ghost"
+                  href={plan.imageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Download
+                  <span className={styles.visuallyHidden}> {plan.name}</span>
+                </Button>
+              </div>
             )}
             {manage.error && !confirmingRemove && (
               <p role="alert" className={styles.inlineError}>
@@ -543,7 +604,15 @@ function AddPlanForm({ buildingId }: { buildingId: string }) {
           name: trimmedName,
           description: entry.description.trim() || undefined,
           imageUrl: entry.uploadedUrl,
-          kind: entry.file.type === 'application/pdf' ? 'pdf' : 'image',
+          // Derived from the file itself, not guessed at the call site: an
+          // image or PDF can be rendered and pinned, anything else is a stored
+          // 'file'. The originating file name, content type and size ride along
+          // so a non-renderable drawing can be named, described and sized
+          // without sniffing or re-fetching the object.
+          kind: floorPlanKindForFile(entry.file),
+          fileName: entry.file.name,
+          contentType: entry.file.type || undefined,
+          sizeBytes: entry.file.size,
         },
       });
       if (result) {
@@ -588,20 +657,26 @@ function AddPlanForm({ buildingId }: { buildingId: string }) {
     >
       <div className={styles.field}>
         <label className={styles.label} htmlFor="new-plan-files">
-          Plan files (each an image up to 10 MB, or a PDF up to 25 MB)
+          Plan files
         </label>
         <input
           id="new-plan-files"
           className={styles.fileInput}
           type="file"
-          accept="image/*,application/pdf"
+          /* Both the accept list and the hint below are derived from the one
+             allow-list in upload.ts, so they cannot drift from what is
+             actually accepted. */
+          accept={FLOOR_PLAN_ACCEPT}
           multiple
           onChange={onFileChange}
           disabled={running}
         />
+        <p className={styles.hint}>{FLOOR_PLAN_TYPES_SENTENCE}</p>
         <p className={styles.hint}>
           Choose several files at once to add a plan per floor. Names start from
-          the file name and can be edited below.
+          the file name and can be edited below. Assessors can place location
+          pins on image and PDF plans; CAD drawings and documents are stored for
+          download only.
         </p>
       </div>
 

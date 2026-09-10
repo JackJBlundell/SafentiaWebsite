@@ -28,7 +28,14 @@ import {
   type ManageFloorPlanResult,
   type ResponsibleParty,
 } from '../../types';
-import { fileIsFloorPlan, newObjectId, uploadFile } from '../lib/upload';
+import {
+  fileIsFloorPlan,
+  floorPlanKindForFile,
+  newObjectId,
+  uploadFile,
+  FLOOR_PLAN_ACCEPT,
+  FLOOR_PLAN_TYPES_SENTENCE,
+} from '../lib/upload';
 import { AddressField } from '../ui/AddressField';
 import { ErrorNotice, PageHeader, type Crumb } from '../ui/Page';
 import { Stepper } from '../ui/Stepper';
@@ -523,7 +530,12 @@ function PlansStep({
       plan: {
         name: trimmedName,
         imageUrl: downloadUrl,
-        kind: file.type === 'application/pdf' ? 'pdf' : 'image',
+        // Same derivation as FloorPlansPanel: images and PDFs can be rendered
+        // and pinned, every other accepted drawing is a stored 'file'.
+        kind: floorPlanKindForFile(file),
+        fileName: file.name,
+        contentType: file.type || undefined,
+        sizeBytes: file.size,
       },
     });
     if (result) {
@@ -546,6 +558,10 @@ function PlansStep({
           Plans unlock location flagging during assessments. You can also manage
           them later from the building page.
         </p>
+        <p className={shared.hint}>
+          {FLOOR_PLAN_TYPES_SENTENCE} Location pins can only be placed on image
+          and PDF plans; CAD drawings and documents are stored for download.
+        </p>
 
         <div
           className={dragOver ? styles.dropAreaActive : styles.dropArea}
@@ -557,16 +573,15 @@ function PlansStep({
           onDrop={onDrop}
         >
           <label className={styles.dropLabel} htmlFor="wizard-plan-file">
-            {file
-              ? file.name
-              : 'Drop a plan here, or choose a file (image up to 10 MB, or PDF up to 25 MB)'}
+            {file ? file.name : 'Drop a plan here, or choose a file'}
           </label>
           <input
             key={inputNonce}
             id="wizard-plan-file"
             className={styles.fileInput}
             type="file"
-            accept="image/*,application/pdf"
+            /* Derived from the one allow-list in upload.ts, as the hint below. */
+            accept={FLOOR_PLAN_ACCEPT}
             onChange={onFileChange}
             disabled={busy}
           />

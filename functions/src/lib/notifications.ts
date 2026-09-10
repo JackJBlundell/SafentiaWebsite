@@ -166,13 +166,64 @@ export async function sendNotification(
       tokens,
       notification: { title: input.title, body: input.body },
       data: input.link ? { link: input.link } : {},
+      // ANDROID PRESENTATION AND DELIVERY.
+      //
+      // Without this block the message goes out at FCM's NORMAL priority, which
+      // Doze is free to hold until the device next wakes - and a device in a van
+      // between sites is the exact case. Everything this app pushes is something
+      // a person is waiting on: a job assigned to them, an auditor asking for
+      // more information against a deadline, remedial work falling due. `high`
+      // is what those warrant; nothing here is marketing.
+      //
+      // The channel is named explicitly rather than left to the manifest default
+      // so the two ends are visible together: the app creates `safentia_alerts`
+      // at IMPORTANCE_HIGH on startup (MainApplication.kt), and a message that
+      // named a channel the app has not created would be posted silently into a
+      // fallback instead.
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'safentia_alerts',
+          // The status-bar mark and its tint. Named here as well as in the
+          // manifest because a message-level value is what survives if the
+          // manifest defaults are ever dropped, and neither costs anything.
+          icon: 'ic_notification',
+          color: '#D9C554',
+        },
+      },
+      // iOS is unchanged in behaviour and stated only so the two platforms read
+      // side by side: alerts are user-visible, so they must not be sent as
+      // background content.
+      apns: {
+        headers: { 'apns-priority': '10' },
+      },
     });
+    // The FAILURE CODES are logged, not just the counts.
+    //
+    // Without them a failed send is undiagnosable from the outside: the codes
+    // were previously read only to decide which tokens to prune and were then
+    // discarded, so a run of failures looked identical whether the token was
+    // dead, the payload was rejected, or the project's APNs credentials were
+    // missing - three faults with completely different fixes. Distinct codes
+    // only (there is one per device and they repeat), and never the tokens
+    // themselves, which are credentials.
+    const failureCodes =
+      response.failureCount > 0
+        ? [
+            ...new Set(
+              response.responses
+                .filter((r) => r.error)
+                .map((r) => r.error?.code ?? 'unknown'),
+            ),
+          ]
+        : [];
     logger.info('Push dispatched', {
       recipientUid,
       type: input.type,
       deviceCount: tokens.length,
       successCount: response.successCount,
       failureCount: response.failureCount,
+      ...(failureCodes.length > 0 ? { failureCodes } : {}),
     });
 
     // Prune tokens FCM reports as permanently invalid so a dead device does not
