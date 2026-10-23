@@ -20,7 +20,7 @@
 // IDEMPOTENT: deterministic ids + set() everywhere, so re-running overwrites in
 // place. TEST ROOT ONLY - every path is asserted to sit under /test.
 //
-//   GOOGLE_APPLICATION_CREDENTIALS=../../safentia-tech-firebase-adminsdk-*.json \
+//   GOOGLE_APPLICATION_CREDENTIALS=./serviceAccount.safentia-tech.json \
 //   npx ts-node src/seed/routebuddiesTestJob.ts
 // ============================================================================
 

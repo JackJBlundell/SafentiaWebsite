@@ -50,7 +50,7 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   getPortalClaims,
   envFor,
 } from '../lib/guards';
@@ -87,23 +87,24 @@ interface Caller {
 }
 
 /**
- * Authorise the caller and resolve their scope. Claim-level only: the LIVE
- * checks that need database reads (the customer's standing, a portal admin's
- * own seat) happen in the body where the reads are shared.
+ * Authorise the caller and resolve their scope. A staff caller is checked
+ * against their live membership record; the portal LIVE checks (the customer's
+ * standing, a portal admin's own seat) happen in the body where the reads are
+ * shared.
  *
  * The staff branch is chosen on the presence of `orgId`, which only a staff
  * token carries; everything else falls to getPortalClaims, which itself refuses
  * a token without portalOrgId + customerId. A caller who is neither is turned
  * away by that guard with the portal's own message.
  */
-function resolveCaller(
+async function resolveCaller(
   request: CallableRequest,
   uid: string,
   input: Record<string, unknown>,
-): Caller {
+): Promise<Caller> {
   const token = request.auth?.token;
   if (typeof token?.orgId === 'string' && token.orgId.length > 0) {
-    const claims = getClaims(request);
+    const claims = await getLiveClaims(request);
     assertOrgRole(claims, 'admin');
     const { paths } = envFor(claims);
     // A staff admin names the customer. It is validated as a KEY because it is
@@ -150,7 +151,7 @@ export const updateCustomerMember = onCall<UpdateCustomerMemberInput>(
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'updateCustomerMember');
         const input = assertObject(request.data);
-        const caller = resolveCaller(request, uid, input);
+        const caller = await resolveCaller(request, uid, input);
         const { paths, orgId, customerId } = caller;
 
         // 2. Validate the change itself. `memberUid` is a database key (it

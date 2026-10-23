@@ -44,6 +44,7 @@ import type {
   TemplateCertificate,
   TemplateSection,
 } from '../shared/types';
+import { tenantStoragePrefix } from '../lib/validate';
 
 // ----------------------------------------------------------------------------
 // The resolved model the renderer consumes. Every field is either a concrete
@@ -440,16 +441,26 @@ function answerToText(
  * whose `data` is set on success and absent on any failure (missing object,
  * permissions, transient error), so one broken image never fails the report
  * (brief 18.3). The path comes from the data model, which itself came from the
- * tenant-scoped path builders, so we never address outside the tenant.
+ * tenant-scoped path builders - except where a client wrote it, which is why
+ * the tenant prefix is re-checked here before any download.
  */
 async function resolveImage(
   storagePath: string | undefined,
   title: string,
+  tenant: string,
   logger: Logger,
 ): Promise<ResolvedImage | undefined> {
   const path = clean(storagePath);
   if (!path) {
     return undefined;
+  }
+  // The Admin SDK ignores Storage rules, and several of these references are
+  // client-written (answer photos, flag composites), so the tenant boundary is
+  // enforced HERE: anything outside this org's own `{env}/orgs/{orgId}/` tree
+  // is treated as unavailable, never fetched.
+  if (!path.startsWith(tenant)) {
+    logger.warn('Report image outside the tenant refused', { title });
+    return { title, available: false };
   }
   try {
     const [data] = await storage.bucket().file(path).download();
@@ -537,6 +548,7 @@ async function resolveFlagImages(
   flags: AnswerFlag[] | undefined,
   planNames: Map<string, string>,
   prefix: string,
+  tenant: string,
   logger: Logger,
 ): Promise<ResolvedImage[]> {
   const usable = (Array.isArray(flags) ? flags : []).filter(
@@ -554,7 +566,7 @@ async function resolveFlagImages(
       // above has already excluded; the coalesce is belt and braces so the
       // caller never has to reason about a hole in the list.
       return (
-        (await resolveImage(toObjectPath(flag.flagImageUrl), caption, logger)) ?? {
+        (await resolveImage(toObjectPath(flag.flagImageUrl), caption, tenant, logger)) ?? {
           title: caption,
           available: false,
         }
@@ -599,6 +611,7 @@ async function buildSections(
   templateSections: TemplateSection[] | undefined,
   answers: Keyed<AssessmentAnswer>,
   planNames: Map<string, string>,
+  tenant: string,
   logger: Logger,
 ): Promise<ReportSection[]> {
   const sections = Array.isArray(templateSections) ? templateSections : [];
@@ -665,7 +678,7 @@ async function buildSections(
             // Reduce to an object path first: like action images, a stored photo
             // may be a gs:// path, an https download URL, or a bare object path.
             rawPhotos.map((p) =>
-              resolveImage(toObjectPath(p?.path), orNotRecorded(p?.title), logger),
+              resolveImage(toObjectPath(p?.path), orNotRecorded(p?.title), tenant, logger),
             ),
           );
           const usable = resolved.filter(
@@ -682,6 +695,7 @@ async function buildSections(
           answer?.flags,
           planNames,
           'Flagged location',
+          tenant,
           logger,
         );
         if (flagImages.length > 0) {
@@ -805,6 +819,7 @@ async function buildActions(
   answers: Keyed<AssessmentAnswer>,
   templateSections: TemplateSection[] | undefined,
   planNames: Map<string, string>,
+  tenant: string,
   logger: Logger,
 ): Promise<ReportAction[]> {
   const findingIndex = buildFindingIndex(templateSections);
@@ -843,6 +858,7 @@ async function buildActions(
         answer?.flags,
         planNames,
         'Location of finding',
+        tenant,
         logger,
       );
       const flagImages =
@@ -852,6 +868,7 @@ async function buildActions(
               [{ planId: '', pins: [], flagImageUrl: action.locationFlagUrl ?? '' }],
               planNames,
               'Location of finding',
+              tenant,
               logger,
             );
 
@@ -861,6 +878,7 @@ async function buildActions(
         const resolved = await resolveImage(
           image?.path,
           orNotRecorded(image?.title),
+          tenant,
           logger,
         );
         if (resolved) {
@@ -982,13 +1000,16 @@ export async function assembleReport(
     });
   }
 
+  // Every stored file this report may embed lives under the org's own tree.
+  const tenant = tenantStoragePrefix(paths.env, orgId);
+
   // 5. Resolve embedded images (logo, cover image, building photo) and the
   // owning customer concurrently. Every one of them degrades to a placeholder:
   // the cover is designed around each being absent.
   const [logo, coverImage, buildingPhoto, customer] = await Promise.all([
-    resolveImage(toObjectPath(profile.logoUrl), profile.name, logger),
-    resolveImage(toObjectPath(profile.coverImageUrl), profile.name, logger),
-    resolveImage(toObjectPath(building?.photoUrl), 'Building', logger),
+    resolveImage(toObjectPath(profile.logoUrl), profile.name, tenant, logger),
+    resolveImage(toObjectPath(profile.coverImageUrl), profile.name, tenant, logger),
+    resolveImage(toObjectPath(building?.photoUrl), 'Building', tenant, logger),
     clean(building?.customerId)
       ? readValue<Customer>(paths.db.customer(orgId, building!.customerId))
       : Promise.resolve(null),
@@ -1011,6 +1032,7 @@ export async function assembleReport(
     assessment.templateSnapshot?.sections,
     answers ?? {},
     planNames,
+    tenant,
     logger,
   );
   const actions = await buildActions(
@@ -1019,6 +1041,7 @@ export async function assembleReport(
     answers ?? {},
     assessment.templateSnapshot?.sections,
     planNames,
+    tenant,
     logger,
   );
 

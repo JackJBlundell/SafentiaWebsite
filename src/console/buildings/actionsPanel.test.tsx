@@ -37,6 +37,8 @@ vi.mock('../../firebase', () => ({
   firebase: { functions: vi.fn(), storage: vi.fn() },
 }));
 
+vi.mock('firebase/storage', async () => (await import('../../test/storageMock')).storageModule);
+
 vi.mock('firebase/functions', () => ({
   httpsCallable: () => mocks.callable,
 }));
@@ -72,6 +74,7 @@ vi.mock('../../query/useRtdbQuery', () => ({
 }));
 
 import { ActionsPanel } from './ActionsPanel';
+import { activateStoredLink } from '../../test/storageMock';
 
 // --- Fixtures -------------------------------------------------------------------
 
@@ -183,18 +186,36 @@ describe('ActionsPanel', () => {
     expect(screen.getByText('Charlie item')).toBeInTheDocument();
   });
 
-  it('renders View location for a flag-born action, opening full size in a new tab', () => {
+  // A download URL for our own bucket; anything else is refused (useStoredFileUrl).
+  const OWN_FLAG_URL =
+    'https://firebasestorage.googleapis.com/v0/b/safentia-tech.firebasestorage.app/o/live%2Forgs%2Forg-1%2Fbuildings%2Fbld-1%2Fflags%2Fcomposite.png?alt=media&token=t';
+
+  it('never links a stored URL outside our own Storage bucket', () => {
     mocks.rtdb.data = {
       a1: action({
         observation: 'Flagged finding',
         locationFlagUrl: 'https://example.com/flags/composite.png',
       }),
+    };
+    render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
+    expect(screen.queryByRole('link', { name: 'View location' })).not.toBeInTheDocument();
+  });
+
+  it('renders View location for a flag-born action, opening full size in a new tab', async () => {
+    mocks.rtdb.data = {
+      a1: action({
+        observation: 'Flagged finding',
+        locationFlagUrl: OWN_FLAG_URL,
+      }),
       a2: action({ observation: 'Plain finding' }),
     };
     render(<ActionsPanel siteId="site-1" buildingId="bld-1" />);
-    const link = screen.getByRole('link', { name: 'View location' });
-    expect(link).toHaveAttribute('href', 'https://example.com/flags/composite.png');
-    expect(link).toHaveAttribute('target', '_blank');
+    const link = await screen.findByRole('link', { name: 'View location' });
+    // Fetched through the SDK (App Check) on click, then shown in a new tab.
+    expect(await activateStoredLink(link)).toEqual({
+      via: 'tab',
+      url: 'blob:live/orgs/org-1/buildings/bld-1/flags/composite.png',
+    });
     // Only the flag-born action carries the link.
     expect(screen.getAllByRole('link', { name: 'View location' })).toHaveLength(1);
   });

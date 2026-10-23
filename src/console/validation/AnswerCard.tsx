@@ -29,10 +29,9 @@
 // assessor's response once present.
 // ============================================================================
 
-import { useEffect, useId, useState } from 'react';
-import { getDownloadURL, ref as storageRef } from 'firebase/storage';
+import { useId } from 'react';
+import { useStoredFileUrl as useStorageUrl } from '../lib/useStoredFileUrl';
 import { Button } from '../../components/Button';
-import { firebase } from '../../firebase';
 import { severityPresentation } from '../../design/rag';
 import { useTheme } from '../../design/ThemeProvider';
 import {
@@ -46,51 +45,6 @@ import {
   type TemplateQuestion,
 } from '../../types';
 import styles from './AnswerCard.module.css';
-
-// ----------------------------------------------------------------------------
-// Storage resolution - a stored object path becomes a tokened URL; a seed row
-// that already stores an https URL passes straight through.
-// ----------------------------------------------------------------------------
-
-function useStorageUrl(pathOrUrl: string | undefined): {
-  url: string | null;
-  failed: boolean;
-} {
-  const isDirect = Boolean(pathOrUrl && /^https?:\/\//.test(pathOrUrl));
-  const [url, setUrl] = useState<string | null>(isDirect ? pathOrUrl ?? null : null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    setFailed(false);
-    if (!pathOrUrl) {
-      setUrl(null);
-      return;
-    }
-    if (/^https?:\/\//.test(pathOrUrl)) {
-      setUrl(pathOrUrl);
-      return;
-    }
-    let cancelled = false;
-    getDownloadURL(storageRef(firebase.storage(), pathOrUrl))
-      .then((resolved) => {
-        if (!cancelled) {
-          setUrl(resolved);
-        }
-      })
-      .catch((error) => {
-        // A missing object must not silently blank the evidence: log loudly
-        // (CONVENTIONS section 4) and say so on screen, distinguishably from
-        // a load that is still in flight.
-        console.error('[Safentia validation] photo url', error);
-        if (!cancelled) {
-          setFailed(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pathOrUrl]);
-  return { url, failed };
-}
 
 /** One photo: a thumbnail that is a real link opening full size in a new tab. */
 function PhotoThumb({ photo }: { photo: AnswerPhoto }) {

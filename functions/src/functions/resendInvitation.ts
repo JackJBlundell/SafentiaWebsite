@@ -22,10 +22,10 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
+import { assertObject, requireDbKey, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
@@ -47,14 +47,14 @@ export const resendInvitation = onCall<ResendInvitationInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'resendInvitation');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { env, paths } = envFor(claims);
         const orgId = claims.orgId;
 
         // 2. Validate the invite id.
         const input = assertObject(request.data);
-        const inviteId = requireString(input, 'inviteId', TEXT_LIMITS.shortText);
+        const inviteId = requireDbKey(input, 'inviteId', TEXT_LIMITS.shortText);
 
         // 3. The invite must exist and belong to the CALLER'S org (same opaque
         // not-found for a foreign org as for a missing id - no cross-tenant

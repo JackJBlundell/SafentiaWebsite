@@ -21,6 +21,7 @@ import {
   type SafentiaClaims,
   type OrgRole,
   type OrgRoleSet,
+  type OrgMember,
 } from '../shared/types';
 
 /**
@@ -110,6 +111,52 @@ export function getClaims(request: CallableRequest): SafentiaClaims {
     claims.testMode = true;
   }
   return claims;
+}
+
+/**
+ * Resolve a STAFF caller's claims against the LIVE membership record, not just
+ * the ID token. Every staff callable uses this rather than getClaims.
+ *
+ * WHY. An ID token stays valid for up to an hour after it was minted, and a
+ * client is free to ignore the refresh marker the membership trigger bumps. A
+ * token-only gate therefore lets a member who has just been locked, archived,
+ * removed or demoted keep acting with their old roles for that hour - long
+ * enough for a locked admin to call updateMember on themselves and undo the
+ * lock. The rules layer already re-checks `orgMembers/.../status` on every read
+ * and write; this is the same check for the callable layer.
+ *
+ * The org and environment still come from the token (they choose WHICH record
+ * to read); the roles come from the record, so a role revoked a moment ago is
+ * gone now and a role granted a moment ago works without waiting for a token
+ * refresh. Unknown role flags are ignored exactly as in getClaims.
+ */
+export async function getLiveClaims(
+  request: CallableRequest,
+): Promise<SafentiaClaims> {
+  const claims = getClaims(request);
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw fail.unauthenticated();
+  }
+  const { db } = await import('../admin');
+  const member = (
+    await db.ref(envFor(claims).paths.db.orgMember(claims.orgId, uid)).get()
+  ).val() as OrgMember | null;
+  if (!member || member.status !== 'active') {
+    throw fail.permissionDenied(
+      'Your access to this organisation is not active.',
+    );
+  }
+  const roles: OrgRoleSet = {};
+  const liveRoles = member.roles as Record<string, unknown> | undefined;
+  if (liveRoles && typeof liveRoles === 'object') {
+    for (const role of ORG_ROLES) {
+      if (liveRoles[role] === true) {
+        roles[role as OrgRole] = true;
+      }
+    }
+  }
+  return { ...claims, roles };
 }
 
 /**

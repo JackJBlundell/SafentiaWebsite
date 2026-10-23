@@ -985,3 +985,270 @@ describe('ops/* is fully closed to clients', () => {
     );
   });
 });
+
+// ============================================================================
+// Security-fix batch (assessment/answer/document/logBook/floorPlan rules).
+// ============================================================================
+
+const ASMT_BASE = {
+  conductedBy: 'assessorA',
+  jobId: 'j1',
+  buildingId: 'b1',
+  customerId: 'c1',
+  templateSnapshot: { name: 'T', version: 1 },
+  conductedAt: 1,
+};
+
+describe('Fix 1: assessment create must match the job building + customer', () => {
+  beforeEach(async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'live/jobs/orgA/j1': { assessorUid: 'assessorA', status: 'scheduled', buildingId: 'b1', customerId: 'c1', templateId: 't1', templateVersion: 1 },
+    });
+  });
+
+  test('a create whose buildingId + customerId match the job is allowed', async () => {
+    const db = await dbFor(assessorA);
+    await assertSucceeds(db.ref('live/assessments/orgA/job-j1').set({ ...ASMT_BASE, status: 'inProgress' }));
+  });
+
+  test('a create pointing at a foreign buildingId is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/assessments/orgA/job-j1').set({ ...ASMT_BASE, buildingId: 'bOther', status: 'inProgress' }),
+    );
+  });
+
+  test('a create pointing at a foreign customerId is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/assessments/orgA/job-j1').set({ ...ASMT_BASE, customerId: 'cOther', status: 'inProgress' }),
+    );
+  });
+});
+
+describe('Fix 2: narrative / responsibleParty / manualRiskLevel / answers only while inProgress or infoRequired', () => {
+  async function seedAsmt(status: string): Promise<void> {
+    await seedAsAdmin(await getTestEnv(), {
+      'live/assessments/orgA/asmt1': { ...ASMT_BASE, status },
+    });
+  }
+
+  const WRITES: Array<[string, string, unknown]> = [
+    ['narrative', 'live/assessments/orgA/asmt1/narrative/summary', 'S'],
+    ['responsibleParty', 'live/assessments/orgA/asmt1/responsibleParty/name', 'RP'],
+    ['manualRiskLevel', 'live/assessments/orgA/asmt1/manualRiskLevel', { level: 'high', byUid: 'assessorA', at: 1 }],
+    ['answer', 'live/assessmentAnswers/orgA/asmt1/q1', { text: 'ok', updatedAt: 1 }],
+  ];
+
+  for (const status of ['inProgress', 'infoRequired']) {
+    for (const [label, path, value] of WRITES) {
+      // The $assessmentId `.validate` is evaluated for these deep writes too
+      // (emulator-proven), which is why it only pins status to inProgress on
+      // CREATE - otherwise the infoRequired window could never open.
+      test(`status ${status}: conducting assessor writes ${label} (allow)`, async () => {
+        await seedAsmt(status);
+        const db = await dbFor(assessorA);
+        await assertSucceeds(db.ref(path).set(value));
+      });
+    }
+  }
+
+  test('the conducting assessor can CLEAR the manual risk override (allow)', async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'live/assessments/orgA/asmt1': {
+        ...ASMT_BASE,
+        status: 'inProgress',
+        manualRiskLevel: { level: 'high', byUid: 'assessorA', at: 1 },
+      },
+    });
+    const db = await dbFor(assessorA);
+    await assertSucceeds(db.ref('live/assessments/orgA/asmt1').update({ manualRiskLevel: null }));
+  });
+
+  test('a manual risk override attributed to someone else is refused (deny)', async () => {
+    await seedAsmt('inProgress');
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/assessments/orgA/asmt1/manualRiskLevel').set({ level: 'high', byUid: 'auditorA', at: 1 }),
+    );
+  });
+
+  test('a non-conducting assessor cannot write narrative even while inProgress (deny)', async () => {
+    await seedAsmt('inProgress');
+    const db = await dbFor(multiA);
+    await assertFails(db.ref('live/assessments/orgA/asmt1/narrative/summary').set('S'));
+  });
+
+  for (const status of ['readyForValidation', 'released']) {
+    test(`status ${status}: all four writes are denied`, async () => {
+      await seedAsmt(status);
+      const db = await dbFor(assessorA);
+      await assertFails(db.ref('live/assessments/orgA/asmt1/narrative/summary').set('S'));
+      await assertFails(db.ref('live/assessments/orgA/asmt1/responsibleParty/name').set('RP'));
+      await assertFails(
+        db.ref('live/assessments/orgA/asmt1/manualRiskLevel').set({ level: 'high', byUid: 'assessorA', at: 1 }),
+      );
+      await assertFails(db.ref('live/assessmentAnswers/orgA/asmt1/q1').set({ text: 'ok', updatedAt: 1 }));
+    });
+  }
+});
+
+describe('Fix 3: answers are granted per-question and an auditor infoRequest is immutable', () => {
+  const REQ = { byUid: 'auditorA', message: 'Need a photo', at: 5 };
+
+  beforeEach(async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'live/assessments/orgA/asmt1': { ...ASMT_BASE, status: 'infoRequired' },
+      'live/assessmentAnswers/orgA/asmt1/q1': { text: 'orig', updatedAt: 1, infoRequest: REQ },
+      'live/assessmentAnswers/orgA/asmt1/q2': { text: 'plain', updatedAt: 1 },
+    });
+  });
+
+  test('the assessor writes infoRequest/response + resolvedAt (allow)', async () => {
+    const db = await dbFor(assessorA);
+    await assertSucceeds(db.ref('live/assessmentAnswers/orgA/asmt1/q1/infoRequest/response').set('Photo added'));
+    await assertSucceeds(db.ref('live/assessmentAnswers/orgA/asmt1/q1/infoRequest/resolvedAt').set(9));
+  });
+
+  test('the assessor updates the answer while keeping the request intact (allow)', async () => {
+    const db = await dbFor(assessorA);
+    await assertSucceeds(
+      db.ref('live/assessmentAnswers/orgA/asmt1/q1').set({
+        text: 'revised',
+        updatedAt: 2,
+        infoRequest: { ...REQ, response: 'done' },
+      }),
+    );
+  });
+
+  test('deleting an answer that carries an infoRequest is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/assessmentAnswers/orgA/asmt1/q1').remove());
+  });
+
+  test('deleting the infoRequest node itself is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/assessmentAnswers/orgA/asmt1/q1/infoRequest').remove());
+  });
+
+  test('overwriting the answer without the infoRequest is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/assessmentAnswers/orgA/asmt1/q1').set({ text: 'x', updatedAt: 2 }));
+  });
+
+  test('altering infoRequest/message is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/assessmentAnswers/orgA/asmt1/q1/infoRequest/message').set('Never mind'));
+  });
+
+  test('altering infoRequest/byUid is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/assessmentAnswers/orgA/asmt1/q1/infoRequest/byUid').set('assessorA'));
+  });
+
+  test('fabricating an infoRequest on an answer that had none is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/assessmentAnswers/orgA/asmt1/q2').set({ text: 'x', updatedAt: 2, infoRequest: { byUid: 'auditorA', message: 'fake', at: 1 } }),
+    );
+  });
+
+  test('deleting an answer WITHOUT an infoRequest is still allowed', async () => {
+    const db = await dbFor(assessorA);
+    await assertSucceeds(db.ref('live/assessmentAnswers/orgA/asmt1/q2').remove());
+  });
+
+  test('a whole-assessment answers write at the $assessmentId level is denied (grant is per-question)', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/assessmentAnswers/orgA/asmt1').set({ q3: { text: 'x', updatedAt: 1 } }));
+  });
+});
+
+describe('Fix 4: documents index is server-only', () => {
+  test('an admin+assessor cannot write a document record (deny)', async () => {
+    const db = await dbFor(multiA);
+    await assertFails(
+      db.ref('live/documents/orgA/b1/safetyPolicy/d1').set({ name: 'D', storagePath: 'live/orgs/orgA/buildings/b1/documents/safetyPolicy/d1', uploadedAt: 1 }),
+    );
+  });
+
+  test('an active member still reads documents (allow)', async () => {
+    await seedAsAdmin(await getTestEnv(), {
+      'live/documents/orgA/b1/safetyPolicy/d1': { name: 'D', uploadedAt: 1 },
+    });
+    const db = await dbFor(assessorA);
+    await assertSucceeds(db.ref('live/documents/orgA/b1/safetyPolicy').once('value'));
+  });
+});
+
+describe('Fix 5: logBook fraCompleted is server-only', () => {
+  test('a client cannot append a fraCompleted entry (deny)', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/logBook/orgA/b1/eF').set({ type: 'fraCompleted', payload: {}, byUid: 'assessorA', at: 1 }),
+    );
+  });
+
+  for (const type of ['fireIncident', 'falseAlarm', 'fireDoorRecord', 'serviceConfirmed', 'assessorAction']) {
+    test(`a client can still append a ${type} entry (allow)`, async () => {
+      const db = await dbFor(assessorA);
+      await assertSucceeds(
+        db.ref(`live/logBook/orgA/b1/e_${type}`).set({ type, payload: {}, byUid: 'assessorA', at: 1 }),
+      );
+    });
+  }
+});
+
+describe('Fix 6: floor plan create validates name + imageUrl', () => {
+  const GOOD_URL = 'live/orgs/orgA/buildings/b1/floorPlans/fp1.png';
+
+  test('a well-formed floor plan is allowed', async () => {
+    const db = await dbFor(assessorA);
+    await assertSucceeds(db.ref('live/floorPlans/orgA/b1/fp1').set({ name: 'Ground', imageUrl: GOOD_URL }));
+  });
+
+  test('a foreign-org imageUrl is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/floorPlans/orgA/b1/fp1').set({ name: 'G', imageUrl: 'live/orgs/orgB/buildings/b1/floorPlans/x.png' }),
+    );
+  });
+
+  test('an imageUrl for a different building is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/floorPlans/orgA/b1/fp1').set({ name: 'G', imageUrl: 'live/orgs/orgA/buildings/b2/floorPlans/x.png' }),
+    );
+  });
+
+  test('an imageUrl in the wrong environment is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/floorPlans/orgA/b1/fp1').set({ name: 'G', imageUrl: 'test/orgs/orgA/buildings/b1/floorPlans/x.png' }),
+    );
+  });
+
+  test('an external URL is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/floorPlans/orgA/b1/fp1').set({ name: 'G', imageUrl: 'https://evil.example/x.png' }),
+    );
+  });
+
+  test('an over-long name (>200) is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/floorPlans/orgA/b1/fp1').set({ name: 'n'.repeat(201), imageUrl: GOOD_URL }));
+  });
+
+  test('an over-long imageUrl (>512) is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(
+      db.ref('live/floorPlans/orgA/b1/fp1').set({ name: 'G', imageUrl: GOOD_URL + 'x'.repeat(520) }),
+    );
+  });
+
+  test('a non-string name is denied', async () => {
+    const db = await dbFor(assessorA);
+    await assertFails(db.ref('live/floorPlans/orgA/b1/fp1').set({ name: 42, imageUrl: GOOD_URL }));
+  });
+});

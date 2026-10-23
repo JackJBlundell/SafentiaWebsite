@@ -9,7 +9,7 @@
     {
       "source": "functions",
       "codebase": "default",
-      "ignore": ["node_modules", ".git", "*.local", "lib/**/*.test.js"],
+      "ignore": ["node_modules", ".git", "*.local", "lib/**/*.test.js", "serviceAccount*.json", "**/serviceAccount*.json", "*.serviceAccount.json"],
       "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
     }
   ],
@@ -42,7 +42,7 @@
         ]
       },
       {
-        "comment": "Baseline security headers. The marketing pages load no third-party origins (self-hosted font, no analytics, no CDN). The ONE deliberate exception is Stripe on the authed billing surface: js.stripe.com (script + frames, for the Payment Element and 3DS) and api.stripe.com (XHR), loaded only by the console's billing pages - Stripe is a listed sub-processor for the billing feature. frame-ancestors 'none' and a tight referrer policy cost nothing and close off clickjacking and referrer leakage; if a fuller CSP is ever added, those Stripe origins must be allowed. HSTS is set by Firebase Hosting on custom domains.",
+        "comment": "Baseline security headers. The ENFORCING Content-Security-Policy is not here: it is stamped into every built page as a <meta http-equiv> by scripts/csp-hashes.mjs (run by npm run build), because its script-src lists the sha256 of each page's own inline scripts (the index.html theme bootstrap, plus vite-react-ssg's __staticRouterHydrationData and __VITE_REACT_SSG_HASH__, which vary per route and per build) and no single header can. That script is the one place the policy and its third-party allow-list (Firebase, App Check's reCAPTCHA, Google sign-in, Stripe, Mapbox) are defined; any new origin is added there. A meta policy cannot carry frame-ancestors, so it is sent here as the only header-borne CSP, and the browser enforces both. HSTS is not set here because Firebase Hosting already sends it on both its own and custom domains.",
         "source": "**",
         "headers": [
           { "key": "X-Content-Type-Options", "value": "nosniff" },

@@ -21,6 +21,7 @@ import { Button } from '../../components/Button';
 import { ImageCropDialog } from '../ui/ImageCropDialog';
 import { fileIsImage, newObjectId, uploadFile } from '../lib/upload';
 import shared from './shared.module.css';
+import { StoredImage } from '../lib/StoredFile';
 import styles from './CustomerImageField.module.css';
 
 /** The photoUrl change a submit should apply: a URL to set, null to clear, or
@@ -185,8 +186,8 @@ export function CustomerImageField({
       </span>
       <div className={styles.row}>
         {image.shownUrl ? (
-          <img
-            src={image.shownUrl}
+          <StoredImage
+            reference={image.shownUrl}
             alt={`${name} logo`}
             className={styles.tile}
           />

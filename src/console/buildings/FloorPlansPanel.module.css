@@ -137,6 +137,21 @@
   overflow-wrap: anywhere;
 }
 
+.downloadLink {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  /* An inline link still needs a comfortable target on touch screens. */
+  display: inline-block;
+  padding-block: var(--space-xs);
+}
+
+.downloadLink:hover {
+  color: var(--brand-ink);
+}
+
 .fileCopy {
   font-size: 0.8125rem;
   color: var(--color-text-secondary);

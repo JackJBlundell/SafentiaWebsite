@@ -28,6 +28,7 @@ import { Button } from '../../components/Button';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { Wordmark } from '../../components/Wordmark';
 import { AccountPage } from '../AccountPage';
+import { StoredImage } from '../lib/StoredFile';
 import { PortalHome } from './PortalHome';
 import { PortalBuilding } from './PortalBuilding';
 import { PortalReport } from './PortalReport';
@@ -192,7 +193,9 @@ function PortalBrandMark() {
       aria-label={`${name} home`}
     >
       <span className={styles.brandIdentity}>
-        {logoUrl && <img src={logoUrl} alt="" className={styles.brandLogo} />}
+        {logoUrl && (
+          <StoredImage reference={logoUrl} alt="" className={styles.brandLogo} />
+        )}
         <span className={styles.brandName} title={name}>
           {name}
         </span>

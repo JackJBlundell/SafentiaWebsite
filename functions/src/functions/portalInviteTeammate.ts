@@ -50,21 +50,21 @@ import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
 import type {
   Customer,
   CustomerContact,
+  CustomerMember,
   InvitationSummary,
   PortalInviteTeammateInput,
   PortalInviteTeammateResult,
 } from '../shared/types';
 
-/** Does the verified portal token grant this caller the customer ADMIN role?
- *  Reconstructed defensively from the token (the same posture getClaims uses for
- *  org roles): only a literal `true` admin flag counts, so a tampered or stale
- *  token cannot assert a role it was never minted with. This is the first place
- *  the product reads a customer role to decide access. */
-function isPortalAdmin(rawRoles: unknown): boolean {
+/** Does this LIVE seat hold the customer ADMIN role? Read from the
+ *  /customerMembers record, not the token: a token outlives a lock or a demotion
+ *  by up to an hour, which would let a just-removed admin invite an alternate
+ *  address as admin and keep a durable seat. Only an active seat with a literal
+ *  `true` admin flag counts, so a malformed record cannot assert a role. */
+function isActivePortalAdmin(member: CustomerMember | null): boolean {
   return (
-    typeof rawRoles === 'object' &&
-    rawRoles !== null &&
-    (rawRoles as Record<string, unknown>).admin === true
+    member?.status === 'active' &&
+    (member.roles as Record<string, unknown> | undefined)?.admin === true
   );
 }
 
@@ -97,9 +97,13 @@ export const portalInviteTeammate = onCall<PortalInviteTeammateInput>(
         const orgId = claims.orgId;
         const customerId = claims.customerId;
 
-        // 2. Authorise: only a customer ADMIN may manage their team. Read from
-        // the verified token, never the payload - this is the customer-role gate.
-        if (!isPortalAdmin(request.auth?.token?.customerRoles)) {
+        // 2. Authorise: only a customer ADMIN may manage their team. Scope comes
+        // from the verified token, the role from the LIVE seat (see
+        // isActivePortalAdmin) - never the payload.
+        const seat = (
+          await db.ref(paths.db.customerMember(orgId, customerId, uid)).get()
+        ).val() as CustomerMember | null;
+        if (!isActivePortalAdmin(seat)) {
           throw fail.permissionDenied(
             'Only a portal administrator can invite teammates.',
           );

@@ -33,7 +33,6 @@ const mocks = vi.hoisted(() => ({
   callable: vi.fn(async () => ({
     data: { reportId: 'rep-2', pdfPath: 'orgs/org-1/reports/rep-2.pdf' },
   })),
-  getDownloadURL: vi.fn(async () => 'https://example.com/report.pdf'),
 }));
 
 vi.mock('../../firebase', () => ({
@@ -45,10 +44,7 @@ vi.mock('firebase/functions', () => ({
   httpsCallable: () => mocks.callable,
 }));
 
-vi.mock('firebase/storage', () => ({
-  ref: vi.fn(),
-  getDownloadURL: () => mocks.getDownloadURL(),
-}));
+vi.mock('firebase/storage', async () => (await import('../../test/storageMock')).storageModule);
 
 vi.mock('../../auth/AuthProvider', () => ({
   useAuth: () => mocks.auth,
@@ -76,6 +72,7 @@ vi.mock('../../query/useRtdbQuery', () => ({
 }));
 
 import { AssessmentHistoryPanel } from './AssessmentHistoryPanel';
+import { activateStoredLink, storageMock } from '../../test/storageMock';
 
 /** The history table links each row through to the assessment in validation, so
  *  it renders react-router <Link>s and needs a router in the tree. Every case
@@ -128,8 +125,7 @@ beforeEach(() => {
     'uid-amy': { name: 'Amy Archer' } as OrgMember,
   };
   mocks.callable.mockClear();
-  mocks.getDownloadURL.mockClear();
-  mocks.getDownloadURL.mockResolvedValue('https://example.com/report.pdf');
+  storageMock.reset();
 });
 
 describe('AssessmentHistoryPanel', () => {
@@ -183,12 +179,14 @@ describe('AssessmentHistoryPanel', () => {
     renderPanel();
     expect(screen.getByText('Generated 1 July 2026')).toBeInTheDocument();
     const link = await screen.findByRole('link', { name: 'Download' });
-    expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
-    expect(link).toHaveAttribute('target', '_blank');
+    expect(await activateStoredLink(link)).toMatchObject({
+      via: 'download',
+      url: 'blob:orgs/org-1/reports/rep-1.pdf',
+    });
   });
 
   it('degrades to honest copy when the report object is unreachable', async () => {
-    mocks.getDownloadURL.mockRejectedValue(new Error('denied'));
+    storageMock.missing.add('orgs/org-1/reports/rep-1.pdf');
     mocks.fixtures.reports = {
       'rep-1': { pdfPath: 'orgs/org-1/reports/rep-1.pdf', generatedAt: JULY_1 },
     };

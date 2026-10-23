@@ -31,10 +31,10 @@ import {
   assertAppCheck,
   assertAuth,
   assertAssessorOnJob,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
+import { assertObject, requireDbKey, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { assertNotSuspended, resolvePlanContext } from '../lib/planContext';
 import { resolveResponsibleParty } from '../lib/responsibleParty';
@@ -66,12 +66,12 @@ export const startAssessment = onCall<StartAssessmentInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'startAssessment');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
 
         const input = assertObject(request.data);
-        const jobId = requireString(input, 'jobId', TEXT_LIMITS.shortText);
+        const jobId = requireDbKey(input, 'jobId', TEXT_LIMITS.shortText);
 
         // 2. Load the job and confirm the caller is its assigned assessor.
         const jobSnap = await db.ref(paths.db.job(orgId, jobId)).get();

@@ -19,7 +19,7 @@ import { db } from '../admin';
 import { callableOptions } from '../lib/callable';
 import { createLogger } from '../lib/logging';
 import { fail, runCallable } from '../lib/errors';
-import { assertAppCheck, assertAuth, getClaims, envFor } from '../lib/guards';
+import { assertAppCheck, assertAuth, getLiveClaims, envFor } from '../lib/guards';
 import { assertObject } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import type {
@@ -68,7 +68,7 @@ export const updateMyPreferences = onCall<UpdateMyPreferencesInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'updateMyPreferences');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
 

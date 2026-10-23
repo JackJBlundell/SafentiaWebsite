@@ -52,7 +52,7 @@ import { fail, runCallable } from '../lib/errors';
 import {
   assertAppCheck,
   assertAuth,
-  getClaims,
+  getLiveClaims,
   getPortalClaims,
   envFor,
 } from '../lib/guards';
@@ -176,7 +176,7 @@ export const getReportDownloadUrl = onCall<GetReportDownloadUrlInput>(
         const portal = isPortalToken(request);
         const claims: SafentiaClaims = portal
           ? getPortalClaims(request)
-          : getClaims(request);
+          : await getLiveClaims(request);
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
 

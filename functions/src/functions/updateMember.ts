@@ -23,12 +23,12 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import {
   assertObject,
-  requireString,
+  requireDbKey,
   requireRoleSet,
   requireEnum,
   TEXT_LIMITS,
@@ -57,7 +57,7 @@ export const updateMember = onCall<UpdateMemberInput>(callableOptions, (request)
       assertAppCheck(request);
       const { uid } = assertAuth(request);
       await assertRateLimit(uid, 'updateMember');
-      const claims = getClaims(request);
+      const claims = await getLiveClaims(request);
       assertOrgRole(claims, 'admin');
       const { paths } = envFor(claims);
       const orgId = claims.orgId;
@@ -66,7 +66,7 @@ export const updateMember = onCall<UpdateMemberInput>(callableOptions, (request)
       // requireRoleSet enforces the allow-list and literal-true flags (the union
       // model); status must be a known lifecycle state.
       const input = assertObject(request.data);
-      const memberUid = requireString(input, 'memberUid', TEXT_LIMITS.shortText);
+      const memberUid = requireDbKey(input, 'memberUid', TEXT_LIMITS.shortText);
       const roles: OrgRoleSet | undefined =
         input.roles !== undefined ? requireRoleSet(input) : undefined;
       const status: MemberStatus | undefined =

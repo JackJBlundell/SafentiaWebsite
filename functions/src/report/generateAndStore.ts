@@ -21,6 +21,7 @@ import type { Logger } from '../lib/logging';
 import type { ActivityEntry, Report } from '../shared/types';
 import { assembleReport } from './assemble';
 import { renderReportPdf } from './render';
+import { tenantStoragePrefix } from '../lib/validate';
 
 export interface GenerateAndStoreArgs {
   /** Env-scoped path builders (test or live) - resolved by the caller. */
@@ -65,6 +66,7 @@ export async function generateAndStoreReport(
   const certificate = model.certificate
     ? await (await import('./certificate')).loadCertificate(
         model.certificate,
+        tenantStoragePrefix(paths.env, orgId),
         logger,
       )
     : undefined;

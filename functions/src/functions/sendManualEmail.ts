@@ -38,10 +38,10 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, requireEmail } from '../lib/validate';
+import { assertObject, requireDbKey, requireEmail } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { chargeManualEmailQuota } from '../lib/manualEmailLimits';
 import { activityUpdate } from '../lib/events';
@@ -102,12 +102,12 @@ function requireRecipient(value: unknown, index: number): ManualEmailRecipient {
   }
   switch (type) {
     case 'member':
-      return { type, uid: requireString(rec, 'uid', 128) };
+      return { type, uid: requireDbKey(rec, 'uid', 128) };
     case 'contact':
       return {
         type,
-        customerId: requireString(rec, 'customerId', 128),
-        contactId: requireString(rec, 'contactId', 128),
+        customerId: requireDbKey(rec, 'customerId', 128),
+        contactId: requireDbKey(rec, 'contactId', 128),
       };
     case 'email':
       // requireEmail is the strict syntactic check the rest of the platform
@@ -199,7 +199,7 @@ export const sendManualEmail = onCall<SendManualEmailInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'sendManualEmail');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { env, paths } = envFor(claims);
         const orgId = claims.orgId;
@@ -207,7 +207,7 @@ export const sendManualEmail = onCall<SendManualEmailInput>(
 
         // 2. Strict validation - reject, never coerce (brief 18.4).
         const input = assertObject(request.data);
-        const templateId = requireString(input, 'templateId', 200);
+        const templateId = requireDbKey(input, 'templateId', 200);
         if (!Array.isArray(input.recipients) || input.recipients.length === 0) {
           throw fail.invalidArgument('Provide at least one recipient.');
         }

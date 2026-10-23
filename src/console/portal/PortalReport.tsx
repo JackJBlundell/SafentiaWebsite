@@ -17,6 +17,11 @@
 // The prompt still produces the artefact the organisation needs either way: a
 // named, timestamped, server-attributed sign-off in the audit trail.
 //
+// Only a customer admin or finance contact may sign (acceptReport's role table).
+// A viewer reaching an unaccepted report is told plainly who signs it and that
+// it opens once they have, instead of a form the server would refuse. The role
+// check here is UX only; the callable is the authority.
+//
 // The route nests under the existing building URL, so the breadcrumb walks back
 // the way the reader came. onAssessmentStageChange builds the same URL for the
 // email CTA (it resolves the siteId while locating the building), which is why
@@ -65,7 +70,7 @@ const DOWNLOAD_BLOCKED =
 
 export function PortalReport() {
   const { siteId = '', buildingId = '', reportId = '' } = useParams();
-  const { ready, orgId, db } = usePortalScope();
+  const { ready, orgId, db, canAccept } = usePortalScope();
 
   // Subscribed through the building's report LIST rather than the single node:
   // it is the same key PortalBuilding already holds, so arriving from that
@@ -120,8 +125,10 @@ export function PortalReport() {
           buildingId={buildingId}
           reportId={reportId}
         />
-      ) : (
+      ) : canAccept ? (
         <AcceptanceGate buildingId={buildingId} reportId={reportId} />
+      ) : (
+        <AwaitingSignOffCard />
       )}
     </>
   );
@@ -193,6 +200,25 @@ function AcceptanceGate({
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+/** The gate as a viewer meets it: nothing to do yet, and nothing pretended.
+ *  Live like the form - when an entitled teammate accepts, the same listener
+ *  swaps this for the accepted view and the download appears. */
+function AwaitingSignOffCard() {
+  return (
+    <Card>
+      <CardHeader
+        title="Awaiting sign-off"
+        hint="This report has not been accepted yet."
+      />
+      <p className={styles.copy}>
+        This report is waiting to be accepted and signed off by a portal
+        administrator or finance contact for your organisation. You will be able
+        to open and download it here once they have accepted it.
+      </p>
     </Card>
   );
 }

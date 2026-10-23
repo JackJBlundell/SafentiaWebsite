@@ -18,7 +18,7 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import {
@@ -82,7 +82,7 @@ export const manageSite = onCall<ManageSiteInput>(callableOptions, (request) =>
       assertAppCheck(request);
       const { uid } = assertAuth(request);
       await assertRateLimit(uid, 'manageSite');
-      const claims = getClaims(request);
+      const claims = await getLiveClaims(request);
       assertOrgRole(claims, 'admin');
       const { paths } = envFor(claims);
       const orgId = claims.orgId;

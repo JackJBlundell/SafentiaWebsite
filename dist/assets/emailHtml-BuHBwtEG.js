@@ -53,4 +53,3 @@ ${m}
 </table>
 </body>
 </html>`}export{d as n,e as t};
-//# sourceMappingURL=emailHtml-BuHBwtEG.js.map

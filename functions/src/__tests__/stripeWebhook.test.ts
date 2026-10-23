@@ -955,3 +955,110 @@ describe('card update', () => {
     });
   });
 });
+
+// ----------------------------------------------------------------------------
+// Superseded subscriptions (security fix): an event for a subscription that is
+// NOT the org's current stripeSubscriptionId and is terminally dead
+// (canceled / incomplete_expired) must not overwrite the live snapshot, stamp
+// a retention clock, or open dunning. A different-id LIVE subscription is a
+// genuine replacement and is adopted.
+// ----------------------------------------------------------------------------
+
+describe('superseded subscriptions', () => {
+  const LIVE_PRIOR: Partial<OrgSubscription> = {
+    stripeCustomerId: 'cus_1',
+    stripeSubscriptionId: 'sub_new',
+    status: 'active',
+    planId: 'silver',
+    priceId: 'price_silver',
+  };
+
+  function seedPrior(prior: Partial<OrgSubscription>): void {
+    mockDbData[SUB_PATH('org-1')] = { ...prior };
+  }
+
+  test.each(['canceled', 'incomplete_expired'])(
+    'subscription.updated for an old %s subscription is ignored',
+    async (status) => {
+      seedPrior(LIVE_PRIOR);
+      mockStripe.subscriptions.retrieve.mockResolvedValue(
+        fakeSubscription({ id: 'sub_old', status, metadata: { orgId: 'org-1' } }),
+      );
+      const res = await deliver(
+        subscriptionEvent('customer.subscription.updated', { data: { object: { id: 'sub_old' } } }),
+      );
+      expect(res.statusCode).toBe(200);
+      expect(mockDbData[SUB_PATH('org-1')]).toEqual(LIVE_PRIOR);
+      expect(feedEntries()).toEqual([]);
+      expect(mockSendKindEmail).not.toHaveBeenCalled();
+    },
+  );
+
+  test('subscription.deleted for an old canceled subscription does not cancel the org', async () => {
+    seedPrior(LIVE_PRIOR);
+    mockStripe.subscriptions.retrieve.mockResolvedValue(
+      fakeSubscription({ id: 'sub_old', status: 'canceled', metadata: { orgId: 'org-1' } }),
+    );
+    const res = await deliver(
+      subscriptionEvent('customer.subscription.deleted', { data: { object: { id: 'sub_old' } } }),
+    );
+    expect(res.statusCode).toBe(200);
+    const snapshot = mockDbData[SUB_PATH('org-1')] as OrgSubscription;
+    expect(snapshot).toEqual(LIVE_PRIOR);
+    expect(snapshot.retentionUntil).toBeUndefined();
+    expect(feedEntries()).toEqual([]);
+  });
+
+  test('a late invoice.payment_failed on an expired restart attempt opens no dunning', async () => {
+    seedPrior(LIVE_PRIOR);
+    mockStripe.invoices.retrieve.mockResolvedValue(
+      fakeInvoice({ parent: { subscription_details: { subscription: 'sub_old' } } }),
+    );
+    mockStripe.subscriptions.retrieve.mockResolvedValue(
+      fakeSubscription({ id: 'sub_old', status: 'incomplete_expired', metadata: { orgId: 'org-1' } }),
+    );
+    await deliver(subscriptionEvent('invoice.payment_failed', { data: { object: { id: 'in_1' } } }));
+    const snapshot = mockDbData[SUB_PATH('org-1')] as OrgSubscription;
+    expect(snapshot.paymentState).toBeUndefined();
+    expect(snapshot.graceUntil).toBeUndefined();
+    expect(snapshot).toEqual(LIVE_PRIOR);
+  });
+
+  test('a NEW live subscription replacing a canceled one is adopted', async () => {
+    seedPrior({ ...LIVE_PRIOR, stripeSubscriptionId: 'sub_old', status: 'canceled' });
+    mockStripe.subscriptions.retrieve.mockResolvedValue(
+      fakeSubscription({ id: 'sub_new', status: 'active', metadata: { orgId: 'org-1' } }),
+    );
+    await deliver(
+      subscriptionEvent('customer.subscription.created', { data: { object: { id: 'sub_new' } } }),
+    );
+    const snapshot = mockDbData[SUB_PATH('org-1')] as OrgSubscription;
+    expect(snapshot.stripeSubscriptionId).toBe('sub_new');
+    expect(snapshot.status).toBe('active');
+  });
+
+  test('a different-id subscription that is NOT terminal (past_due) is still applied', async () => {
+    seedPrior(LIVE_PRIOR);
+    mockStripe.subscriptions.retrieve.mockResolvedValue(
+      fakeSubscription({ id: 'sub_other', status: 'past_due', metadata: { orgId: 'org-1' } }),
+    );
+    await deliver(
+      subscriptionEvent('customer.subscription.updated', { data: { object: { id: 'sub_other' } } }),
+    );
+    const snapshot = mockDbData[SUB_PATH('org-1')] as OrgSubscription;
+    expect(snapshot.stripeSubscriptionId).toBe('sub_other');
+  });
+
+  test('deletion of the CURRENT subscription still cancels the org', async () => {
+    seedPrior(LIVE_PRIOR);
+    mockStripe.subscriptions.retrieve.mockResolvedValue(
+      fakeSubscription({ id: 'sub_new', status: 'canceled', metadata: { orgId: 'org-1' } }),
+    );
+    await deliver(
+      subscriptionEvent('customer.subscription.deleted', { data: { object: { id: 'sub_new' } } }),
+    );
+    const snapshot = mockDbData[SUB_PATH('org-1')] as OrgSubscription;
+    expect(snapshot.status).toBe('canceled');
+    expect(snapshot.retentionUntil).toBeGreaterThan(Date.now());
+  });
+});

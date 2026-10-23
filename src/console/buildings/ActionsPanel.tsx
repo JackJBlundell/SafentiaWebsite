@@ -48,16 +48,15 @@
 // ============================================================================
 
 import {
-  useEffect,
   useMemo,
   useState,
   type FormEvent,
   type ReactNode,
 } from 'react';
-import { getDownloadURL, ref as storageRef } from 'firebase/storage';
+import { useStoredFileStatus } from '../lib/useStoredFileUrl';
+import { StoredFileLink } from '../lib/StoredFile';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
-import { firebase } from '../../firebase';
 import { useTheme } from '../../design/ThemeProvider';
 import { severityPresentation } from '../../design/rag';
 import { keys } from '../../query/keys';
@@ -164,71 +163,26 @@ function StatusChip({ status }: { status: ActionStatus }) {
   );
 }
 
-/**
- * Resolve a stored-file reference to something a browser can open.
- *
- * Two shapes exist in the pipeline: a full https download URL (older flag
- * composites) and a Storage object path (documents, and every file this panel
- * writes). A path is exchanged for a tokened URL minted for the signed-in
- * member, exactly as the rules intend; an https value is already usable.
- * `failed` is a real state, not a null - a dead link is worse than honest copy.
- */
-function useStoredFileUrl(reference: string): {
-  url: string | null;
-  failed: boolean;
-} {
-  const isDirect = /^https?:\/\//.test(reference);
-  const [url, setUrl] = useState<string | null>(isDirect ? reference : null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (isDirect) {
-      setUrl(reference);
-      return;
-    }
-    let cancelled = false;
-    setUrl(null);
-    setFailed(false);
-    getDownloadURL(storageRef(firebase.storage(), reference))
-      .then((downloadUrl) => {
-        if (!cancelled) {
-          setUrl(downloadUrl);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFailed(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [reference, isDirect]);
-
-  return { url, failed };
-}
-
 /** "View location" for an action born from a flagged floor-plan answer (story
  *  2042): the flag composite, opened full size in a new tab. */
 function LocationFlagLink({ url }: { url: string }) {
-  const resolved = useStoredFileUrl(url);
-  if (resolved.failed) {
+  const status = useStoredFileStatus(url);
+  if (status === 'unavailable') {
     return (
       <span className={styles.locationUnavailable}>Location unavailable</span>
     );
   }
-  if (!resolved.url) {
+  if (status === 'checking') {
     return null;
   }
   return (
-    <a
+    <StoredFileLink
       className={styles.locationLink}
-      href={resolved.url}
-      target="_blank"
-      rel="noopener noreferrer"
+      errorClassName={styles.locationUnavailable}
+      reference={url}
     >
       View location
-    </a>
+    </StoredFileLink>
   );
 }
 
@@ -237,23 +191,24 @@ function LocationFlagLink({ url }: { url: string }) {
  *  history entry that recorded it - because a closure a reader cannot verify is
  *  only half a record. */
 function EvidenceLink({ document }: { document: SafentiaDocument }) {
-  const resolved = useStoredFileUrl(document.storagePath);
+  // Checked without downloading; fetched through the SDK only when clicked.
+  const status = useStoredFileStatus(document.storagePath);
   return (
     <p className={styles.evidence}>
       <span className={styles.evidenceLabel}>Evidence</span>
-      {resolved.failed ? (
+      {status === 'unavailable' ? (
         <span className={styles.evidenceUnavailable}>
           {document.fileName} (unavailable)
         </span>
-      ) : resolved.url ? (
-        <a
+      ) : status === 'ready' ? (
+        <StoredFileLink
           className={styles.evidenceLink}
-          href={resolved.url}
-          target="_blank"
-          rel="noopener noreferrer"
+          errorClassName={styles.evidenceUnavailable}
+          reference={document.storagePath}
+          fileName={document.fileName}
         >
           {document.fileName}
-        </a>
+        </StoredFileLink>
       ) : (
         <span className={styles.evidenceUnavailable}>{document.fileName}</span>
       )}

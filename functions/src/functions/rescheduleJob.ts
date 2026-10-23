@@ -25,10 +25,10 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, requireTimestamp, TEXT_LIMITS } from '../lib/validate';
+import { assertObject, requireDbKey, requireTimestamp, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { assertValidSlot, assertNoSlotClash } from '../lib/jobSlots';
 import { activityUpdate } from '../lib/events';
@@ -60,7 +60,7 @@ export const rescheduleJob = onCall<RescheduleJobInput>(
       assertAppCheck(request);
       const { uid } = assertAuth(request);
       await assertRateLimit(uid, 'rescheduleJob');
-      const claims = getClaims(request);
+      const claims = await getLiveClaims(request);
       assertOrgRole(claims, 'admin');
       const { paths } = envFor(claims);
       const orgId = claims.orgId;
@@ -68,7 +68,7 @@ export const rescheduleJob = onCall<RescheduleJobInput>(
       // 2. Validate input. The slot rules are the same as createJob's, shared
       // via lib/jobSlots so the two admin paths cannot drift.
       const input = assertObject(request.data);
-      const jobId = requireString(input, 'jobId', TEXT_LIMITS.shortText);
+      const jobId = requireDbKey(input, 'jobId', TEXT_LIMITS.shortText);
       const scheduledFor = requireTimestamp(input, 'scheduledFor');
       const scheduledUntil =
         input.scheduledUntil !== undefined
@@ -79,7 +79,7 @@ export const rescheduleJob = onCall<RescheduleJobInput>(
       }
       const newAssessorUid =
         input.assessorUid !== undefined
-          ? requireString(input, 'assessorUid', TEXT_LIMITS.shortText)
+          ? requireDbKey(input, 'assessorUid', TEXT_LIMITS.shortText)
           : undefined;
 
       // 3. The job must exist in the caller's org (the env-scoped path IS the

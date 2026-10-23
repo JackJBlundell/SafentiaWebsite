@@ -23,10 +23,10 @@ import {
   assertAppCheck,
   assertAuth,
   assertAssessorOnJob,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
+import { assertObject, requireDbKey, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { findMissingForSubmission } from '../lib/assessmentChecks';
 import { appendActivity } from '../lib/events';
@@ -52,12 +52,12 @@ export const submitAssessment = onCall<SubmitAssessmentInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'submitAssessment');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
 
         const input = assertObject(request.data);
-        const assessmentId = requireString(
+        const assessmentId = requireDbKey(
           input,
           'assessmentId',
           TEXT_LIMITS.shortText,

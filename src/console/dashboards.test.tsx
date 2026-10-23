@@ -49,7 +49,6 @@ const mocks = vi.hoisted(() => {
       /** Keyed by buildingId, matching the building-scoped reports node. */
       reports: {} as Record<string, Record<string, Report>>,
     },
-    getDownloadURL: vi.fn(async () => 'https://example.com/report.pdf'),
   };
 });
 
@@ -58,12 +57,9 @@ vi.mock('../firebase', () => ({
   firebase: { functions: vi.fn(), storage: vi.fn() },
 }));
 
-// The report affordance resolves a Storage path to a tokened URL; mocked at the
-// SDK boundary so the card renders without touching Storage.
-vi.mock('firebase/storage', () => ({
-  ref: vi.fn(),
-  getDownloadURL: () => mocks.getDownloadURL(),
-}));
+// The report affordance checks and fetches the PDF through the Storage SDK;
+// mocked at that boundary so the card renders without touching Storage.
+vi.mock('firebase/storage', async () => (await import('../test/storageMock')).storageModule);
 
 vi.mock('../auth/AuthProvider', () => ({
   useAuth: () => mocks.auth,
@@ -133,6 +129,7 @@ vi.mock('../query/useRtdbQuery', () => ({
 }));
 
 import { ConsoleHome } from './ConsoleHome';
+import { activateStoredLink } from '../test/storageMock';
 
 // --- Fixtures ----------------------------------------------------------------
 
@@ -451,7 +448,10 @@ describe('ConsoleHome recent releases', () => {
     const link = await screen.findByRole('link', {
       name: 'Download the report for North Tower',
     });
-    expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
+    expect(await activateStoredLink(link)).toMatchObject({
+      via: 'download',
+      url: 'blob:orgs/org-1/reports/rep-1.pdf',
+    });
   });
 
   it('states that the report is not ready rather than offering a dead button', () => {
@@ -494,7 +494,10 @@ describe('ConsoleHome recent releases', () => {
     const link = await screen.findByRole('link', {
       name: /Download the report for North Tower/,
     });
-    expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
+    expect(await activateStoredLink(link)).toMatchObject({
+      via: 'download',
+      url: 'blob:orgs/org-1/reports/rep-legacy.pdf',
+    });
     expect(
       within(releasesCard()).getByText(/Not linked to this assessment/),
     ).toBeInTheDocument();

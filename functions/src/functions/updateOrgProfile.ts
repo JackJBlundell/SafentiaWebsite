@@ -23,7 +23,7 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import {
@@ -90,7 +90,7 @@ export const updateOrgProfile = onCall<UpdateOrgProfileInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'updateOrgProfile');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { env, paths } = envFor(claims);
         const orgId = claims.orgId;

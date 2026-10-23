@@ -31,6 +31,7 @@ import { AccountPage } from './AccountPage';
 import { ConsoleHome } from './ConsoleHome';
 import { OrgSwitcher } from './OrgSwitcher';
 import { useImageFailed } from './useImageFailed';
+import { StoredImage } from './lib/StoredFile';
 import { CustomersRoutes } from './customers/CustomersRoutes';
 import { StaffRoutes } from './staff/StaffRoutes';
 import { SettingsRoutes } from './settings/SettingsRoutes';
@@ -521,8 +522,8 @@ function OrgBrandMark() {
             nothing - which is why there is no monogram fallback here, unlike the
             switcher marks where the image IS the identity. */}
         {logoUrl && !logo.failed && (
-          <img
-            src={logoUrl}
+          <StoredImage
+            reference={logoUrl}
             alt=""
             className={styles.brandLogo}
             onError={logo.onError}

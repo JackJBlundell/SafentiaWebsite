@@ -45,10 +45,10 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
+import { assertObject, requireDbKey, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import { deriveRiskLevel, RAG_CONFIG_DEFAULTS } from '../lib/ragDerivation';
@@ -302,13 +302,13 @@ export const releaseAssessment = onCall<ReleaseAssessmentInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'releaseAssessment');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, ['admin', 'auditor']);
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
 
         const input = assertObject(request.data);
-        const assessmentId = requireString(
+        const assessmentId = requireDbKey(
           input,
           'assessmentId',
           TEXT_LIMITS.shortText,

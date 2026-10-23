@@ -1497,7 +1497,7 @@ export const EMAIL_KINDS: Record<EmailKindId, EmailKindDefinition> = {
         name: 'report.accessInstruction',
         label: 'Portal instruction sentences, exactly as computed today for the accept-flow or no-report case',
         example:
-          'Sign in to your Safentia portal to read and accept the report. You will be asked to type your name to sign it off, and the report is available to download straight afterwards.',
+          'Sign in to your Safentia portal to read and accept the report. A portal administrator or finance contact for your organisation signs it off by typing their name, and the report is available to download straight afterwards.',
       },
     ],
     hasKindLink: true,

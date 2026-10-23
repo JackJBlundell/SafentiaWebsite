@@ -78,6 +78,7 @@ import {
 } from './AnswerCard';
 import { actorName } from '../lib/actorName';
 import { useReportDownload } from './releaseShared';
+import { StoredFileLink } from '../lib/StoredFile';
 import { ValidationGuide } from './ValidationGuide';
 import { hasSeenValidationGuide, rememberValidationGuideSeen } from './guideSeen';
 import styles from './AssessmentReview.module.css';
@@ -208,14 +209,13 @@ function ReportDownload({ report }: { report: Report | null }) {
     );
   }
   return (
-    <a
+    <StoredFileLink
       className={styles.reportDownload}
-      href={download.url}
-      target="_blank"
-      rel="noopener"
+      errorClassName={styles.decisionHint}
+      reference={download.path}
     >
       Download report
-    </a>
+    </StoredFileLink>
   );
 }
 

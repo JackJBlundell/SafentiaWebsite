@@ -47,11 +47,13 @@ import {
   assertAppCheck,
   assertAuth,
   assertAssessorOnJob,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
+import { assertObject, requireDbKey, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
+import { ops } from '../lib/paths';
+import { utcDayKey } from '../lib/manualEmailLimits';
 import {
   extractIssues,
   ragDistribution,
@@ -74,6 +76,7 @@ import type {
   OrgSettings,
   Site,
   Keyed,
+  Environment,
 } from '../shared/types';
 
 /** The OpenAI API key, injected at runtime from Secret Manager (never in the
@@ -92,6 +95,48 @@ const MODEL = 'gpt-4o';
  * future ceiling change still cannot swamp the system prompt.
  */
 const AI_GUIDANCE_PROMPT_LIMIT = 1500;
+
+/**
+ * At most this many MODEL-BACKED drafts per organisation per UTC day - the
+ * OpenAI cost ceiling. The per-user rate limit (lib/rateLimit) only slows one
+ * caller down; an org with many assessors (or one compromised account rotated
+ * across sessions) could still run the paid model all day. A real field day is
+ * a handful of drafts per assessor, so a busy org fits comfortably under 200;
+ * a scripted loop does not. Only calls that would actually reach the model are
+ * charged (no key configured = deterministic fallback = no cost, no charge).
+ */
+const AI_DRAFT_DAILY_CAP = 200;
+
+/**
+ * Charge one model-backed draft against the org's daily allowance, or reject.
+ * Mirrors chargeManualEmailQuota (lib/manualEmailLimits): the counter lives
+ * under the server-only ops namespace keyed by UTC calendar day
+ * (`ops/aiDraftCounts/{env}/{orgId}/{yyyyMmDd}`), so rules default-deny it, no
+ * client can read or reset it, and a new day is simply a new key. One atomic
+ * transaction reads and advances the total, so concurrent drafts cannot race
+ * past the cap, and an over-cap charge ABORTS (no write) and is rejected with
+ * the structured `resource-exhausted` error the client already maps.
+ */
+async function chargeAiDraftQuota(
+  env: Environment,
+  orgId: string,
+  nowMs: number = Date.now(),
+): Promise<void> {
+  const ref = db.ref(ops.aiDraftCount(env, orgId, utcDayKey(nowMs)));
+  const tx = await ref.transaction((current: number | null) => {
+    const next = (current ?? 0) + 1;
+    // Over the cap: abort (undefined) so nothing is written and `committed`
+    // comes back false - the day's total only counts drafts cleared to run.
+    return next > AI_DRAFT_DAILY_CAP ? undefined : next;
+  });
+  if (!tx.committed) {
+    throw fail.resourceExhausted(
+      `Your organisation has reached its daily limit of ${AI_DRAFT_DAILY_CAP} AI drafts. ` +
+        'The limit resets at midnight UTC - please try again then.',
+      { limit: AI_DRAFT_DAILY_CAP },
+    );
+  }
+}
 
 /**
  * Sanitise a free-text value before it is interpolated into the LLM prompt. The
@@ -129,12 +174,12 @@ export const generateAssessmentDraft = onCall<GenerateAssessmentDraftInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'generateAssessmentDraft');
-        const claims = getClaims(request);
-        const { paths } = envFor(claims);
+        const claims = await getLiveClaims(request);
+        const { env, paths } = envFor(claims);
         const orgId = claims.orgId;
 
         const input = assertObject(request.data);
-        const assessmentId = requireString(
+        const assessmentId = requireDbKey(
           input,
           'assessmentId',
           TEXT_LIMITS.shortText,
@@ -223,6 +268,11 @@ export const generateAssessmentDraft = onCall<GenerateAssessmentDraftInput>(
         let summary = fallbackSummary(issues, dist);
         const apiKey = OPENAI_API_KEY.value();
         if (apiKey) {
+          // The org-wide cost ceiling, charged only now that the model is about
+          // to be called, and OUTSIDE the try below: an over-cap rejection must
+          // reach the caller, not be swallowed into the deterministic fallback
+          // (that would silently hand back a lesser draft with no explanation).
+          await chargeAiDraftQuota(env, orgId);
           try {
             // Lazy-load the OpenAI SDK at first use: every deployed function
             // loads the whole barrel graph at cold start, so a static import

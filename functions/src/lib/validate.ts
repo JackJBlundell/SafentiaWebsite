@@ -362,7 +362,7 @@ export function requireEnum<T extends string>(
 
 /** The tenant object-path prefix every stored file for an org lives under
  *  (mirrors shared/paths storageFor: `{env}/orgs/{orgId}/...`). */
-function tenantStoragePrefix(env: Environment, orgId: string): string {
+export function tenantStoragePrefix(env: Environment, orgId: string): string {
   return `${env}/orgs/${orgId}/`;
 }
 

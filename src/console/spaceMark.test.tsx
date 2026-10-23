@@ -2,17 +2,35 @@
 // SpaceMark tests: the three identity tiers, and - the reason this file exists -
 // what happens when tier 1 is a logo that will not load.
 //
-// No mocks. SpaceMark reads nothing but its props (the contrast helper is pure),
-// so it is rendered directly rather than through the console shell, which is the
-// altitude the behaviour actually lives at.
+// SpaceMark reads only its props, plus the logo itself, which is fetched through
+// the Storage SDK (mocked at that boundary). It is rendered directly rather than
+// through the console shell, which is the altitude the behaviour lives at.
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { UserSpace } from '../types';
+import { storageMock } from '../test/storageMock';
 import { SpaceMark } from './SpaceMark';
 
-const BROKEN = 'https://example.test/deleted-logo.png';
+vi.mock('../firebase', () => ({ firebase: { storage: vi.fn() } }));
+vi.mock('firebase/storage', async () => (await import('../test/storageMock')).storageModule);
+
+// Each test uses its own object: fetched files are cached for the session.
+let n = 0;
+let LOGO = '';
+beforeEach(() => {
+  n += 1;
+  LOGO = `live/orgs/org-1/branding/logo-${n}.png`;
+});
+
+/** The logo <img> once it has been fetched (alt="" gives it no img role). */
+async function loadedLogo(container: HTMLElement): Promise<HTMLImageElement> {
+  await vi.waitFor(() => expect(container.querySelector('img')).not.toBeNull());
+  return container.querySelector('img') as HTMLImageElement;
+}
+
+beforeEach(() => storageMock.reset());
 
 function staffSpace(overrides: Partial<UserSpace> = {}): UserSpace {
   return {
@@ -25,23 +43,35 @@ function staffSpace(overrides: Partial<UserSpace> = {}): UserSpace {
 }
 
 describe('SpaceMark', () => {
-  it('shows the organisation logo when it loads', () => {
+  it('shows the organisation logo when it loads', async () => {
     const { container } = render(
-      <SpaceMark space={staffSpace({ logoUrl: BROKEN })} />,
+      <SpaceMark space={staffSpace({ logoUrl: LOGO })} />,
     );
-    expect(container.querySelector('img')).toHaveAttribute('src', BROKEN);
+    // The monogram holds the mark while the logo is fetched.
+    expect(screen.getByText('AF')).toBeInTheDocument();
+    expect(await loadedLogo(container)).toHaveAttribute('src', `blob:${LOGO}`);
     // The monogram is not also rendered underneath it.
     expect(screen.queryByText('AF')).not.toBeInTheDocument();
   });
 
-  it('falls back to the monogram when the logo will not load', () => {
-    // The object was deleted from Storage, or its url never resolved. The
-    // profile still carries the url, so the mark tries it and the browser fails.
+  it('keeps the monogram when the logo cannot be fetched', async () => {
+    // The object was deleted from Storage, or the rules refuse it.
+    storageMock.missing.add(LOGO);
     const { container } = render(
-      <SpaceMark space={staffSpace({ logoUrl: BROKEN, brandColor: '#0B5FA5' })} />,
+      <SpaceMark space={staffSpace({ logoUrl: LOGO, brandColor: '#0B5FA5' })} />,
     );
-    const img = container.querySelector('img') as HTMLImageElement;
-    fireEvent.error(img);
+    await vi.waitFor(() => expect(storageMock.fetched).toContain(LOGO));
+    expect(container.querySelector('img')).not.toBeInTheDocument();
+    const mark = screen.getByText('AF');
+    expect(mark).toHaveStyle({ background: '#0B5FA5' });
+  });
+
+  it('falls back to the monogram when the logo will not render', async () => {
+    // Fetched, but the bytes are not a usable image: the browser fails it.
+    const { container } = render(
+      <SpaceMark space={staffSpace({ logoUrl: LOGO, brandColor: '#0B5FA5' })} />,
+    );
+    fireEvent.error(await loadedLogo(container));
 
     // Without this the browser's broken-image glyph sits inside the mark, which
     // reads as a broken product rather than broken data.
@@ -54,20 +84,28 @@ describe('SpaceMark', () => {
     expect(mark).toHaveStyle({ background: '#0B5FA5' });
   });
 
-  it('retries a corrected logo rather than latching on the failure', () => {
-    const space = staffSpace({ logoUrl: BROKEN });
-    const { container, rerender } = render(<SpaceMark space={space} />);
-    fireEvent.error(container.querySelector('img') as HTMLImageElement);
+  it('never fetches a logo from outside our own Storage bucket', () => {
+    const { container } = render(
+      <SpaceMark space={staffSpace({ logoUrl: 'https://example.test/logo.png' })} />,
+    );
+    expect(container.querySelector('img')).not.toBeInTheDocument();
+    expect(storageMock.fetched).toHaveLength(0);
+    expect(screen.getByText('AF')).toBeInTheDocument();
+  });
+
+  it('retries a corrected logo rather than latching on the failure', async () => {
+    const { container, rerender } = render(
+      <SpaceMark space={staffSpace({ logoUrl: LOGO })} />,
+    );
+    fireEvent.error(await loadedLogo(container));
     expect(container.querySelector('img')).not.toBeInTheDocument();
 
     // An admin fixes the logo. The failure is remembered against the OLD url, so
     // a new one is attempted rather than being suppressed by a latched flag.
-    rerender(
-      <SpaceMark space={staffSpace({ logoUrl: 'https://example.test/new.png' })} />,
-    );
-    expect(container.querySelector('img')).toHaveAttribute(
-      'src',
-      'https://example.test/new.png',
+    const fixed = `${LOGO}.fixed.png`;
+    rerender(<SpaceMark space={staffSpace({ logoUrl: fixed })} />);
+    await vi.waitFor(() =>
+      expect(container.querySelector('img')).toHaveAttribute('src', `blob:${fixed}`),
     );
   });
 

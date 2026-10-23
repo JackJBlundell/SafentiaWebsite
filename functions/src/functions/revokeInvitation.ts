@@ -20,10 +20,10 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
+import { assertObject, requireDbKey, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import type {
@@ -42,14 +42,14 @@ export const revokeInvitation = onCall<RevokeInvitationInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'revokeInvitation');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
 
         // 2. Validate the invite id.
         const input = assertObject(request.data);
-        const inviteId = requireString(input, 'inviteId', TEXT_LIMITS.shortText);
+        const inviteId = requireDbKey(input, 'inviteId', TEXT_LIMITS.shortText);
 
         // 3. The invite must exist, belong to the CALLER'S org, and still be
         // pending. A foreign-org invite returns the same not-found as a missing

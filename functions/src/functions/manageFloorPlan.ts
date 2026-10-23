@@ -31,12 +31,12 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import {
   assertObject,
-  requireString,
+  requireString, requireDbKey,
   clearableString,
   requireEnum,
   requireTenantStorageRef,
@@ -105,7 +105,7 @@ export const manageFloorPlan = onCall<ManageFloorPlanInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'manageFloorPlan');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { env, paths } = envFor(claims);
         const orgId = claims.orgId;
@@ -114,7 +114,7 @@ export const manageFloorPlan = onCall<ManageFloorPlanInput>(
         // actions) the whitelisted plan fields.
         const input = assertObject(request.data);
         const action = requireEnum(input, 'action', ACTIONS);
-        const buildingId = requireString(input, 'buildingId', TEXT_LIMITS.shortText);
+        const buildingId = requireDbKey(input, 'buildingId', TEXT_LIMITS.shortText);
 
         // On update an explicit null on an OPTIONAL field (description, kind)
         // is the CLEAR intent (ClearableFields in the contract: writing null
@@ -317,7 +317,7 @@ export const manageFloorPlan = onCall<ManageFloorPlanInput>(
         }
 
         // 3c. Update / remove both address an existing plan.
-        const planId = requireString(input, 'planId', TEXT_LIMITS.shortText);
+        const planId = requireDbKey(input, 'planId', TEXT_LIMITS.shortText);
         const planPath = paths.db.floorPlan(orgId, buildingId, planId);
         const existingSnap = await db.ref(planPath).get();
         if (!existingSnap.exists()) {

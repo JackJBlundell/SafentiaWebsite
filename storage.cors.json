@@ -1,0 +1,15 @@
+[
+  {
+    "origin": [
+      "https://safentia.co.uk",
+      "https://www.safentia.co.uk",
+      "https://safentia-tech.web.app",
+      "https://safentia-tech.firebaseapp.com",
+      "http://localhost:5173",
+      "http://localhost:4173"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Content-Disposition", "Content-Length"],
+    "maxAgeSeconds": 3600
+  }
+]

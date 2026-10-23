@@ -11,18 +11,16 @@
 // Every assessment renders its stage with the EXACT client-facing words from
 // ASSESSMENT_STAGE_LABELS, and its assessor through actorName (uid -> live
 // member name, "Former staff member" once they leave). A report's Download
-// resolves Report.pdfPath through getDownloadURL exactly like a document row,
-// degrading to honest copy when the object is unreachable. Regenerate is
+// fetches Report.pdfPath through the SDK exactly like a document row, saying so
+// when the object is unreachable. Regenerate is
 // admin/auditor only (matching the generateReport callable's own gate) and is
 // two-step, because it mints a new legal document.
 // ============================================================================
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { equalTo, orderByChild, query } from 'firebase/database';
-import { getDownloadURL, ref as storageRef } from 'firebase/storage';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
-import { firebase } from '../../firebase';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import {
@@ -34,6 +32,8 @@ import {
   type Report,
 } from '../../types';
 import { actorName } from '../lib/actorName';
+import { StoredFileLink } from '../lib/StoredFile';
+import { useStoredFileStatus } from '../lib/useStoredFileUrl';
 import { DataTable, type Column } from '../ui/DataTable';
 import { ErrorNotice } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
@@ -206,30 +206,7 @@ function ReportItem({
     'generateReport',
   );
   const [confirming, setConfirming] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [downloadFailed, setDownloadFailed] = useState(false);
-
-  // Resolve the stored object path into a tokened download URL for the
-  // signed-in member; failure degrades to honest copy, never a dead link.
-  useEffect(() => {
-    let cancelled = false;
-    setDownloadUrl(null);
-    setDownloadFailed(false);
-    getDownloadURL(storageRef(firebase.storage(), report.pdfPath))
-      .then((url) => {
-        if (!cancelled) {
-          setDownloadUrl(url);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setDownloadFailed(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [report.pdfPath]);
+  const fileStatus = useStoredFileStatus(report.pdfPath);
 
   const onRegenerate = async () => {
     if (!report.assessmentId) {
@@ -248,17 +225,18 @@ function ReportItem({
           Generated {formatDate(report.generatedAt)}
         </span>
         <span className={styles.reportActions}>
-          {downloadUrl && (
-            <a
+          {/* Fetched through the SDK (App Check) when clicked. A file that
+              cannot be reached degrades to honest copy, never a dead link. */}
+          {fileStatus === 'ready' && (
+            <StoredFileLink
               className={styles.downloadLink}
-              href={downloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              errorClassName={styles.unavailable}
+              reference={report.pdfPath}
             >
               Download
-            </a>
+            </StoredFileLink>
           )}
-          {downloadFailed && (
+          {fileStatus === 'unavailable' && (
             <span className={styles.unavailable}>
               The report file could not be reached. Please try again.
             </span>

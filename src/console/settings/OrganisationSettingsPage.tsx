@@ -38,6 +38,7 @@ import { CardGrid } from '../ui/Grid';
 import { ImageCropDialog } from '../ui/ImageCropDialog';
 import { ErrorNotice, PageHeader } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
+import { StoredImage } from '../lib/StoredFile';
 import styles from './OrganisationSettingsPage.module.css';
 
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;
@@ -680,7 +681,7 @@ function OrgImageField({
       </span>
       <div className={styles.imageRow}>
         {image.shownUrl ? (
-          <img src={image.shownUrl} alt={alt} className={styles.imageTile} />
+          <StoredImage reference={image.shownUrl} alt={alt} className={styles.imageTile} />
         ) : (
           <span className={styles.imageEmpty}>{emptyLabel}</span>
         )}

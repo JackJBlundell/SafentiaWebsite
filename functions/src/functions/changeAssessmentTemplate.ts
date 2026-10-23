@@ -33,7 +33,7 @@ import {
   assertAppCheck,
   assertAuth,
   assertAssessorOnJob,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import { assertObject, requireDbKey, TEXT_LIMITS } from '../lib/validate';
@@ -59,7 +59,7 @@ export const changeAssessmentTemplate = onCall<ChangeAssessmentTemplateInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'changeAssessmentTemplate');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
         const logger = createLogger({ fn: 'changeAssessmentTemplate', orgId });

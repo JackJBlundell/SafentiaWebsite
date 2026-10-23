@@ -26,12 +26,12 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import {
   assertObject,
-  requireString,
+  requireString, requireDbKey,
   requireEmail,
   optionalString,
   clearableString,
@@ -132,7 +132,7 @@ export const manageCustomer = onCall<ManageCustomerInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'manageCustomer');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { env, paths } = envFor(claims);
         const orgId = claims.orgId;
@@ -365,7 +365,7 @@ export const manageCustomer = onCall<ManageCustomerInput>(
         }
 
         // 3b. Update / archive both address an existing customer.
-        const customerId = requireString(input, 'customerId', TEXT_LIMITS.shortText);
+        const customerId = requireDbKey(input, 'customerId', TEXT_LIMITS.shortText);
         const customerPath = paths.db.customer(orgId, customerId);
         const existingSnap = await db.ref(customerPath).get();
         if (!existingSnap.exists()) {

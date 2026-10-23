@@ -33,12 +33,12 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import {
   assertObject,
-  requireString,
+  requireString, requireDbKey,
   optionalString,
   clearableString,
   requireEnum,
@@ -422,14 +422,14 @@ export const manageAction = onCall<ManageActionInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'manageAction');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { env, paths } = envFor(claims);
         const orgId = claims.orgId;
 
         const input = assertObject(request.data);
         const action = requireEnum(input, 'action', ACTIONS);
-        const buildingId = requireString(input, 'buildingId', TEXT_LIMITS.shortText);
+        const buildingId = requireDbKey(input, 'buildingId', TEXT_LIMITS.shortText);
 
         // 2. The building must exist in THIS org. First stop is the server-
         // maintained buildingCustomerIndex (one targeted read); buildings that
@@ -592,7 +592,7 @@ export const manageAction = onCall<ManageActionInput>(
         }
 
         // 3b. Update / signOff / reopen all address an existing action.
-        const actionId = requireString(input, 'actionId', TEXT_LIMITS.shortText);
+        const actionId = requireDbKey(input, 'actionId', TEXT_LIMITS.shortText);
         const actionPath = paths.db.action(orgId, buildingId, actionId);
         const existingSnap = await db.ref(actionPath).get();
         if (!existingSnap.exists()) {

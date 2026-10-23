@@ -2,4 +2,3 @@ var e=/\{\{\s*([a-zA-Z0-9_][a-zA-Z0-9_.-]*)\s*\}\}/g,t=()=>new RegExp(e.source,`
 `)),g&&_.push(`${g.label}: ${g.url}`),p!==void 0&&p.trim()!==``&&_.push(p);let v=_.filter(e=>e.trim()!==``).join(`
 
 `);return{subject:u,preheader:d,heading:f,paragraphs:m,detailRows:h,cta:g,footerNote:p,text:v,unknown:s}}export{a as n,i as t};
-//# sourceMappingURL=emailVariableEngine-DO2rm8QE.js.map

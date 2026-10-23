@@ -28,10 +28,8 @@
 // accepted before its PDF is offered, and that gate lives on its own screen.
 // ============================================================================
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { getDownloadURL, ref as storageRef } from 'firebase/storage';
-import { firebase } from '../../firebase';
 import { useAuth } from '../../auth/AuthProvider';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
@@ -62,6 +60,8 @@ import {
   portalReadStatus,
   type PortalReadStatus,
 } from './shared';
+import { StoredFileLink } from '../lib/StoredFile';
+import { useStoredFileStatus } from '../lib/useStoredFileUrl';
 import styles from './PortalBuilding.module.css';
 
 const ACTION_STATUS_LABELS: Record<Action['status'], string> = {
@@ -123,37 +123,23 @@ function isLiveAction(action: Action): boolean {
  * link would be worse than an honest one.
  */
 function EvidenceLink({ document }: { document: SafentiaDocument }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setUrl(null);
-    setFailed(false);
-    getDownloadURL(storageRef(firebase.storage(), document.storagePath))
-      .then((resolved) => {
-        if (!cancelled) setUrl(resolved);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [document.storagePath]);
+  // Checked without downloading; the file is fetched through the SDK (App
+  // Check) only when the link is clicked.
+  const status = useStoredFileStatus(document.storagePath);
+  const failed = status === 'unavailable';
 
   return (
     <p className={styles.actionEvidence}>
       Evidence:{' '}
-      {url && !failed ? (
-        <a
+      {status === 'ready' ? (
+        <StoredFileLink
           className={styles.actionEvidenceLink}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
+          errorClassName={styles.actionEvidenceMuted}
+          reference={document.storagePath}
+          fileName={document.fileName}
         >
           {document.fileName}
-        </a>
+        </StoredFileLink>
       ) : (
         <span className={styles.actionEvidenceMuted}>
           {failed ? `${document.fileName} (unavailable)` : document.fileName}
@@ -405,6 +391,10 @@ function ReportRow({
   report: Report;
 }) {
   const acceptance = report.acceptance;
+  // A viewer cannot sign (acceptReport's role table), so their unaccepted row
+  // says who it is waiting on and links to the report screen's honest
+  // "awaiting sign-off" state rather than inviting an action they cannot take.
+  const { canAccept } = usePortalScope();
   return (
     <li className={styles.reportRow}>
       <span className={styles.reportIdentity}>
@@ -417,14 +407,16 @@ function ReportRow({
         >
           {acceptance
             ? `Accepted by ${acceptance.name} on ${formatDate(acceptance.at)}`
-            : 'Awaiting your acceptance'}
+            : canAccept
+              ? 'Awaiting your acceptance'
+              : 'Awaiting sign-off by your organisation'}
         </span>
       </span>
       <Button
-        variant={acceptance ? 'secondary' : 'primary'}
+        variant={acceptance || !canAccept ? 'secondary' : 'primary'}
         to={portalUrls.report(siteId, buildingId, reportId)}
       >
-        {acceptance ? 'Open report' : 'Accept & sign off'}
+        {acceptance ? 'Open report' : canAccept ? 'Accept & sign off' : 'View status'}
       </Button>
     </li>
   );

@@ -57,6 +57,7 @@ import {
   useOrgScope,
 } from './shared';
 import shared from './shared.module.css';
+import { StoredImage } from '../lib/StoredFile';
 import styles from './CustomersList.module.css';
 
 type CustomerRow = { id: string; customer: Customer };
@@ -127,7 +128,11 @@ function buildColumns(
           {row.customer.photoUrl ? (
             // Decorative: the name sits immediately beside it, so an alt would
             // only repeat what is already read out.
-            <img src={row.customer.photoUrl} alt="" className={styles.orgThumb} />
+            <StoredImage
+              reference={row.customer.photoUrl}
+              alt=""
+              className={styles.orgThumb}
+            />
           ) : (
             // A quiet initial keeps the column aligned for the many customers
             // with no image, without reading as a missing-image error.

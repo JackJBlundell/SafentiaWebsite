@@ -24,10 +24,10 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, optionalString, TEXT_LIMITS } from '../lib/validate';
+import { assertObject, requireDbKey, optionalString, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import { sendNotification } from '../lib/notifications';
@@ -52,14 +52,14 @@ export const cancelJob = onCall<CancelJobInput>(
       assertAppCheck(request);
       const { uid } = assertAuth(request);
       await assertRateLimit(uid, 'cancelJob');
-      const claims = getClaims(request);
+      const claims = await getLiveClaims(request);
       assertOrgRole(claims, 'admin');
       const { paths } = envFor(claims);
       const orgId = claims.orgId;
 
       // 2. Validate input. The reason is optional free text for the assessor.
       const input = assertObject(request.data);
-      const jobId = requireString(input, 'jobId', TEXT_LIMITS.shortText);
+      const jobId = requireDbKey(input, 'jobId', TEXT_LIMITS.shortText);
       const reason = optionalString(input, 'reason', TEXT_LIMITS.freeText);
 
       // 3. The job must exist (env-scoped path = tenancy) and still be

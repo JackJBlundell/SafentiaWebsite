@@ -35,12 +35,12 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import {
   assertObject,
-  requireString,
+  requireDbKey,
   requireTenantStorageRef,
   TEXT_LIMITS,
 } from '../lib/validate';
@@ -469,13 +469,13 @@ export const publishTemplate = onCall<PublishTemplateInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'publishTemplate');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { env, paths } = envFor(claims);
         const orgId = claims.orgId;
 
         const input = assertObject(request.data);
-        const templateId = requireString(
+        const templateId = requireDbKey(
           input,
           'templateId',
           TEXT_LIMITS.shortText,

@@ -19,7 +19,7 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import { assertObject, clearableString } from '../lib/validate';
@@ -144,7 +144,7 @@ export const updateOrgSettings = onCall<UpdateOrgSettingsInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'updateOrgSettings');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { paths } = envFor(claims);
         const orgId = claims.orgId;

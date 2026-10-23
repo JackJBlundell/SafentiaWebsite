@@ -53,6 +53,29 @@ import {
   type Environment,
 } from '../shared/types';
 
+/** The job's pinned published template: the immutable archived version first,
+ *  then the live template if (and only if) it is still at the pinned version.
+ *  Null when neither exists. A half-written archive entry (a publish claim
+ *  marker) is not a template and is skipped. */
+async function loadPinnedTemplate(
+  envPaths: ReturnType<typeof paths.forEnv>,
+  orgId: string,
+  job: Job,
+): Promise<Template | null> {
+  const archived = (
+    await db
+      .ref(envPaths.db.templateVersion(orgId, job.templateId, job.templateVersion))
+      .get()
+  ).val() as Template | null;
+  if (archived && archived.version === job.templateVersion) {
+    return archived;
+  }
+  const live = (
+    await db.ref(envPaths.db.template(orgId, job.templateId)).get()
+  ).val() as Template | null;
+  return live && live.version === job.templateVersion ? live : null;
+}
+
 export const onAssessmentCreate = onValueCreated(
   {
     ref: '/{env}/assessments/{orgId}/{assessmentId}',
@@ -92,37 +115,48 @@ export const onAssessmentCreate = onValueCreated(
       }
       const job = jobSnap.val() as Job;
 
-      // 2. Re-read the job's PINNED published template and overwrite the
-      // client-supplied snapshot with the canonical copy. A published template
-      // version is immutable, so the pinned version must still match; if the
-      // template is missing or the version has drifted, log a warning and leave
-      // the client snapshot in place rather than crash (brief 18.3 / 18.4).
-      const templateSnap = await db
-        .ref(envPaths.db.template(orgId, job.templateId))
-        .get();
-      if (!templateSnap.exists()) {
-        logger.warn('Pinned template no longer available; snapshot left as-is', {
+      // 2. Overwrite the client-supplied snapshot with the job's PINNED
+      // published template. The immutable archive copy (templateVersions) is
+      // read first, so a template republished or edited since the job was
+      // created still reconciles to exactly the version the job pinned; the
+      // live template is the fallback for one published before the archive
+      // existed. The client snapshot is NEVER kept: it is client-written, and
+      // the report generator trusts its certificate reference.
+      const assessmentPath = envPaths.db.assessment(orgId, assessmentId);
+      const canonical = await loadPinnedTemplate(envPaths, orgId, job);
+      if (canonical) {
+        await db.ref(`${assessmentPath}/templateSnapshot`).set(canonical);
+        logger.info('Reconciled templateSnapshot from pinned template', {
           jobId,
           templateId: job.templateId,
         });
       } else {
-        const template = templateSnap.val() as Template;
-        if (template.version !== job.templateVersion) {
-          logger.warn('Pinned template version mismatch; snapshot left as-is', {
-            jobId,
-            templateId: job.templateId,
-            pinned: job.templateVersion,
-            current: template.version,
-          });
-        } else {
-          await db
-            .ref(`${envPaths.db.assessment(orgId, assessmentId)}/templateSnapshot`)
-            .set(template);
-          logger.info('Reconciled templateSnapshot from pinned template', {
-            jobId,
-            templateId: job.templateId,
-          });
-        }
+        // No canonical copy exists to restore (template and archive both gone).
+        // Keep the questions so the assessor's work is not lost, but strip the
+        // certificate - the one field that makes the generator read a Storage
+        // object - and flag it for an operator.
+        await db.ref(`${assessmentPath}/templateSnapshot/certificate`).remove();
+        logger.error('Pinned template unavailable; client snapshot unverified', {
+          jobId,
+          templateId: job.templateId,
+          pinned: job.templateVersion,
+        });
+      }
+
+      // 2b. The assessment's building and customer are the JOB's. The create
+      // rule already insists on this; stamping them here as well means no
+      // record can ever carry a client's choice of where its report is filed.
+      if (
+        assessment.buildingId !== job.buildingId ||
+        assessment.customerId !== job.customerId
+      ) {
+        await db.ref(assessmentPath).update({
+          buildingId: job.buildingId,
+          customerId: job.customerId,
+        });
+        logger.warn('Assessment building/customer corrected from its job', {
+          jobId,
+        });
       }
 
       // 3. Stamp the inherited responsible party, when the assessment does not

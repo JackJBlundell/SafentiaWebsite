@@ -282,3 +282,64 @@ describe('Action evidence - portal read scoped by stamped customerId', () => {
     );
   });
 });
+
+// ============================================================================
+// Locked / archived / removed staff (security fix): computeClaims KEEPS the
+// orgId claim for attribution but strips roles to {}. ownOrg() now requires a
+// non-empty roles map, so such a token is denied all staff Storage access.
+// ============================================================================
+describe('Locked member (orgId kept, roles {}) is denied staff Storage', () => {
+  const lockedA: Actor = { uid: 'uL', orgId: 'orgA', roles: {} };
+  const noRolesA: Actor = { uid: 'uN', orgId: 'orgA' };
+  const PHOTO = 'live/orgs/orgA/buildings/b1/photos/lockedSeed';
+
+  async function seedPhoto(): Promise<void> {
+    const env = await getTestEnv();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const s: any = ctx.storage();
+      await s.ref(PHOTO).put(bytes(64), { contentType: 'image/jpeg' });
+    });
+  }
+
+  test('an active member (non-empty roles) still reads the photo (allow)', async () => {
+    await seedPhoto();
+    const s = await storageFor(orgAUser);
+    await assertSucceeds(s.ref(PHOTO).getDownloadURL());
+  });
+
+  test('a locked member with roles {} cannot read the photo (deny)', async () => {
+    await seedPhoto();
+    const s = await storageFor(lockedA);
+    await assertFails(s.ref(PHOTO).getDownloadURL());
+  });
+
+  test('a token with orgId but no roles claim at all cannot read (deny)', async () => {
+    await seedPhoto();
+    const s = await storageFor(noRolesA);
+    await assertFails(s.ref(PHOTO).getDownloadURL());
+  });
+
+  test('a locked member cannot upload a photo (deny)', async () => {
+    const s = await storageFor(lockedA);
+    await assertFails(
+      s.ref('live/orgs/orgA/buildings/b1/photos/lockedUp').put(bytes(64), { contentType: 'image/jpeg' }),
+    );
+  });
+
+  test('a locked member cannot upload a document (deny)', async () => {
+    const s = await storageFor(lockedA);
+    await assertFails(
+      s.ref('live/orgs/orgA/buildings/b1/documents/safetyPolicy/lockedDoc').put(bytes(64), { contentType: 'application/pdf' }),
+    );
+  });
+
+  test('a locked member cannot read the org reports prefix (deny)', async () => {
+    const env = await getTestEnv();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const s: any = ctx.storage();
+      await s.ref('live/orgs/orgA/reports/lockedR.pdf').put(bytes(64), { contentType: 'application/pdf' });
+    });
+    const s = await storageFor(lockedA);
+    await assertFails(s.ref('live/orgs/orgA/reports/lockedR.pdf').getDownloadURL());
+  });
+});

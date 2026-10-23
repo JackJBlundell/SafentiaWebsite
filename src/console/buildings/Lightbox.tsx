@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Button } from '../../components/Button';
 import { DownloadIcon } from '../ui/DownloadIcon';
+import { useStoredFileUrl } from '../lib/useStoredFileUrl';
 import styles from './Lightbox.module.css';
 
 const FOCUSABLE =
@@ -139,4 +140,27 @@ export function Lightbox({ src, title, downloadUrl, onClose }: LightboxProps) {
       </div>
     </div>
   );
+}
+
+/** A Lightbox for a stored-file reference: fetched through the SDK (App Check)
+ *  when opened, so a list of image documents downloads nothing until viewed. */
+export function StoredLightbox({
+  reference,
+  title,
+  onClose,
+}: {
+  reference: string;
+  title: string;
+  onClose: () => void;
+}) {
+  const { url, failed } = useStoredFileUrl(reference);
+  useEffect(() => {
+    if (failed) {
+      onClose();
+    }
+  }, [failed, onClose]);
+  if (!url) {
+    return null;
+  }
+  return <Lightbox src={url} title={title} onClose={onClose} />;
 }

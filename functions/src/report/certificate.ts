@@ -86,11 +86,18 @@ export interface LoadedCertificate {
  */
 export async function loadCertificate(
   certificate: TemplateCertificate,
+  tenant: string,
   logger: Logger,
 ): Promise<LoadedCertificate | undefined> {
   const objectPath = toObjectPath(certificate.url);
   if (!objectPath) {
     logger.warn('Report certificate skipped: reference is not a storage object');
+    return undefined;
+  }
+  // The Admin SDK ignores Storage rules, and the snapshot this reference came
+  // from can be client-written, so only the org's own tree is ever read.
+  if (!objectPath.startsWith(tenant)) {
+    logger.warn('Report certificate skipped: object is outside the tenant');
     return undefined;
   }
 

@@ -31,10 +31,10 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, requireTimestamp, TEXT_LIMITS } from '../lib/validate';
+import { assertObject, requireDbKey, requireTimestamp, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { assertNotSuspended, resolvePlanContext } from '../lib/planContext';
 import { assertValidSlot, assertNoSlotClash } from '../lib/jobSlots';
@@ -63,24 +63,24 @@ export const createJob = onCall<CreateJobInput>(
       assertAppCheck(request);
       const { uid } = assertAuth(request);
       await assertRateLimit(uid, 'createJob');
-      const claims = getClaims(request);
+      const claims = await getLiveClaims(request);
       assertOrgRole(claims, 'admin');
       const { paths } = envFor(claims);
       const orgId = claims.orgId;
 
       // 2. Validate input. Ids are short identifiers; scheduledFor is a timestamp.
       const input = assertObject(request.data);
-      const templateId = requireString(input, 'templateId', TEXT_LIMITS.shortText);
+      const templateId = requireDbKey(input, 'templateId', TEXT_LIMITS.shortText);
       const templateVersion = requireTimestamp(
         // templateVersion is a positive integer like a timestamp - reuse the same
         // positive-integer guard so a non-integer or zero version is rejected.
         { templateVersion: input.templateVersion },
         'templateVersion',
       );
-      const customerId = requireString(input, 'customerId', TEXT_LIMITS.shortText);
-      const siteId = requireString(input, 'siteId', TEXT_LIMITS.shortText);
-      const buildingId = requireString(input, 'buildingId', TEXT_LIMITS.shortText);
-      const assessorUid = requireString(input, 'assessorUid', TEXT_LIMITS.shortText);
+      const customerId = requireDbKey(input, 'customerId', TEXT_LIMITS.shortText);
+      const siteId = requireDbKey(input, 'siteId', TEXT_LIMITS.shortText);
+      const buildingId = requireDbKey(input, 'buildingId', TEXT_LIMITS.shortText);
+      const assessorUid = requireDbKey(input, 'assessorUid', TEXT_LIMITS.shortText);
       const scheduledFor = requireTimestamp(input, 'scheduledFor');
       // Optional time slot (FR-E17). When present it must be well-formed (end
       // after start, same UTC day). Date-only jobs never clash (lib/jobSlots).

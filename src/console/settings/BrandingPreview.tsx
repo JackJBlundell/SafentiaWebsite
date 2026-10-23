@@ -28,6 +28,7 @@
 // branded email consumes it (it dresses the console/app theme, not these).
 // ============================================================================
 
+import { StoredImage } from '../lib/StoredFile';
 import styles from './BrandingPreview.module.css';
 
 /** The PDF's fixed palette, mirroring COLOURS in report/render.ts. A PDF is
@@ -118,7 +119,7 @@ export function BrandingPreview({ orgName, brandPrimary, logoUrl }: BrandingPrev
                 />
               </div>
               {logoUrl && (
-                <img className={styles.paperLogo} src={logoUrl} alt="" />
+                <StoredImage className={styles.paperLogo} reference={logoUrl} alt="" />
               )}
             </div>
             {/* Footer strip: hairline, org name left, page number right. */}

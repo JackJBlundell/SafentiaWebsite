@@ -16,7 +16,14 @@
 // (clause 11.4). The ONE exception is Stripe, a listed sub-processor for the
 // billing feature: the AUTHED billing surface (and only it) loads Stripe.js
 // from js.stripe.com via dynamic import (src/console/billing/stripeClient.ts).
-// No marketing page loads anything third-party.
+// No marketing page loads anything third-party. The signed-in console also
+// reaches Firebase, App Check's reCAPTCHA, Google sign-in and Mapbox.
+//
+// Every origin the site may load is listed in ONE place: the enforcing
+// Content-Security-Policy that scripts/csp-hashes.mjs stamps into each built
+// page after the pre-render, alongside the sha256 of that page's inline
+// scripts. A new external host is blocked in production until it is added
+// there. The dev server sends no policy.
 // ============================================================================
 
 import { defineConfig } from 'vitest/config';
@@ -25,9 +32,11 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   build: {
-    // Source maps ship so a production stack trace is readable during the
-    // warranty period (Agreement clause 12.2) without a separate upload step.
-    sourcemap: true,
+    // Source maps are generated so a production stack trace can be decoded
+    // during the warranty period (Agreement clause 12.2), but 'hidden' omits the
+    // sourceMappingURL comment, so shipped bundles do not point browsers at the
+    // original source. Hosting also refuses to serve **/*.map (firebase.json).
+    sourcemap: 'hidden',
     outDir: 'dist',
   },
   test: {

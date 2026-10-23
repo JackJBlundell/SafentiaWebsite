@@ -10,7 +10,7 @@
 
 import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { forEnv } from '../../paths';
 import type { SessionClaims } from '../../auth/claims';
@@ -48,6 +48,8 @@ const mocks = vi.hoisted(() => {
     fixtures: {} as Record<string, unknown>,
   };
 });
+
+vi.mock('firebase/storage', async () => (await import('../../test/storageMock')).storageModule);
 
 vi.mock('../../firebase', () => ({
   startFirebase: vi.fn(),
@@ -194,7 +196,7 @@ function seedPortalFixtures() {
   };
   const orgProfile: OrgProfile = {
     name: 'Ember Fire Safety',
-    logoUrl: 'https://example.test/ember.png',
+    logoUrl: 'live/orgs/org-ember/branding/logo.png',
     brand: { primary: '#1f6feb', secondary: '#0b3d91' },
   };
   mocks.fixtures = {
@@ -261,9 +263,13 @@ describe('Portal organisation branding', () => {
     const brandLink = await screen.findByRole('link', {
       name: 'Ember Fire Safety home',
     });
-    const logo = brandLink.querySelector('img');
-    expect(logo).not.toBeNull();
-    expect(logo).toHaveAttribute('src', 'https://example.test/ember.png');
+    // Fetched through the SDK (App Check) and shown from a same-origin blob.
+    await waitFor(() =>
+      expect(brandLink.querySelector('img')).toHaveAttribute(
+        'src',
+        'blob:live/orgs/org-ember/branding/logo.png',
+      ),
+    );
     // The customer is told, in words, whose service this is.
     expect(
       screen.getByText(/Ember Fire Safety carries out the fire risk assessments/),
@@ -624,12 +630,17 @@ describe('PortalBuilding', () => {
     ).toBeInTheDocument();
     // Reports: released date, the outstanding-acceptance state, and the link
     // to the acceptance screen (the PDF sits behind that gate, not here).
+    // The default fixture session is a VIEWER, who cannot sign: the row names
+    // who it is waiting on instead of inviting an action they cannot take.
     expect(screen.getByText('Released 9 July 2026')).toBeInTheDocument();
-    expect(screen.getByText('Awaiting your acceptance')).toBeInTheDocument();
-    expect(screen.getByText('1 awaiting acceptance')).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'Accept & sign off' }),
+      screen.getByText('Awaiting sign-off by your organisation'),
     ).toBeInTheDocument();
+    expect(screen.getByText('1 awaiting acceptance')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View status' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Accept & sign off' }),
+    ).not.toBeInTheDocument();
     // Action plan: high severity first despite the fixture's key order, with
     // the Life Protection marker and status label.
     const items = screen.getAllByText(/Fire door to plant room|Signage in stairwells/);
@@ -651,8 +662,73 @@ describe('PortalBuilding', () => {
     for (const button of buttons) {
       expect(button.textContent).not.toMatch(/sign off|edit|create|add|save/i);
     }
+    expect(screen.getByRole('link', { name: 'View status' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['admin', { admin: true }],
+    ['finance', { finance: true }],
+  ] as const)('offers a %s the accept link on an unaccepted report', (_, roles) => {
+    mocks.auth.claims = { ...portalClaims, customerRoles: roles };
+    renderPortalAt('/app/sites/site-1/buildings/b-1');
+    expect(screen.getByText('Awaiting your acceptance')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Accept & sign off' }),
     ).toBeInTheDocument();
+  });
+});
+
+// --- PortalReport: who meets the acceptance form ------------------------------
+
+describe('PortalReport acceptance gate', () => {
+  const REPORT_URL = '/app/sites/site-1/buildings/b-1/reports/r-1';
+
+  it.each([
+    ['admin', { admin: true }],
+    ['finance', { finance: true }],
+  ] as const)('shows a %s the accept & sign off form', async (_, roles) => {
+    mocks.auth.claims = { ...portalClaims, customerRoles: roles };
+    renderPortalAt(REPORT_URL);
+    expect(
+      await screen.findByRole('heading', { name: 'Accept the report' }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Your full name')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Accept & sign off' }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ['a viewer', { viewer: true }],
+    ['a session with no roles', {}],
+  ] as const)('never shows %s the form, only honest awaiting copy', async (_, roles) => {
+    mocks.auth.claims = { ...portalClaims, customerRoles: roles };
+    renderPortalAt(REPORT_URL);
+    expect(
+      await screen.findByRole('heading', { name: 'Awaiting sign-off' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/administrator or finance contact for your organisation/),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Your full name')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Accept & sign off' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('lets a viewer download once someone entitled has accepted', async () => {
+    mocks.fixtures['reports/org-1/building/b-1'] = {
+      'r-1': {
+        pdfPath: 'test/orgs/org-1/reports/r-1.pdf',
+        generatedAt: JULY_9_2026,
+        acceptance: { name: 'Fran Finance', byUid: 'fin-uid', at: JULY_9_2026 },
+      },
+    };
+    renderPortalAt(REPORT_URL);
+    expect(
+      await screen.findByRole('heading', { name: 'Report accepted' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Accepted by Fran Finance on 9 July 2026.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download PDF/ })).toBeInTheDocument();
   });
 });

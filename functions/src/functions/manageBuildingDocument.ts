@@ -22,12 +22,12 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import {
   assertObject,
-  requireString,
+  requireString, requireDbKey,
   optionalString,
   requireEnum,
   requireTenantStorageRef,
@@ -58,7 +58,7 @@ export const manageBuildingDocument = onCall<ManageBuildingDocumentInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'manageBuildingDocument');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { env, paths } = envFor(claims);
         const orgId = claims.orgId;
@@ -68,7 +68,7 @@ export const manageBuildingDocument = onCall<ManageBuildingDocumentInput>(
         // write inside the schema's known children).
         const input = assertObject(request.data);
         const action = requireEnum(input, 'action', ACTIONS);
-        const buildingId = requireString(input, 'buildingId', TEXT_LIMITS.shortText);
+        const buildingId = requireDbKey(input, 'buildingId', TEXT_LIMITS.shortText);
         const category = requireEnum(input, 'category', DOCUMENT_CATEGORIES);
 
         // 3a. Create: a record is a file name plus the tenant Storage path the
@@ -130,7 +130,7 @@ export const manageBuildingDocument = onCall<ManageBuildingDocumentInput>(
         }
 
         // 3b. Remove: the record must exist; delete it with its audit entry.
-        const docId = requireString(input, 'docId', TEXT_LIMITS.shortText);
+        const docId = requireDbKey(input, 'docId', TEXT_LIMITS.shortText);
         const docPath = paths.db.document(orgId, buildingId, category, docId);
         const existingSnap = await db.ref(docPath).get();
         if (!existingSnap.exists()) {

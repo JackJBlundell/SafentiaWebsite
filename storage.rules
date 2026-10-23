@@ -49,9 +49,17 @@ service firebase.storage {
     // false is the same answer by construction. Behaviour is unchanged either
     // way: every use of ownOrg is either standalone (error and false both deny)
     // or the left arm of an OR (both fall through to the right arm).
+    //
+    // It also requires at least one staff ROLE. The orgId claim alone is not a
+    // membership signal: computeClaims keeps orgId for a locked, archived or
+    // removed member (attribution) and strips only their roles. Storage rules
+    // cannot read the live orgMembers status the database rules check, so the
+    // role set is the one signal here that a lock actually revokes.
     function ownOrg(orgId) {
       return 'orgId' in request.auth.token
-        && request.auth.token.orgId == orgId;
+        && request.auth.token.orgId == orgId
+        && 'roles' in request.auth.token
+        && request.auth.token.roles.size() > 0;
     }
 
     // Helper: an image upload within the 10MB ceiling.
@@ -190,9 +198,10 @@ service firebase.storage {
       // defence in depth, but nothing grants on it any more - do not restore
       // this branch to "fix" a portal download, fix the callable.
       //
-      // Staff direct read STAYS. It is scoped by the orgId claim, which is live
-      // (onMembershipChange re-mints it and trips the refresh marker the moment
-      // membership changes), so it carries none of the staleness above; and the
+      // Staff direct read STAYS. It is scoped by ownOrg (orgId claim AND a
+      // non-empty role set; onMembershipChange re-mints both and trips the
+      // refresh marker the moment membership changes), so it carries none of
+      // the staleness above; and the
       // console and the assessor app resolve report PDFs through the Storage SDK
       // in several places. There is no portal exposure in keeping it: a portal
       // token has no orgId claim, so ownOrg can never be true for one.

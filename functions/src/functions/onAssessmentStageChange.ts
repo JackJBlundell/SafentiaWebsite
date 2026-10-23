@@ -608,10 +608,14 @@ export const onAssessmentStageChange = onValueWritten(
                   'building.name': buildingName,
                   // The portal instruction sentences, exactly as computed for
                   // the accept-flow and no-report cases (the catalogue's
-                  // report.accessInstruction contract).
+                  // report.accessInstruction contract). The accept-flow copy
+                  // names WHO signs rather than telling the reader they will:
+                  // one message goes to every contact, and acceptReport refuses
+                  // a portal viewer, so "you will be asked to sign" would be a
+                  // promise the portal breaks for some recipients.
                   'report.accessInstruction':
                     releasedReportId && siteId
-                      ? 'Sign in to your Safentia portal to read and accept the report. You will be asked to type your name to sign it off, and the report is available to download straight afterwards.'
+                      ? 'Sign in to your Safentia portal to read and accept the report. A portal administrator or finance contact for your organisation signs it off by typing their name, and the report is available to download straight afterwards.'
                       : 'You can view the assessment and download the report from your Safentia portal. The report is a secure, authenticated download - sign in to open it.',
                 };
                 // A secure CTA into the portal, never the PDF as an attachment:

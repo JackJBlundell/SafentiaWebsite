@@ -7,9 +7,9 @@
 // one listener per category is the natural, indexed shape (no client-side
 // filtering of a larger subtree).
 //
-// A SafentiaDocument stores its Storage object path, not a download URL, so
-// each row resolves its link via getDownloadURL on mount - the tokened URL is
-// minted for the signed-in member, exactly as the rules intend.
+// A SafentiaDocument stores its Storage object path, not a download URL. Each
+// row fetches the file through the SDK (so App Check is sent) only when it is
+// opened, with the signed-in member's own access, exactly as the rules intend.
 //
 // NOTE on building reference images (story 2022): the schema has no gallery
 // concept - DocumentCategory has no images entry, Building carries a single
@@ -19,11 +19,9 @@
 // schema decision; see the wave report.
 // ============================================================================
 
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { getDownloadURL, ref as storageRef } from 'firebase/storage';
+import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
-import { firebase } from '../../firebase';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import {
@@ -36,7 +34,9 @@ import {
 import { EmptyState, ErrorNotice } from '../ui/Page';
 import { useCallable } from '../ui/useCallable';
 import { fileIsDocument, newObjectId, uploadFile } from '../lib/upload';
-import { Lightbox } from './Lightbox';
+import { StoredFileLink } from '../lib/StoredFile';
+import { useStoredFileStatus } from '../lib/useStoredFileUrl';
+import { StoredLightbox } from './Lightbox';
 import styles from './DocumentsPanel.module.css';
 
 /** Image documents open in the lightbox; everything else keeps its direct
@@ -172,30 +172,12 @@ function DocumentRow({
     ManageBuildingDocumentResult
   >('manageBuildingDocument');
   const [confirming, setConfirming] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [viewing, setViewing] = useState(false);
-
-  // Resolve the record's storagePath into a tokened download URL. The record
-  // deliberately stores the path (stable, tenant-scoped) rather than a URL.
-  useEffect(() => {
-    let cancelled = false;
-    getDownloadURL(storageRef(firebase.storage(), doc.storagePath))
-      .then((url) => {
-        if (!cancelled) {
-          setDownloadUrl(url);
-        }
-      })
-      .catch(() => {
-        // Leave the row as plain text: the record is still legible, and the
-        // rules layer already told us the object is not reachable right now.
-        if (!cancelled) {
-          setDownloadUrl(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [doc.storagePath]);
+  // Checked without downloading; an unreachable file stays plain text - the
+  // record is still legible, and the rules told us the object is not ours to
+  // open right now.
+  const fileStatus = useStoredFileStatus(doc.storagePath);
+  const closeViewer = useCallback(() => setViewing(false), []);
 
   // Removing removes the DB record only: the stored object is not purged in
   // this wave (a later lifecycle/cleanup pass owns Storage garbage collection).
@@ -214,9 +196,10 @@ function DocumentRow({
   return (
     <li className={styles.row}>
       <div className={styles.rowBody}>
-        {downloadUrl && isImageDocument(doc.fileName) ? (
-          // Images open full size in the lightbox; the Download link inside it
-          // reuses this already-resolved URL.
+        {fileStatus !== 'ready' ? (
+          <span className={styles.fileName}>{doc.fileName}</span>
+        ) : isImageDocument(doc.fileName) ? (
+          // Images open full size in the lightbox, fetched when opened.
           <button
             type="button"
             className={styles.fileLinkButton}
@@ -224,23 +207,22 @@ function DocumentRow({
           >
             {doc.fileName}
           </button>
-        ) : downloadUrl ? (
-          <a
+        ) : (
+          // The record stores the path (stable, tenant-scoped); the file is
+          // fetched through the SDK only when clicked.
+          <StoredFileLink
             className={styles.fileLink}
-            href={downloadUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+            reference={doc.storagePath}
+            fileName={doc.fileName}
           >
             {doc.fileName}
-          </a>
-        ) : (
-          <span className={styles.fileName}>{doc.fileName}</span>
+          </StoredFileLink>
         )}
-        {viewing && downloadUrl && (
-          <Lightbox
-            src={downloadUrl}
+        {viewing && (
+          <StoredLightbox
+            reference={doc.storagePath}
             title={doc.fileName}
-            onClose={() => setViewing(false)}
+            onClose={closeViewer}
           />
         )}
         {doc.description && (

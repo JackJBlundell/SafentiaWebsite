@@ -32,6 +32,7 @@ import { readableTextOn } from '../design/tokens/contrast';
 import type { UserSpace } from '../types';
 import { useSuperAdminClaim } from './admin/useSuperAdminClaim';
 import { useImageFailed } from './useImageFailed';
+import { useStoredFileUrl } from './lib/useStoredFileUrl';
 import styles from './SpacePicker.module.css';
 
 interface SpacePickerProps {
@@ -157,8 +158,11 @@ function PickerMark({
   space: UserSpace;
   unresolved: boolean;
 }) {
-  const logo = useImageFailed(space.logoUrl);
-  const hasLogo = Boolean(space.logoUrl) && !logo.failed;
+  // Fetched through the SDK (App Check); the monogram holds the mark until it
+  // arrives, and stays if it never does.
+  const logoSrc = useStoredFileUrl(space.logoUrl).url ?? undefined;
+  const logo = useImageFailed(logoSrc);
+  const hasLogo = Boolean(logoSrc) && !logo.failed;
 
   return (
     <span
@@ -183,7 +187,7 @@ function PickerMark({
       {hasLogo ? (
         <img
           className={styles.markLogo}
-          src={space.logoUrl}
+          src={logoSrc}
           alt=""
           onError={logo.onError}
         />

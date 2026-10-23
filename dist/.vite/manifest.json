@@ -3,8 +3,8 @@
     "file": "assets/AuthLayout-BrBNmv0S.css",
     "src": "_AuthLayout-BrBNmv0S.css"
   },
-  "_AuthLayout-C0rCLxI0.js": {
-    "file": "assets/AuthLayout-C0rCLxI0.js",
+  "_AuthLayout-DQz6-zPr.js": {
+    "file": "assets/AuthLayout-DQz6-zPr.js",
     "name": "AuthLayout",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
@@ -16,14 +16,14 @@
       "assets/AuthLayout-BrBNmv0S.css"
     ]
   },
-  "_AuthProvider-DnzbAspn.js": {
-    "file": "assets/AuthProvider-DnzbAspn.js",
+  "_AuthProvider-BSWuqqhy.js": {
+    "file": "assets/AuthProvider-BSWuqqhy.js",
     "name": "AuthProvider",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
-      "_firebase-ksKh2zn0.js"
+      "_firebase-C_A_GxiG.js"
     ]
   },
   "_Card-CQR3ken9.css": {
@@ -47,24 +47,24 @@
     "file": "assets/ConfirmingScreen-BXpLxQdW.css",
     "src": "_ConfirmingScreen-BXpLxQdW.css"
   },
-  "_ConfirmingScreen-CgveNdhQ.css": {
-    "file": "assets/ConfirmingScreen-CgveNdhQ.css",
-    "src": "_ConfirmingScreen-CgveNdhQ.css"
-  },
-  "_ConfirmingScreen-DK9SZdTo.js": {
-    "file": "assets/ConfirmingScreen-DK9SZdTo.js",
+  "_ConfirmingScreen-BkGjQ4-I.js": {
+    "file": "assets/ConfirmingScreen-BkGjQ4-I.js",
     "name": "ConfirmingScreen",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
+      "_AuthProvider-BSWuqqhy.js",
       "_ConfirmingScreen.module-B0_hjrjA.js"
     ],
     "css": [
       "assets/ConfirmingScreen-BXpLxQdW.css"
     ]
+  },
+  "_ConfirmingScreen-CgveNdhQ.css": {
+    "file": "assets/ConfirmingScreen-CgveNdhQ.css",
+    "src": "_ConfirmingScreen-CgveNdhQ.css"
   },
   "_ConfirmingScreen.module-B0_hjrjA.js": {
     "file": "assets/ConfirmingScreen.module-B0_hjrjA.js",
@@ -77,17 +77,18 @@
     "file": "assets/ContactPicker-Bjb3k0YT.css",
     "src": "_ContactPicker-Bjb3k0YT.css"
   },
-  "_ContactPicker-WWEqK50p.js": {
-    "file": "assets/ContactPicker-WWEqK50p.js",
+  "_ContactPicker-CV39HGl3.js": {
+    "file": "assets/ContactPicker-CV39HGl3.js",
     "name": "ContactPicker",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_Page-BdeuA7jF.js",
-      "_useCallable-QQmcMPsp.js",
-      "_shared-CmlZbVLJ.js"
+      "_AuthProvider-BSWuqqhy.js",
+      "_useCallable-BroRK0JQ.js",
+      "_Page-BdotLs5U.js",
+      "_shared-CPZvMXp4.js"
     ],
     "css": [
       "assets/ContactPicker-Bjb3k0YT.css"
@@ -125,12 +126,12 @@
     "file": "assets/EmailsDialog-BXoduthE.css",
     "src": "_EmailsDialog-BXoduthE.css"
   },
-  "_Grid-BQwcS3a2.css": {
-    "file": "assets/Grid-BQwcS3a2.css",
-    "src": "_Grid-BQwcS3a2.css"
+  "_Grid-CTuwt1DH.css": {
+    "file": "assets/Grid-CTuwt1DH.css",
+    "src": "_Grid-CTuwt1DH.css"
   },
-  "_Grid-Ljhixg9q.js": {
-    "file": "assets/Grid-Ljhixg9q.js",
+  "_Grid-DkfTL-PD.js": {
+    "file": "assets/Grid-DkfTL-PD.js",
     "name": "Grid",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
@@ -138,22 +139,20 @@
       "_react-dom-B3sP1daK.js"
     ],
     "css": [
-      "assets/Grid-BQwcS3a2.css"
+      "assets/Grid-CTuwt1DH.css"
     ]
   },
   "_Page-0NiEpAUJ.css": {
     "file": "assets/Page-0NiEpAUJ.css",
     "src": "_Page-0NiEpAUJ.css"
   },
-  "_Page-BdeuA7jF.js": {
-    "file": "assets/Page-BdeuA7jF.js",
+  "_Page-BdotLs5U.js": {
+    "file": "assets/Page-BdotLs5U.js",
     "name": "Page",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
       "_dist-Ducpb61W.js",
-      "_react-dom-B3sP1daK.js",
-      "_AuthProvider-DnzbAspn.js",
-      "_firebase-ksKh2zn0.js"
+      "_react-dom-B3sP1daK.js"
     ],
     "css": [
       "assets/Page-0NiEpAUJ.css"
@@ -187,16 +186,20 @@
     "file": "assets/Stepper-g2wYewcR.css",
     "src": "_Stepper-g2wYewcR.css"
   },
-  "_SubscribePlanPage-BZoWOvGz.js": {
-    "file": "assets/SubscribePlanPage-BZoWOvGz.js",
+  "_SubscribePlanPage-CdSqobRK.css": {
+    "file": "assets/SubscribePlanPage-CdSqobRK.css",
+    "src": "_SubscribePlanPage-CdSqobRK.css"
+  },
+  "_SubscribePlanPage-zpbRcvB6.js": {
+    "file": "assets/SubscribePlanPage-zpbRcvB6.js",
     "name": "SubscribePlanPage",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_Page-BdotLs5U.js",
       "_Skeleton-CwumgXm-.js",
       "_Stepper-BjuEmCDf.js"
     ],
@@ -206,10 +209,6 @@
     "css": [
       "assets/SubscribePlanPage-CdSqobRK.css"
     ]
-  },
-  "_SubscribePlanPage-CdSqobRK.css": {
-    "file": "assets/SubscribePlanPage-CdSqobRK.css",
-    "src": "_SubscribePlanPage-CdSqobRK.css"
   },
   "_UpsellNotice-BdGwCWMe.js": {
     "file": "assets/UpsellNotice-BdGwCWMe.js",
@@ -233,11 +232,11 @@
       "_react-dom-B3sP1daK.js"
     ]
   },
-  "_emailEditorModel-BAqL7KyR.js": {
-    "file": "assets/emailEditorModel-BAqL7KyR.js",
+  "_emailEditorModel-MH03wjA2.js": {
+    "file": "assets/emailEditorModel-MH03wjA2.js",
     "name": "emailEditorModel",
     "imports": [
-      "_emailKindCatalogue-DQUPkdMY.js",
+      "_emailKindCatalogue-BIRM4Pay.js",
       "_emailVariableEngine-DO2rm8QE.js"
     ]
   },
@@ -245,16 +244,16 @@
     "file": "assets/emailHtml-BuHBwtEG.js",
     "name": "emailHtml"
   },
-  "_emailKindCatalogue-DQUPkdMY.js": {
-    "file": "assets/emailKindCatalogue-DQUPkdMY.js",
+  "_emailKindCatalogue-BIRM4Pay.js": {
+    "file": "assets/emailKindCatalogue-BIRM4Pay.js",
     "name": "emailKindCatalogue"
   },
   "_emailVariableEngine-DO2rm8QE.js": {
     "file": "assets/emailVariableEngine-DO2rm8QE.js",
     "name": "emailVariableEngine"
   },
-  "_firebase-ksKh2zn0.js": {
-    "file": "assets/firebase-ksKh2zn0.js",
+  "_firebase-C_A_GxiG.js": {
+    "file": "assets/firebase-C_A_GxiG.js",
     "name": "firebase",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
@@ -280,18 +279,19 @@
     "file": "assets/riskReasons-BCjWNl6X.css",
     "src": "_riskReasons-BCjWNl6X.css"
   },
-  "_riskReasons-CPD7F6B0.js": {
-    "file": "assets/riskReasons-CPD7F6B0.js",
+  "_riskReasons-BaBHNN8a.js": {
+    "file": "assets/riskReasons-BaBHNN8a.js",
     "name": "riskReasons",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_firebase-C_A_GxiG.js",
       "_Skeleton-CwumgXm-.js",
       "_Card-DjhyyXWE.js",
-      "_shared-CmlZbVLJ.js"
+      "_shared-CPZvMXp4.js"
     ],
     "css": [
       "assets/riskReasons-BCjWNl6X.css"
@@ -305,74 +305,75 @@
     "file": "assets/shared-BYP58-rA.css",
     "src": "_shared-BYP58-rA.css"
   },
-  "_shared-BsWLJ9rI.js": {
-    "file": "assets/shared-BsWLJ9rI.js",
-    "name": "shared",
-    "imports": [
-      "_dist-Ducpb61W.js",
-      "_AuthProvider-DnzbAspn.js"
-    ],
-    "css": [
-      "assets/shared-BYP58-rA.css"
-    ]
-  },
   "_shared-COI7yNHD.css": {
     "file": "assets/shared-COI7yNHD.css",
     "src": "_shared-COI7yNHD.css"
   },
-  "_shared-CmlZbVLJ.js": {
-    "file": "assets/shared-CmlZbVLJ.js",
+  "_shared-CPZvMXp4.js": {
+    "file": "assets/shared-CPZvMXp4.js",
     "name": "shared",
     "imports": [
       "_dist-Ducpb61W.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js"
+      "_AuthProvider-BSWuqqhy.js",
+      "_Page-BdotLs5U.js"
     ],
     "css": [
       "assets/shared-COI7yNHD.css"
     ]
   },
-  "_upload-DdbyjfiZ.js": {
-    "file": "assets/upload-DdbyjfiZ.js",
-    "name": "upload",
+  "_shared-Cm_VgywX.js": {
+    "file": "assets/shared-Cm_VgywX.js",
+    "name": "shared",
     "imports": [
-      "_firebase-ksKh2zn0.js"
+      "_dist-Ducpb61W.js",
+      "_AuthProvider-BSWuqqhy.js"
+    ],
+    "css": [
+      "assets/shared-BYP58-rA.css"
     ]
   },
-  "_useCallable-QQmcMPsp.js": {
-    "file": "assets/useCallable-QQmcMPsp.js",
+  "_standardParagraphs-dM6KKskj.js": {
+    "file": "assets/standardParagraphs-dM6KKskj.js",
+    "name": "standardParagraphs"
+  },
+  "_upload-CR_tw7sY.js": {
+    "file": "assets/upload-CR_tw7sY.js",
+    "name": "upload",
+    "imports": [
+      "_firebase-C_A_GxiG.js"
+    ]
+  },
+  "_useCallable-BroRK0JQ.js": {
+    "file": "assets/useCallable-BroRK0JQ.js",
     "name": "useCallable",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
       "_react-dom-B3sP1daK.js",
       "_index.esm-FNMukJA7.js",
-      "_firebase-ksKh2zn0.js"
+      "_firebase-C_A_GxiG.js"
     ]
   },
-  "_useEntitlements-Cn7xskip.js": {
-    "file": "assets/useEntitlements-Cn7xskip.js",
+  "_useEntitlements-ByS_EhVC.js": {
+    "file": "assets/useEntitlements-ByS_EhVC.js",
     "name": "useEntitlements",
     "imports": [
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js"
+      "_AuthProvider-BSWuqqhy.js",
+      "_Page-BdotLs5U.js"
     ]
   },
-  "_useOrgEmailBrand-D75t8anx.js": {
-    "file": "assets/useOrgEmailBrand-D75t8anx.js",
+  "_useOrgEmailBrand-DYeVmp8l.js": {
+    "file": "assets/useOrgEmailBrand-DYeVmp8l.js",
     "name": "useOrgEmailBrand",
     "imports": [
-      "_Page-BdeuA7jF.js",
-      "_shared-CmlZbVLJ.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_Page-BdotLs5U.js",
+      "_shared-CPZvMXp4.js",
       "_emailHtml-BuHBwtEG.js"
     ]
   },
-  "_useUnsavedGuard-Deh6RtDz.css": {
-    "file": "assets/useUnsavedGuard-Deh6RtDz.css",
-    "src": "_useUnsavedGuard-Deh6RtDz.css"
-  },
-  "_useUnsavedGuard-DhspRHEJ.js": {
-    "file": "assets/useUnsavedGuard-DhspRHEJ.js",
+  "_useUnsavedGuard-CJRAmpiL.js": {
+    "file": "assets/useUnsavedGuard-CJRAmpiL.js",
     "name": "useUnsavedGuard",
     "imports": [
       "_rolldown-runtime-BgaNhQyE.js",
@@ -387,8 +388,12 @@
       "assets/useUnsavedGuard-Deh6RtDz.css"
     ]
   },
+  "_useUnsavedGuard-Deh6RtDz.css": {
+    "file": "assets/useUnsavedGuard-Deh6RtDz.css",
+    "src": "_useUnsavedGuard-Deh6RtDz.css"
+  },
   "index.html": {
-    "file": "assets/app-BnlNVE1y.js",
+    "file": "assets/app-DdG8OmKN.js",
     "name": "app",
     "src": "index.html",
     "isEntry": true,
@@ -399,7 +404,7 @@
     ],
     "dynamicImports": [
       "node_modules/react-dom/client.js",
-      "_firebase-ksKh2zn0.js",
+      "_firebase-C_A_GxiG.js",
       "_index.esm-FNMukJA7.js",
       "src/features/auth/LoginRoute.tsx",
       "src/features/auth/ForgotPasswordRoute.tsx",
@@ -433,7 +438,7 @@
     "src": "node_modules/mapbox-gl/dist/mapbox-gl.css"
   },
   "node_modules/mapbox-gl/dist/mapbox-gl.js": {
-    "file": "assets/mapbox-gl-D1fvqEbm.js",
+    "file": "assets/mapbox-gl-BLhO4NDq.js",
     "name": "mapbox-gl",
     "src": "node_modules/mapbox-gl/dist/mapbox-gl.js",
     "isDynamicEntry": true,
@@ -453,7 +458,7 @@
     ]
   },
   "src/console/ConsoleRoute.tsx": {
-    "file": "assets/ConsoleRoute-BOpOluBF.js",
+    "file": "assets/ConsoleRoute-Dw_Ec4sY.js",
     "name": "ConsoleRoute",
     "src": "src/console/ConsoleRoute.tsx",
     "isDynamicEntry": true,
@@ -463,25 +468,26 @@
       "_react-dom-B3sP1daK.js",
       "index.html",
       "_index.esm-FNMukJA7.js",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js",
-      "_firebase-ksKh2zn0.js",
-      "_useCallable-QQmcMPsp.js",
-      "_ConfirmingScreen-DK9SZdTo.js",
-      "_useEntitlements-Cn7xskip.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_firebase-C_A_GxiG.js",
+      "_useCallable-BroRK0JQ.js",
+      "_riskReasons-BaBHNN8a.js",
+      "_Page-BdotLs5U.js",
+      "_ConfirmingScreen-BkGjQ4-I.js",
+      "_useEntitlements-ByS_EhVC.js",
       "_Skeleton-CwumgXm-.js",
       "_Card-DjhyyXWE.js",
-      "_Grid-Ljhixg9q.js",
-      "_shared-CmlZbVLJ.js",
-      "_riskReasons-CPD7F6B0.js",
+      "_Grid-DkfTL-PD.js",
+      "_shared-CPZvMXp4.js",
       "_UpsellNotice-BdGwCWMe.js",
       "_DataTable-BIp0HNrq.js",
-      "_useUnsavedGuard-DhspRHEJ.js",
-      "_upload-DdbyjfiZ.js",
+      "_useUnsavedGuard-CJRAmpiL.js",
+      "_upload-CR_tw7sY.js",
       "_Stepper-BjuEmCDf.js",
-      "_ContactPicker-WWEqK50p.js",
-      "_shared-BsWLJ9rI.js",
-      "_emailKindCatalogue-DQUPkdMY.js",
+      "_ContactPicker-CV39HGl3.js",
+      "_shared-Cm_VgywX.js",
+      "_standardParagraphs-dM6KKskj.js",
+      "_emailKindCatalogue-BIRM4Pay.js",
       "_ConfirmingScreen.module-B0_hjrjA.js"
     ],
     "dynamicImports": [
@@ -499,11 +505,11 @@
       "src/console/billing/SetupCompleteScreen.tsx"
     ],
     "css": [
-      "assets/ConsoleRoute-DspPttH-.css"
+      "assets/ConsoleRoute-Dg3t8nT4.css"
     ]
   },
   "src/console/billing/BillingSettingsPage.tsx": {
-    "file": "assets/BillingSettingsPage-BGvRr0Yt.js",
+    "file": "assets/BillingSettingsPage-Ba2SmB4O.js",
     "name": "BillingSettingsPage",
     "src": "src/console/billing/BillingSettingsPage.tsx",
     "isDynamicEntry": true,
@@ -512,15 +518,15 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js",
-      "_useCallable-QQmcMPsp.js",
-      "_useEntitlements-Cn7xskip.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_useCallable-BroRK0JQ.js",
+      "_Page-BdotLs5U.js",
+      "_useEntitlements-ByS_EhVC.js",
       "_Skeleton-CwumgXm-.js",
       "_Card-DjhyyXWE.js",
-      "_shared-CmlZbVLJ.js",
+      "_shared-CPZvMXp4.js",
       "_DataTable-BIp0HNrq.js",
-      "_SubscribePlanPage-BZoWOvGz.js",
+      "_SubscribePlanPage-zpbRcvB6.js",
       "_EmailsDialog-BAr6zQbA.js"
     ],
     "css": [
@@ -528,7 +534,7 @@
     ]
   },
   "src/console/billing/SetupCompleteScreen.tsx": {
-    "file": "assets/SetupCompleteScreen-Myus5FUe.js",
+    "file": "assets/SetupCompleteScreen-CtVGZq2q.js",
     "name": "SetupCompleteScreen",
     "src": "src/console/billing/SetupCompleteScreen.tsx",
     "isDynamicEntry": true,
@@ -541,7 +547,7 @@
     ]
   },
   "src/console/billing/SetupGate.tsx": {
-    "file": "assets/SetupGate-CkdrYc4M.js",
+    "file": "assets/SetupGate-vcTuHDje.js",
     "name": "SetupGate",
     "src": "src/console/billing/SetupGate.tsx",
     "isDynamicEntry": true,
@@ -557,7 +563,7 @@
     ]
   },
   "src/console/billing/SetupWizard.tsx": {
-    "file": "assets/SetupWizard-B91HPFzr.js",
+    "file": "assets/SetupWizard-DdnOAwdY.js",
     "name": "SetupWizard",
     "src": "src/console/billing/SetupWizard.tsx",
     "isDynamicEntry": true,
@@ -566,20 +572,20 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js",
-      "_useCallable-QQmcMPsp.js",
-      "_useEntitlements-Cn7xskip.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_useCallable-BroRK0JQ.js",
+      "_Page-BdotLs5U.js",
+      "_useEntitlements-ByS_EhVC.js",
       "_UpsellNotice-BdGwCWMe.js",
       "_Stepper-BjuEmCDf.js",
-      "_shared-BsWLJ9rI.js"
+      "_shared-Cm_VgywX.js"
     ],
     "css": [
       "assets/SetupWizard-CPpsHDSz.css"
     ]
   },
   "src/console/billing/SubscribeGate.tsx": {
-    "file": "assets/SubscribeGate-cNs4grv2.js",
+    "file": "assets/SubscribeGate-CM-VLW_e.js",
     "name": "SubscribeGate",
     "src": "src/console/billing/SubscribeGate.tsx",
     "isDynamicEntry": true,
@@ -588,21 +594,21 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js",
-      "_firebase-ksKh2zn0.js",
-      "_useCallable-QQmcMPsp.js",
-      "_ConfirmingScreen-DK9SZdTo.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_firebase-C_A_GxiG.js",
+      "_useCallable-BroRK0JQ.js",
+      "_Page-BdotLs5U.js",
+      "_ConfirmingScreen-BkGjQ4-I.js",
       "_Skeleton-CwumgXm-.js",
       "_ConfirmingScreen.module-B0_hjrjA.js",
-      "_SubscribePlanPage-BZoWOvGz.js"
+      "_SubscribePlanPage-zpbRcvB6.js"
     ],
     "css": [
       "assets/SubscribeGate-CZ9M1f0g.css"
     ]
   },
   "src/console/customers/BuildingDetail.tsx": {
-    "file": "assets/BuildingDetail-DtX341h8.js",
+    "file": "assets/BuildingDetail-ElYS4-3Y.js",
     "name": "BuildingDetail",
     "src": "src/console/customers/BuildingDetail.tsx",
     "isDynamicEntry": true,
@@ -611,25 +617,25 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js",
-      "_firebase-ksKh2zn0.js",
-      "_useCallable-QQmcMPsp.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_firebase-C_A_GxiG.js",
+      "_useCallable-BroRK0JQ.js",
+      "_riskReasons-BaBHNN8a.js",
+      "_Page-BdotLs5U.js",
       "_Skeleton-CwumgXm-.js",
       "_Card-DjhyyXWE.js",
-      "_Grid-Ljhixg9q.js",
-      "_shared-CmlZbVLJ.js",
-      "_riskReasons-CPD7F6B0.js",
+      "_Grid-DkfTL-PD.js",
+      "_shared-CPZvMXp4.js",
       "_DataTable-BIp0HNrq.js",
-      "_upload-DdbyjfiZ.js",
-      "_ContactPicker-WWEqK50p.js"
+      "_upload-CR_tw7sY.js",
+      "_ContactPicker-CV39HGl3.js"
     ],
     "css": [
-      "assets/BuildingDetail-BGNYOP0Q.css"
+      "assets/BuildingDetail-w9jIfGMq.css"
     ]
   },
   "src/console/customers/BuildingWizard.tsx": {
-    "file": "assets/BuildingWizard-Bl2gk5QS.js",
+    "file": "assets/BuildingWizard-Bp-Xik9s.js",
     "name": "BuildingWizard",
     "src": "src/console/customers/BuildingWizard.tsx",
     "isDynamicEntry": true,
@@ -638,21 +644,21 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js",
-      "_useCallable-QQmcMPsp.js",
-      "_shared-CmlZbVLJ.js",
-      "_useUnsavedGuard-DhspRHEJ.js",
-      "_upload-DdbyjfiZ.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_useCallable-BroRK0JQ.js",
+      "_Page-BdotLs5U.js",
+      "_shared-CPZvMXp4.js",
+      "_useUnsavedGuard-CJRAmpiL.js",
+      "_upload-CR_tw7sY.js",
       "_Stepper-BjuEmCDf.js",
-      "_ContactPicker-WWEqK50p.js"
+      "_ContactPicker-CV39HGl3.js"
     ],
     "css": [
       "assets/BuildingWizard-B1q508MJ.css"
     ]
   },
   "src/console/customers/SiteWizard.tsx": {
-    "file": "assets/SiteWizard-PvaA4iFq.js",
+    "file": "assets/SiteWizard-Jl3ReDwQ.js",
     "name": "SiteWizard",
     "src": "src/console/customers/SiteWizard.tsx",
     "isDynamicEntry": true,
@@ -661,19 +667,19 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_Page-BdeuA7jF.js",
-      "_useCallable-QQmcMPsp.js",
-      "_shared-CmlZbVLJ.js",
-      "_useUnsavedGuard-DhspRHEJ.js",
+      "_useCallable-BroRK0JQ.js",
+      "_Page-BdotLs5U.js",
+      "_shared-CPZvMXp4.js",
+      "_useUnsavedGuard-CJRAmpiL.js",
       "_Stepper-BjuEmCDf.js",
-      "_ContactPicker-WWEqK50p.js"
+      "_ContactPicker-CV39HGl3.js"
     ],
     "css": [
       "assets/SiteWizard-VAUtZeR9.css"
     ]
   },
   "src/console/emails/ComposePage.tsx": {
-    "file": "assets/ComposePage-DQrSaeje.js",
+    "file": "assets/ComposePage-CEsm_3AJ.js",
     "name": "ComposePage",
     "src": "src/console/emails/ComposePage.tsx",
     "isDynamicEntry": true,
@@ -682,23 +688,24 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_Page-BdeuA7jF.js",
-      "_useCallable-QQmcMPsp.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_useCallable-BroRK0JQ.js",
+      "_Page-BdotLs5U.js",
       "_Skeleton-CwumgXm-.js",
       "_Card-DjhyyXWE.js",
-      "_shared-CmlZbVLJ.js",
+      "_shared-CPZvMXp4.js",
       "_Stepper-BjuEmCDf.js",
       "_EmailsDialog-BAr6zQbA.js",
       "_emailVariableEngine-DO2rm8QE.js",
       "_emailHtml-BuHBwtEG.js",
-      "_useOrgEmailBrand-D75t8anx.js"
+      "_useOrgEmailBrand-DYeVmp8l.js"
     ],
     "css": [
       "assets/ComposePage-GIw2Fazr.css"
     ]
   },
   "src/console/emails/EmailTemplateEditor.tsx": {
-    "file": "assets/EmailTemplateEditor-KlN43_LO.js",
+    "file": "assets/EmailTemplateEditor-dBu0-q8G.js",
     "name": "EmailTemplateEditor",
     "src": "src/console/emails/EmailTemplateEditor.tsx",
     "isDynamicEntry": true,
@@ -707,21 +714,21 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js",
-      "_firebase-ksKh2zn0.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_firebase-C_A_GxiG.js",
+      "_Page-BdotLs5U.js",
       "_Card-DjhyyXWE.js",
-      "_Grid-Ljhixg9q.js",
+      "_Grid-DkfTL-PD.js",
       "_emailVariableEngine-DO2rm8QE.js",
       "_emailHtml-BuHBwtEG.js",
-      "_emailEditorModel-BAqL7KyR.js"
+      "_emailEditorModel-MH03wjA2.js"
     ],
     "css": [
       "assets/EmailTemplateEditor-Daa2s7B0.css"
     ]
   },
   "src/console/emails/EmailTemplatesPage.tsx": {
-    "file": "assets/EmailTemplatesPage-BmjwuBwG.js",
+    "file": "assets/EmailTemplatesPage-BBYVKtRa.js",
     "name": "EmailTemplatesPage",
     "src": "src/console/emails/EmailTemplatesPage.tsx",
     "isDynamicEntry": true,
@@ -730,21 +737,21 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js",
-      "_firebase-ksKh2zn0.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_firebase-C_A_GxiG.js",
+      "_Page-BdotLs5U.js",
       "_Skeleton-CwumgXm-.js",
       "_Card-DjhyyXWE.js",
-      "_shared-CmlZbVLJ.js",
+      "_shared-CPZvMXp4.js",
       "_DataTable-BIp0HNrq.js",
-      "_emailEditorModel-BAqL7KyR.js"
+      "_emailEditorModel-MH03wjA2.js"
     ],
     "css": [
       "assets/EmailTemplatesPage-BHeiZi4_.css"
     ]
   },
   "src/console/emails/EmailTypesPage.tsx": {
-    "file": "assets/EmailTypesPage-CukHFkXr.js",
+    "file": "assets/EmailTypesPage-BuF23gjl.js",
     "name": "EmailTypesPage",
     "src": "src/console/emails/EmailTypesPage.tsx",
     "isDynamicEntry": true,
@@ -753,25 +760,26 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_Page-BdeuA7jF.js",
-      "_firebase-ksKh2zn0.js",
-      "_useEntitlements-Cn7xskip.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_firebase-C_A_GxiG.js",
+      "_Page-BdotLs5U.js",
+      "_useEntitlements-ByS_EhVC.js",
       "_Skeleton-CwumgXm-.js",
       "_Card-DjhyyXWE.js",
-      "_shared-CmlZbVLJ.js",
+      "_shared-CPZvMXp4.js",
       "_UpsellNotice-BdGwCWMe.js",
-      "_emailKindCatalogue-DQUPkdMY.js",
+      "_emailKindCatalogue-BIRM4Pay.js",
       "_EmailsDialog-BAr6zQbA.js",
       "_emailVariableEngine-DO2rm8QE.js",
       "_emailHtml-BuHBwtEG.js",
-      "_useOrgEmailBrand-D75t8anx.js"
+      "_useOrgEmailBrand-DYeVmp8l.js"
     ],
     "css": [
       "assets/EmailTypesPage-DROLubrf.css"
     ]
   },
   "src/console/templates/TemplateBuilder.tsx": {
-    "file": "assets/TemplateBuilder-DfJFNMx2.js",
+    "file": "assets/TemplateBuilder-DH2UKcSV.js",
     "name": "TemplateBuilder",
     "src": "src/console/templates/TemplateBuilder.tsx",
     "isDynamicEntry": true,
@@ -780,20 +788,21 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_Page-BdeuA7jF.js",
-      "_firebase-ksKh2zn0.js",
-      "_useCallable-QQmcMPsp.js",
+      "_AuthProvider-BSWuqqhy.js",
+      "_firebase-C_A_GxiG.js",
+      "_useCallable-BroRK0JQ.js",
+      "_Page-BdotLs5U.js",
       "_Card-DjhyyXWE.js",
-      "_Grid-Ljhixg9q.js",
-      "_upload-DdbyjfiZ.js"
+      "_Grid-DkfTL-PD.js",
+      "_upload-CR_tw7sY.js",
+      "_standardParagraphs-dM6KKskj.js"
     ],
     "css": [
-      "assets/TemplateBuilder-C-JP5ThT.css"
+      "assets/TemplateBuilder-DGQYASW9.css"
     ]
   },
   "src/features/auth/ForgotPasswordRoute.tsx": {
-    "file": "assets/ForgotPasswordRoute-Dwyj_UuK.js",
+    "file": "assets/ForgotPasswordRoute-uXMuyjpr.js",
     "name": "ForgotPasswordRoute",
     "src": "src/features/auth/ForgotPasswordRoute.tsx",
     "isDynamicEntry": true,
@@ -802,12 +811,12 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_AuthLayout-C0rCLxI0.js"
+      "_AuthProvider-BSWuqqhy.js",
+      "_AuthLayout-DQz6-zPr.js"
     ]
   },
   "src/features/auth/LoginRoute.tsx": {
-    "file": "assets/LoginRoute-R_3Hn6QV.js",
+    "file": "assets/LoginRoute-DCbZbITu.js",
     "name": "LoginRoute",
     "src": "src/features/auth/LoginRoute.tsx",
     "isDynamicEntry": true,
@@ -816,12 +825,12 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_AuthLayout-C0rCLxI0.js"
+      "_AuthProvider-BSWuqqhy.js",
+      "_AuthLayout-DQz6-zPr.js"
     ]
   },
   "src/features/invite/InviteRoute.tsx": {
-    "file": "assets/InviteRoute-6TbRPYHb.js",
+    "file": "assets/InviteRoute-Dov_DbEz.js",
     "name": "InviteRoute",
     "src": "src/features/invite/InviteRoute.tsx",
     "isDynamicEntry": true,
@@ -830,9 +839,9 @@
       "_dist-Ducpb61W.js",
       "_react-dom-B3sP1daK.js",
       "index.html",
-      "_AuthProvider-DnzbAspn.js",
-      "_useCallable-QQmcMPsp.js",
-      "_AuthLayout-C0rCLxI0.js"
+      "_AuthProvider-BSWuqqhy.js",
+      "_useCallable-BroRK0JQ.js",
+      "_AuthLayout-DQz6-zPr.js"
     ]
   }
 }

@@ -76,6 +76,17 @@ export const ops = {
    *  deletion. */
   manualEmailCountsForOrg: (env: Environment, orgId: string): RtdbPath =>
     `ops/manualEmailCounts/${env}/${orgId}`,
+  /** Per-env, per-org DAILY AI-draft counter (UTC date key), for the OpenAI
+   *  cost ceiling in generateAssessmentDraft. */
+  aiDraftCount: (
+    env: Environment,
+    orgId: string,
+    yyyyMmDd: string,
+  ): RtdbPath => `ops/aiDraftCounts/${env}/${orgId}/${yyyyMmDd}`,
+  /** One org's whole AI-draft-counter subtree (all days), for offboarding
+   *  deletion. */
+  aiDraftCountsForOrg: (env: Environment, orgId: string): RtdbPath =>
+    `ops/aiDraftCounts/${env}/${orgId}`,
 
   // ====
   // Email bundling (EMAIL_BUNDLING_PLAN.md). Both trees are keyed by a HASH of

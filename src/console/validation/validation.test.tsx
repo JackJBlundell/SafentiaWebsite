@@ -54,10 +54,6 @@ const mocks = vi.hoisted(() => ({
    *  key's first segment as a fallback (single-map nodes like orgMembers). */
   rtdb: {} as Record<string, unknown>,
   callable: vi.fn(async (_name: string, _input: unknown) => ({}) as unknown),
-  /** Report PDF resolution, mocked at the firebase/storage boundary so the
-   *  released download resolves without touching Storage (the buildings tests'
-   *  pattern). */
-  getDownloadURL: vi.fn(async () => 'https://example.com/report.pdf'),
 }));
 
 vi.mock('../../firebase', () => ({
@@ -65,10 +61,10 @@ vi.mock('../../firebase', () => ({
   firebase: { functions: vi.fn(), storage: vi.fn() },
 }));
 
-vi.mock('firebase/storage', () => ({
-  ref: vi.fn(),
-  getDownloadURL: () => mocks.getDownloadURL(),
-}));
+// Report PDFs are checked and fetched at the firebase/storage boundary, so the
+// released download works without touching Storage (the buildings tests'
+// pattern).
+vi.mock('firebase/storage', async () => (await import('../../test/storageMock')).storageModule);
 
 vi.mock('../../auth/AuthProvider', () => ({
   useAuth: () => mocks.auth,
@@ -108,6 +104,7 @@ vi.mock('../ui/useCallable', () => ({
 }));
 
 import { ValidationRoutes } from './ValidationRoutes';
+import { activateStoredLink, storageMock } from '../../test/storageMock';
 
 const auditorClaims = {
   orgId: 'org-1',
@@ -221,8 +218,7 @@ beforeEach(() => {
   mocks.rtdb = {};
   mocks.callable.mockClear();
   mocks.callable.mockResolvedValue({});
-  mocks.getDownloadURL.mockClear();
-  mocks.getDownloadURL.mockResolvedValue('https://example.com/report.pdf');
+  storageMock.reset();
 });
 
 describe('ValidationRoutes gate', () => {
@@ -435,16 +431,17 @@ describe('AssessmentReview rendering', () => {
       },
     };
     renderValidationAt('/job-1');
-    // While getDownloadURL is in flight the pending copy shows.
+    // While the report file is being checked the pending copy shows.
     expect(
       screen.getByText('Preparing the report for download'),
     ).toBeInTheDocument();
-    // Once resolved, the primary affordance points at the resolved URL and
-    // opens in a new tab without leaking the opener.
+    // Once checked, the primary affordance fetches the PDF through the SDK on
+    // click and opens it in a new tab without leaking the opener.
     const link = await screen.findByRole('link', { name: 'Download report' });
-    expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noopener');
+    expect(await activateStoredLink(link)).toMatchObject({
+      via: 'download',
+      url: 'blob:orgs/org-1/reports/rep-1.pdf',
+    });
   });
 
   it('falls back to the newest building report when none matches the assessment', async () => {
@@ -564,7 +561,10 @@ describe('ReleasedList', () => {
     const link = await screen.findByRole('link', {
       name: 'Download the report for Meridian Tower A',
     });
-    expect(link).toHaveAttribute('href', 'https://example.com/report.pdf');
+    expect(await activateStoredLink(link)).toMatchObject({
+      via: 'download',
+      url: 'blob:orgs/org-1/reports/rep-1.pdf',
+    });
   });
 
   it('says the report is not ready rather than offering a dead download', () => {

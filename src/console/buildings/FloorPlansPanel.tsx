@@ -19,6 +19,8 @@
 // ============================================================================
 
 import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useStoredFileUrl } from '../lib/useStoredFileUrl';
+import { StoredFileLink } from '../lib/StoredFile';
 import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
 import { keys } from '../../query/keys';
@@ -234,33 +236,39 @@ function PlanRow({
   // Null for a plan stored before sizeBytes existed, so the meta line simply
   // says less rather than claiming a size nobody recorded.
   const sizeLabel = formatFileSize(plan.sizeBytes);
+  // The record may hold a Storage path (plans added in the app) or a download
+  // URL; either way it goes through the shared stored-file helpers (App Check,
+  // and any URL outside our own bucket is refused). Only an image plan is
+  // fetched up front, for its thumbnail; PDFs and drawings are fetched when
+  // clicked.
+  const showsThumbnail = plan.kind !== 'pdf' && annotatable;
+  const fileUrl =
+    useStoredFileUrl(showsThumbnail ? plan.imageUrl : undefined).url ?? undefined;
 
   return (
     <li className={styles.row}>
       {plan.kind === 'pdf' ? (
         // Non-image plans download directly: the tile links straight to the
         // stored PDF rather than opening an image lightbox.
-        <a
+        <StoredFileLink
           className={styles.pdfTile}
-          href={plan.imageUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+          reference={plan.imageUrl}
+          fileName={plan.fileName}
           aria-label={`Download ${plan.name} (PDF)`}
         >
           PDF
-        </a>
+        </StoredFileLink>
       ) : !annotatable ? (
         // No preview is possible, so the tile states the format instead of
         // pretending to be a thumbnail, and downloads on activation.
-        <a
+        <StoredFileLink
           className={styles.fileTile}
-          href={plan.imageUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+          reference={plan.imageUrl}
+          fileName={plan.fileName}
           aria-label={`Download ${plan.name} (${typeLabel})`}
         >
           {floorPlanTypeBadge(plan.fileName)}
-        </a>
+        </StoredFileLink>
       ) : (
         <button
           type="button"
@@ -268,12 +276,12 @@ function PlanRow({
           onClick={() => setViewing(true)}
           aria-label={`View ${plan.name} full size`}
         >
-          <img className={styles.thumbnail} src={plan.imageUrl} alt="" />
+          <img className={styles.thumbnail} src={fileUrl} alt="" />
         </button>
       )}
-      {viewing && (
+      {viewing && fileUrl && (
         <Lightbox
-          src={plan.imageUrl}
+          src={fileUrl}
           title={plan.name}
           onClose={() => setViewing(false)}
         />
@@ -352,15 +360,14 @@ function PlanRow({
                   pins can only be placed on image and PDF plans. Download it to
                   open it in your own drawing software.
                 </p>
-                <Button
-                  variant="ghost"
-                  href={plan.imageUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <StoredFileLink
+                  className={styles.downloadLink}
+                  reference={plan.imageUrl}
+                  fileName={plan.fileName}
                 >
                   Download
                   <span className={styles.visuallyHidden}> {plan.name}</span>
-                </Button>
+                </StoredFileLink>
               </div>
             )}
             {manage.error && !confirmingRemove && (

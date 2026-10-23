@@ -18,14 +18,15 @@
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
+import { db } from '../admin';
 import { callableOptions } from '../lib/callable';
 import { createLogger } from '../lib/logging';
 import { fail, runCallable } from '../lib/errors';
-import { assertAppCheck, assertAuth, assertOrgRole, getClaims, envFor } from '../lib/guards';
+import { assertAppCheck, assertAuth, assertOrgRole, getLiveClaims, envFor } from '../lib/guards';
 import { assertRateLimit } from '../lib/rateLimit';
 import {
   assertObject,
-  requireString,
+  requireDbKey,
   TEXT_LIMITS,
   requireEmail,
 } from '../lib/validate';
@@ -74,14 +75,14 @@ export const generateReport = onCall<GenerateReportInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'generateReport');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, ['admin', 'auditor']);
         const { paths } = envFor(claims);
         const orgId = claims.orgId;
 
         // 2. Validate input.
         const input = assertObject(request.data);
-        const assessmentId = requireString(
+        const assessmentId = requireDbKey(
           input,
           'assessmentId',
           TEXT_LIMITS.shortText,
@@ -89,6 +90,23 @@ export const generateReport = onCall<GenerateReportInput>(
         const emailTo = validateEmailRecipients(input);
 
         const logger = createLogger({ fn: 'generateReport', orgId });
+
+        // 2b. Only a RELEASED assessment has a report. The generated PDF is
+        // filed against the building, where the customer portal reads it, so
+        // generating from an assessment still in progress or awaiting
+        // validation would publish an unvalidated draft to the customer.
+        const status = (
+          await db.ref(`${paths.db.assessment(orgId, assessmentId)}/status`).get()
+        ).val() as string | null;
+        if (status === null) {
+          throw fail.notFound('This assessment could not be found.');
+        }
+        if (status !== 'released') {
+          throw fail.failedPrecondition(
+            'A report can only be generated for a released assessment.',
+            { status },
+          );
+        }
 
         // 3. Delegate to the shared core (assemble → render → upload → record).
         // A missing assessment is the one hard failure; the core throws a plain

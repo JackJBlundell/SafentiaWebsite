@@ -138,6 +138,7 @@ export function orgRtdbRoots(
     // Server-only per-org ops counters (rate-limit / quota accounting).
     entry('notificationCounts', ops.notificationCountsForOrg(env, orgId)),
     entry('manualEmailCounts', ops.manualEmailCountsForOrg(env, orgId)),
+    entry('aiDraftCounts', ops.aiDraftCountsForOrg(env, orgId)),
     // Email bundling state. The bundles hold REAL recipient addresses until
     // they are flushed, so leaving them behind after an offboarding would keep
     // exactly the PII the deletion exists to remove.

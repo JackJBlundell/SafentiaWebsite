@@ -13,10 +13,8 @@
 // a row to disappear.
 // ============================================================================
 
-import { useEffect, useMemo, useState } from 'react';
-import { getDownloadURL, ref as storageRef } from 'firebase/storage';
+import { useMemo } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
-import { firebase } from '../../firebase';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import type {
@@ -29,6 +27,8 @@ import type {
 } from '../../types';
 import { STANDARD_LABELS } from '../jobs/shared';
 import { DownloadIcon } from '../ui/DownloadIcon';
+import { StoredFileLink } from '../lib/StoredFile';
+import { useStoredFileStatus } from '../lib/useStoredFileUrl';
 import styles from './releaseShared.module.css';
 
 /** The best available release timestamp. releaseAssessment stamps releasedAt,
@@ -168,40 +168,22 @@ export function useAssessmentReport(
 
 export type DownloadState =
   | { state: 'resolving' }
-  | { state: 'ready'; url: string }
+  | { state: 'ready'; path: string }
   | { state: 'unreachable' };
 
-/** Resolves a stored PDF object path into a tokened download URL for the
- *  signed-in member. Storage rules are the real gate on the object, so a
- *  refusal is expected rather than exceptional and is reported as such - the
- *  row must never offer a link it cannot honour. */
+/** Whether a stored report PDF can be downloaded by the signed-in member,
+ *  checked without downloading it. Storage rules are the real gate on the
+ *  object, so a refusal is expected rather than exceptional and is reported as
+ *  such - the row must never offer a link it cannot honour. The file itself is
+ *  fetched through the SDK (App Check) only when the link is clicked. */
 export function useReportDownload(pdfPath: string | undefined): DownloadState {
-  const [state, setState] = useState<DownloadState>({ state: 'resolving' });
-
-  useEffect(() => {
-    if (!pdfPath) {
-      setState({ state: 'resolving' });
-      return;
-    }
-    let cancelled = false;
-    setState({ state: 'resolving' });
-    getDownloadURL(storageRef(firebase.storage(), pdfPath))
-      .then((url) => {
-        if (!cancelled) {
-          setState({ state: 'ready', url });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setState({ state: 'unreachable' });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pdfPath]);
-
-  return state;
+  const status = useStoredFileStatus(pdfPath);
+  if (!pdfPath || status === 'checking') {
+    return { state: 'resolving' };
+  }
+  return status === 'ready'
+    ? { state: 'ready', path: pdfPath }
+    : { state: 'unreachable' };
 }
 
 /**
@@ -256,16 +238,14 @@ export function ReportLink({
   // and a sighted user gets the same on hover.
   const label = `Download the report for ${subject}`;
   const link = (
-    <a
+    <StoredFileLink
       className={styles.reportLink}
-      href={download.url}
-      target="_blank"
-      rel="noopener"
+      reference={download.path}
       aria-label={label}
       title={label}
     >
       <DownloadIcon />
-    </a>
+    </StoredFileLink>
   );
   if (match.attribution === 'assessment') {
     return link;

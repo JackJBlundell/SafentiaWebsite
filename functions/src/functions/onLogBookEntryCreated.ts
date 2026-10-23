@@ -107,6 +107,19 @@ export const onLogBookEntryCreated = onValueCreated(
       }
       const job = jobSnap.val() as Job;
 
+      // The entry must be about THIS assessment's own building, written by the
+      // assessor who conducted it. The log-book rule lets any active assessor
+      // create an entry on any building in the org, so without this an entry on
+      // building X naming an unrelated assessment would rewrite X's statutory
+      // service dates.
+      if (job.buildingId !== buildingId || assessment.conductedBy !== entry.byUid) {
+        logger.warn('serviceConfirmed entry does not match its assessment; refusing to mirror', {
+          assessmentId,
+          jobId: assessment.jobId,
+        });
+        return;
+      }
+
       // The building must GENUINELY exist at /buildings/{org}/{job.siteId}/
       // {buildingId} before we write to it. The log book is keyed by building
       // id alone, and update() on a non-existent path would CREATE a phantom

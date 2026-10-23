@@ -46,6 +46,7 @@ import {
   useOrgScope,
 } from './shared';
 import shared from './shared.module.css';
+import { StoredImage } from '../lib/StoredFile';
 import styles from './CustomerDetail.module.css';
 
 /** The stored risk levels the compliance band can filter the buildings list to,
@@ -371,8 +372,8 @@ export function CustomerDetail() {
             <Card>
               <CardHeader title="Organisation" />
               {record.photoUrl && (
-                <img
-                  src={record.photoUrl}
+                <StoredImage
+                  reference={record.photoUrl}
                   alt={`${record.name} logo`}
                   className={styles.orgImage}
                 />

@@ -546,6 +546,29 @@ async function maybeProvisionOnboarding(
 // Per-event handlers (plan 4.4 mapping)
 // ============================================================================
 
+/** Whether this event is about a subscription the org has already moved on
+ *  from, and so must not touch the org's billing state.
+ *
+ *  Stripe does not guarantee delivery order. resubscribe cancels a superseded
+ *  restart attempt and creates its replacement, so the old one's `deleted` (or a
+ *  late `updated`) can land AFTER the replacement is active - and would then
+ *  mark a paying org canceled, suspend it and stamp a deletion clock. The test
+ *  is deliberately narrow: an event for a DIFFERENT subscription than the
+ *  org's current one is ignored only when that subscription has ENDED (its
+ *  re-fetched status, not the event's). A different subscription that is live
+ *  is the org's new one - its first event is how the webhook adopts it - so it
+ *  still writes. */
+function isSupersededSubscription(
+  prior: OrgSubscription | null,
+  sub: Stripe.Subscription,
+): boolean {
+  return (
+    Boolean(prior?.stripeSubscriptionId) &&
+    prior?.stripeSubscriptionId !== sub.id &&
+    (sub.status === 'canceled' || sub.status === 'incomplete_expired')
+  );
+}
+
 /** customer.subscription.created / customer.subscription.updated. */
 async function handleSubscriptionUpsert(
   env: Environment,
@@ -581,6 +604,13 @@ async function handleSubscriptionUpsert(
   const prior = (
     await db.ref(forEnv(env).db.orgSubscription(orgId)).get()
   ).val() as OrgSubscription | null;
+  if (isSupersededSubscription(prior, sub)) {
+    logger.info('Ignoring event for a superseded subscription', {
+      subscriptionId: sub.id,
+      eventType: event.type,
+    });
+    return;
+  }
 
   // Retention lifecycle (DECISIONS §8): a returning customer must never be
   // reaped. The moment the subscription is entitled again (active/trialing),
@@ -702,6 +732,12 @@ async function handleSubscriptionDeleted(
   const prior = (
     await db.ref(forEnv(env).db.orgSubscription(orgId)).get()
   ).val() as OrgSubscription | null;
+  if (isSupersededSubscription(prior, sub)) {
+    logger.info('Ignoring deletion of a superseded subscription', {
+      subscriptionId: sub.id,
+    });
+    return;
+  }
 
   // Status forced to 'canceled': whatever terminal state Stripe reports, the
   // org's subscription is over. Dunning state is cleared - there is nothing
@@ -770,6 +806,23 @@ async function handleInvoiceEvent(
 
   const { db } = await import('../admin');
   const subscriptionRef = db.ref(forEnv(env).db.orgSubscription(orgId));
+
+  // A late invoice for a subscription the org has already replaced (a failed
+  // first payment on a superseded restart attempt) must not open a dunning
+  // window or re-snapshot the org's billing. See isSupersededSubscription.
+  if (
+    sub &&
+    isSupersededSubscription(
+      (await subscriptionRef.get()).val() as OrgSubscription | null,
+      sub,
+    )
+  ) {
+    logger.info('Ignoring invoice for a superseded subscription', {
+      subscriptionId: sub.id,
+      eventType: event.type,
+    });
+    return;
+  }
 
   switch (event.type) {
     case 'invoice.paid': {

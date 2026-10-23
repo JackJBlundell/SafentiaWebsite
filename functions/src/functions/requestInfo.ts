@@ -39,10 +39,10 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
-import { assertObject, requireString, TEXT_LIMITS } from '../lib/validate';
+import { assertObject, requireString, requireDbKey, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
 import { EMAIL_PROVIDER_SECRETS } from '../lib/email';
@@ -186,7 +186,7 @@ export const requestInfo = onCall<RequestInfoInput>(
       assertAppCheck(request);
       const { uid } = assertAuth(request);
       await assertRateLimit(uid, 'requestInfo');
-      const claims = getClaims(request);
+      const claims = await getLiveClaims(request);
       assertOrgRole(claims, ['admin', 'auditor']);
       const { paths } = envFor(claims);
       const orgId = claims.orgId;
@@ -194,7 +194,7 @@ export const requestInfo = onCall<RequestInfoInput>(
       // 2. Validate input: at least one {questionId, message} pair, each shaped
       // and bounded, with no duplicate question.
       const input = assertObject(request.data);
-      const assessmentId = requireString(input, 'assessmentId', TEXT_LIMITS.shortText);
+      const assessmentId = requireDbKey(input, 'assessmentId', TEXT_LIMITS.shortText);
       const rawRequests = input.requests;
       if (!Array.isArray(rawRequests) || rawRequests.length === 0) {
         throw fail.invalidArgument('Flag at least one question.', {
@@ -210,7 +210,7 @@ export const requestInfo = onCall<RequestInfoInput>(
       const seen = new Set<string>();
       const requests = rawRequests.map((entry) => {
         const item = assertObject(entry);
-        const questionId = requireString(item, 'questionId', TEXT_LIMITS.shortText);
+        const questionId = requireDbKey(item, 'questionId', TEXT_LIMITS.shortText);
         const message = requireString(item, 'message', TEXT_LIMITS.freeText);
         if (seen.has(questionId)) {
           throw fail.invalidArgument('A question can only be flagged once.', {

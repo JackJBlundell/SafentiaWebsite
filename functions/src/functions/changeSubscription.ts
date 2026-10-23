@@ -31,7 +31,7 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import { assertObject, requireDbKey, TEXT_LIMITS } from '../lib/validate';
@@ -98,7 +98,7 @@ export const changeSubscription = onCall<ChangeSubscriptionRequest>(
         // 1. Attestation, identity, authorisation, throttle, validation.
         assertAppCheck(request);
         const { uid } = assertAuth(request);
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         const { env, paths: envPaths } = envFor(claims);
         await assertRateLimit(uid, 'changeSubscription');

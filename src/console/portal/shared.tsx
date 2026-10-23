@@ -7,7 +7,9 @@
 // here writes to the database directly, and every portal grant in the rules is
 // `.read` only. The ONE mutation a contact can make is accepting a report, and
 // it goes through the acceptReport callable, which re-derives their right to
-// accept server-side - the database rules still deny the write outright.
+// accept server-side - the database rules still deny the write outright. Only a
+// customer admin or finance contact may accept (a viewer may not); `canAccept`
+// below mirrors that so a viewer is never offered the form.
 // ============================================================================
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
@@ -17,7 +19,13 @@ import { severityPresentation } from '../../design/rag';
 import { keys } from '../../query/keys';
 import { useRtdbQuery } from '../../query/useRtdbQuery';
 import type { EnvPaths } from '../../paths';
-import type { OrgContact, OrgProfile, Severity } from '../../types';
+import type {
+  CustomerRole,
+  CustomerRoleSet,
+  OrgContact,
+  OrgProfile,
+  Severity,
+} from '../../types';
 import styles from './shared.module.css';
 
 // ----------------------------------------------------------------------------
@@ -37,11 +45,37 @@ export interface PortalScope {
    *  callable re-checks the customer role server-side, so a UI slip can never
    *  grant access. */
   isAdmin: boolean;
+  /** True when this session's role may accept and sign off a released report
+   *  (customer admin or finance - never a viewer). Convenience only: see
+   *  ROLE_MAY_ACCEPT below; the acceptReport callable decides. */
+  canAccept: boolean;
   /** This session's own account id, so a screen can tell WHICH row in a list is
    *  the person reading it - the team page needs it to stop an admin removing
    *  their own administrator role. Empty until the session resolves. */
   uid: string;
   db: EnvPaths['db'] | null;
+}
+
+/**
+ * WHICH PORTAL ROLES ARE OFFERED THE ACCEPTANCE FORM. The SERVER decides - see
+ * PORTAL_ROLE_MAY_ACCEPT in functions/src/functions/acceptReport.ts, which
+ * re-reads the caller's live /customerMembers roles and refuses regardless of
+ * what the portal renders. This mirror exists only so a viewer is never shown a
+ * form that would be turned away; change the two together.
+ */
+const ROLE_MAY_ACCEPT: Record<CustomerRole, boolean> = {
+  admin: true,
+  finance: true,
+  viewer: false,
+};
+
+/** A session carrying no role flags is judged the least-privileged seat, exactly
+ *  as the server judges it, so an empty role set is never a way past the table. */
+function mayAccept(roles: CustomerRoleSet): boolean {
+  const held = (Object.keys(ROLE_MAY_ACCEPT) as CustomerRole[]).filter(
+    (role) => roles[role] === true,
+  );
+  return held.length > 0 && held.some((role) => ROLE_MAY_ACCEPT[role]);
 }
 
 export function usePortalScope(): PortalScope {
@@ -52,6 +86,7 @@ export function usePortalScope(): PortalScope {
     orgId: isPortal ? claims.orgId : '',
     customerId: isPortal ? claims.customerId : '',
     isAdmin: isPortal ? claims.customerRoles.admin === true : false,
+    canAccept: isPortal ? mayAccept(claims.customerRoles) : false,
     uid: isPortal ? (user?.uid ?? '') : '',
     db: paths?.db ?? null,
   };

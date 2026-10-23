@@ -24,6 +24,13 @@
 // who actually signed. The transaction aborts for the loser, who is handed the
 // winner's acceptance. Only the winner appends the /activity entry, so the trail
 // carries exactly one accepted event per report.
+//
+// WHO MAY SIGN is a product decision held in one table (PORTAL_ROLE_MAY_ACCEPT
+// below): a customer `admin` or `finance` contact speaks for the customer, a
+// `viewer` does not. The acceptance is the one portal write that gates every
+// other seat's download, so a read-only seat being able to make it would turn
+// "viewer" into a quiet sign-off authority. Viewers still READ and DOWNLOAD once
+// someone entitled has accepted (getReportDownloadUrl's own role table).
 // ============================================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -45,11 +52,15 @@ import {
 } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
 import { activityUpdate } from '../lib/events';
-import type {
-  AcceptReportInput,
-  AcceptReportResult,
-  Report,
-  ReportAcceptance,
+import {
+  CUSTOMER_ROLES,
+  type AcceptReportInput,
+  type AcceptReportResult,
+  type CustomerMember,
+  type CustomerRole,
+  type CustomerRoleSet,
+  type Report,
+  type ReportAcceptance,
 } from '../shared/types';
 
 /** A signature has to be a name someone could actually be called. Two characters
@@ -58,6 +69,46 @@ import type {
  *  signature. */
 const MIN_NAME_LENGTH = 2;
 const HAS_LETTER = /\p{L}/u;
+
+/**
+ * WHICH PORTAL ROLES MAY ACCEPT AND SIGN OFF A REPORT. This table is the ONLY
+ * thing that decides, so tightening or loosening it is a one-line change here.
+ *
+ * A `viewer` is excluded by name (product decision): their seat exists to READ
+ * the customer's fire safety position, while an acceptance is a binding,
+ * first-wins attestation made on the customer's behalf - and the act that
+ * unlocks the download for every other seat. `admin` and `finance` act for the
+ * account. The portal mirrors this table (ROLE_MAY_ACCEPT in the web portal's
+ * shared.tsx) only so a viewer is never shown a form that would be turned away;
+ * change the two together.
+ */
+const PORTAL_ROLE_MAY_ACCEPT: Record<CustomerRole, boolean> = {
+  admin: true,
+  finance: true,
+  viewer: false,
+};
+
+/** A member carrying no role flags at all - a record predating roles, or one
+ *  whose roles were cleared - is judged as the LEAST-privileged seat rather than
+ *  waved through, so an empty role set can never become a quiet way past the
+ *  table above (the posture respondToAction and getReportDownloadUrl take). */
+const DEFAULT_PORTAL_ROLE: CustomerRole = 'viewer';
+
+/** Does this member's LIVE role set permit an acceptance? Roles come from the
+ *  /customerMembers record rather than the token, because the token is a cached
+ *  copy that can be minutes stale and this is the authorisation decision. Only
+ *  a literal `true` on a known role counts (the defensive reconstruction
+ *  computePortalClaims applies), so a malformed record cannot assert a role.
+ *  Exported so the role table is pinned by unit tests without the onCall
+ *  wrapper. */
+export function portalRoleMayAccept(roles: CustomerRoleSet | undefined): boolean {
+  const held = CUSTOMER_ROLES.filter(
+    (role) => (roles as Record<string, unknown> | undefined)?.[role] === true,
+  );
+  const effective: readonly CustomerRole[] =
+    held.length > 0 ? held : [DEFAULT_PORTAL_ROLE];
+  return effective.some((role) => PORTAL_ROLE_MAY_ACCEPT[role]);
+}
 
 export const acceptReport = onCall<AcceptReportInput>(callableOptions, (request) =>
   runCallable<AcceptReportResult>(
@@ -98,6 +149,31 @@ export const acceptReport = onCall<AcceptReportInput>(callableOptions, (request)
       if ((ownerSnap.val() as string | null) !== claims.customerId) {
         throw fail.permissionDenied(
           'You do not have access to this report.',
+        );
+      }
+
+      // 3b. Their portal seat must still be live. The token outlives a lock, an
+      // archive or a removal by up to an hour, and an acceptance is a binding,
+      // first-wins attestation, so it is checked against /customerMembers now
+      // rather than trusted from the token (as getReportDownloadUrl does). The
+      // same LIVE record carries the roles judged below, so a seat demoted to
+      // viewer a minute ago cannot sign on the strength of its older token.
+      const seat = (
+        await db
+          .ref(paths.db.customerMember(orgId, claims.customerId, uid))
+          .get()
+      ).val() as CustomerMember | null;
+      if (seat?.status !== 'active') {
+        throw fail.permissionDenied(
+          'You do not have access to this report.',
+        );
+      }
+      // 3c. ...and carry a role allowed to sign for the customer. Checked after
+      // the ownership and seat checks, so this distinct copy is only ever shown
+      // to a live member of the owning customer - it reveals nothing to a probe.
+      if (!portalRoleMayAccept(seat.roles)) {
+        throw fail.permissionDenied(
+          'Only a customer administrator or finance contact can accept this report.',
         );
       }
 

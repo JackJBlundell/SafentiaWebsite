@@ -56,12 +56,12 @@ import {
   assertAppCheck,
   assertAuth,
   assertOrgRole,
-  getClaims,
+  getLiveClaims,
   envFor,
 } from '../lib/guards';
 import {
   assertObject,
-  requireString,
+  requireDbKey,
   optionalString,
   clearableString,
   clearableEmail,
@@ -404,7 +404,7 @@ export const manageCustomerContact = onCall<ManageCustomerContactInput>(
         assertAppCheck(request);
         const { uid } = assertAuth(request);
         await assertRateLimit(uid, 'manageCustomerContact');
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         // The union model: an admin may do anything here, an assessor only the
         // guarded create below. An admin+assessor passes as an admin.
         assertOrgRole(claims, ['admin', 'assessor']);
@@ -415,7 +415,7 @@ export const manageCustomerContact = onCall<ManageCustomerContactInput>(
         // 2. Validate the action and the owning customer.
         const input = assertObject(request.data);
         const action = requireEnum(input, 'action', ACTIONS);
-        const customerId = requireString(input, 'customerId', TEXT_LIMITS.shortText);
+        const customerId = requireDbKey(input, 'customerId', TEXT_LIMITS.shortText);
 
         // 2b. The assessor gate. Editing and removing a customer's people is
         // administration, so an assessor is turned away here rather than part
@@ -684,7 +684,7 @@ export const manageCustomerContact = onCall<ManageCustomerContactInput>(
         // 3b. Update / remove both address an existing contact. The read here is
         // a fast-path courtesy for honest copy; the transaction below re-asserts
         // existence (and the primary guard) against the state it commits on.
-        const contactId = requireString(input, 'contactId', TEXT_LIMITS.shortText);
+        const contactId = requireDbKey(input, 'contactId', TEXT_LIMITS.shortText);
         const contactPath = paths.db.customerContact(orgId, customerId, contactId);
         const existingSnap = await db.ref(contactPath).get();
         if (!existingSnap.exists()) {

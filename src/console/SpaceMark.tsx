@@ -19,6 +19,7 @@
 import type { UserSpace } from '../types';
 import { readableTextOn } from '../design/tokens/contrast';
 import { useImageFailed } from './useImageFailed';
+import { useStoredFileUrl } from './lib/useStoredFileUrl';
 import styles from './SpaceMark.module.css';
 
 export type SpaceMarkSize = 'sm' | 'md' | 'lg';
@@ -70,8 +71,11 @@ export function SpaceMark({
   // unavailable, and the monogram below it takes over. Every decision that keyed
   // off "has a logo" reads this instead, so the fallback is a complete tier and
   // not a broken image sitting in a mark that still thinks it has one.
-  const logo = useImageFailed(space.logoUrl);
-  const hasLogo = Boolean(space.logoUrl) && !logo.failed;
+  // Fetched through the SDK (App Check); the monogram holds the mark until it
+  // arrives, and stays if it never does.
+  const logoSrc = useStoredFileUrl(space.logoUrl).url ?? undefined;
+  const logo = useImageFailed(logoSrc);
+  const hasLogo = Boolean(logoSrc) && !logo.failed;
 
   const className = `${styles.mark} ${styles[size]} ${
     hasLogo ? styles.markLogo : ''
@@ -93,7 +97,7 @@ export function SpaceMark({
       {hasLogo ? (
         <img
           className={styles.logo}
-          src={space.logoUrl}
+          src={logoSrc}
           alt=""
           onError={logo.onError}
         />

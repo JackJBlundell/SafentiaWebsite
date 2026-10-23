@@ -34,7 +34,7 @@ import {
   assertAuth,
   assertOrgRole,
   envFor,
-  getClaims,
+  getLiveClaims,
 } from '../lib/guards';
 import { usersOnboarding } from '../lib/paths';
 import { assertObject, optionalString, TEXT_LIMITS } from '../lib/validate';
@@ -144,7 +144,7 @@ export const getBillingState = onCall<GetBillingStateRequest>(
         }
 
         // --- Mode (b): org admin's Billing tab ------------------------------
-        const claims = getClaims(request);
+        const claims = await getLiveClaims(request);
         assertOrgRole(claims, 'admin');
         if (claims.orgId !== orgId) {
           throw fail.permissionDenied(
