@@ -10,9 +10,11 @@
 //     subscription to 'active') passes the full subscription snapshot.
 //
 // The bootstrap is ONE multi-location update - profile, usage counters, the
-// founder's admin membership, the /userOrgs login index, the subscription
-// snapshot (when present) and the audit entry land together, so the database is
-// never left with a half-created organisation (brief 18.3). The founder's
+// founder's admin membership, the /userOrgs login index, the base templates,
+// the subscription snapshot (when present) and the audit entry land together,
+// so the database is never left with a half-created organisation (brief 18.3).
+// The base templates (PAS 79 + BS 9792, see baseTemplates.ts) are part of that
+// write because an org without them cannot start a single assessment. The founder's
 // claims are then re-minted exactly as createOrganisation always did.
 //
 // IDEMPOTENCY. Stripe retries webhooks, so the self-serve path must be safe to
@@ -38,6 +40,7 @@
 import { auth, db } from '../admin';
 import { forEnv, ops } from './paths';
 import { activityUpdate } from './events';
+import { BASE_TEMPLATES } from './baseTemplates';
 import { computeClaims, writeClaims } from './claims';
 import type { Logger } from './logging';
 import type {
@@ -231,6 +234,11 @@ export async function provisionOrganisation(
         target: orgId,
       }),
     };
+    // The system templates, current wording from code. /templates is
+    // server-write-only, so this is the only route by which an org gets them.
+    for (const { id, template } of BASE_TEMPLATES) {
+      update[paths.db.template(orgId, id)] = template;
+    }
     if (Object.keys(subscription).length > 0) {
       update[paths.db.orgSubscription(orgId)] = subscription;
     }

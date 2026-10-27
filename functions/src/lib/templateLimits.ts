@@ -8,6 +8,9 @@
 //   - Only NON-ARCHIVED live templates count. Archiving flips status (the
 //     degrade policy never deletes), and an archived template is not a thing
 //     the org can run assessments against, so it releases its slot.
+//   - The base templates Safentia provides (PAS 79, BS 9792) never count:
+//     every org is given them at sign-up, so counting them would start a
+//     1-template plan over its limit with no room for a template of its own.
 //   - Only publishing a NEW template id is a create. Republishing an existing
 //     id - however many versions it accrues - edits a template the org already
 //     has, and the block-new-creates-only policy (§6.3) must never stop an org
@@ -16,6 +19,7 @@
 
 import { fail } from './errors';
 import type { Template } from '../shared/types';
+import { isBaseTemplateId } from './baseTemplates';
 
 /** What the org currently publishes and what its plan permits, if anything. */
 export interface TemplateLimitContext {
@@ -48,8 +52,12 @@ export function countBillableTemplates(
   if (!templates) {
     return 0;
   }
-  return Object.values(templates).filter(
-    (template) => template !== null && typeof template === 'object' && template.status !== 'archived',
+  return Object.entries(templates).filter(
+    ([templateId, template]) =>
+      !isBaseTemplateId(templateId) &&
+      template !== null &&
+      typeof template === 'object' &&
+      template.status !== 'archived',
   ).length;
 }
 

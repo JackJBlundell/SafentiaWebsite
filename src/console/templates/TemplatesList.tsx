@@ -410,11 +410,14 @@ export function TemplatesList() {
   // ceiling server-side): at the plan's template limit the New/Duplicate entry
   // point gives way to the upsell notice. Counted over non-archived PUBLISHED
   // templates, the same population the server counts at publish, so the gate
-  // and the enforcement can never disagree about the number.
+  // and the enforcement can never disagree about the number. The base
+  // templates Safentia provides are excluded on both sides (they come with
+  // every plan; see functions lib/templateLimits.ts).
   const billing = useEntitlements();
   const templateLimit = billing.entitlements.limits.assessmentTemplates;
-  const publishedCount = Object.values(templates.data ?? {}).filter(
-    (template) => template.status !== 'archived',
+  const publishedCount = Object.entries(templates.data ?? {}).filter(
+    ([templateId, template]) =>
+      !isBaseTemplate(templateId) && template.status !== 'archived',
   ).length;
   const templatesAtLimit =
     !billing.loading && !isWithinLimit(templateLimit, publishedCount);

@@ -19,8 +19,8 @@
 // work and re-shape every job pinned to it. This only ever FILLS A GAP.
 //
 // TEST ROOT ONLY. Every write is asserted to sit under /test before it is sent;
-// the production path (createOrganisation, which currently publishes NO
-// templates at all) is a separate, deliberate piece of work.
+// New organisations now receive both at sign-up (provisionOrganisation), so
+// this only repairs orgs founded before that change.
 //
 // Dry run by default; pass --apply to write:
 //   npx ts-node src/seed/backfillBaseTemplates.ts
@@ -30,18 +30,9 @@
 import * as admin from 'firebase-admin';
 import { forEnv } from '../shared/paths';
 import type { Keyed, Template } from '../shared/types';
-import { PAS79_TEMPLATE_ID, BS9792_TEMPLATE_ID } from './ids';
-import { PAS79_TEMPLATE } from './data/pas79Template';
-import { BS9792_TEMPLATE } from './data/bs9792Template';
+import { BASE_TEMPLATES } from '../lib/baseTemplates';
 
 const APPLY = process.argv.includes('--apply');
-
-/** The system templates every org should hold, by their FIXED ids - the id is
- *  the only durable marker of a base template in the data. */
-const BASE_TEMPLATES: ReadonlyArray<{ id: string; template: Template }> = [
-  { id: PAS79_TEMPLATE_ID, template: PAS79_TEMPLATE },
-  { id: BS9792_TEMPLATE_ID, template: BS9792_TEMPLATE },
-];
 
 function initAdmin(): void {
   if (admin.apps.length > 0) {
