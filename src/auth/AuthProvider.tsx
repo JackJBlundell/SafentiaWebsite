@@ -52,6 +52,7 @@ import {
 } from 'firebase/auth';
 import { onValue, ref } from 'firebase/database';
 import { firebase, startFirebase } from '../firebase';
+import { AppCheckNotice } from '../components/AppCheckNotice';
 import { forEnv } from '../paths';
 import type { EnvPaths } from '../paths';
 import { queryClient } from '../query/queryClient';
@@ -469,7 +470,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <AppCheckNotice />
+    </AuthContext.Provider>
+  );
 }
 
 /** Read the session. Throws if used outside the provider so a wiring mistake is

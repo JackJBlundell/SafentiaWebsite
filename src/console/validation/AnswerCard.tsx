@@ -15,7 +15,8 @@
 //                  party and due date (labelled defaults where it has none),
 //                  the Life Protection marker from value.lifeProtection, and an
 //                  explicit line when the assessor marked no action required
-// An unanswered question says so honestly rather than rendering blank.
+// An unanswered question says so honestly rather than rendering blank, and an
+// answer the assessor marked NOT APPLICABLE says that, never "Not answered".
 //
 // Photos and flag composites store Storage object paths (seed data stores full
 // URLs); useStorageUrl resolves either into a tokened URL for the signed-in
@@ -131,12 +132,15 @@ export function SeverityChip({ severity }: { severity: Severity }) {
 // ----------------------------------------------------------------------------
 
 /** An answer node counts as answered when it carries any captured substance.
- *  Presence of an empty node (or only an infoRequest) is not an answer. */
+ *  Presence of an empty node (or only an infoRequest) is not an answer. An
+ *  explicit NOT APPLICABLE is a decision, so it counts as answered on its own
+ *  (mirrors the app's completion rules and the server's submission gate). */
 export function isAnswered(answer: AssessmentAnswer | undefined): boolean {
   if (!answer) {
     return false;
   }
   return (
+    answer.notApplicable === true ||
     answer.text !== undefined ||
     answer.value !== undefined ||
     (answer.photos?.length ?? 0) > 0 ||
@@ -408,7 +412,9 @@ export function AnswerCard({
         )}
       </div>
 
-      {answered && answer ? (
+      {answer?.notApplicable === true ? (
+        <p className={styles.notApplicable}>Not applicable</p>
+      ) : answered && answer ? (
         <AnswerBody question={question} answer={answer} responsibleParty={responsibleParty} />
       ) : (
         <p className={styles.unanswered}>Not answered</p>

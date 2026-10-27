@@ -35,7 +35,9 @@ import {
   type Functions,
 } from 'firebase/functions';
 import {
+  getToken as getAppCheckToken,
   initializeAppCheck,
+  onTokenChanged as onAppCheckTokenChanged,
   ReCaptchaV3Provider,
   type AppCheck,
 } from 'firebase/app-check';
@@ -52,6 +54,63 @@ const EMULATOR = {
 
 let appCheckInstance: AppCheck | undefined;
 let started = false;
+
+// ----------------------------------------------------------------------------
+// App Check health, for the "security check blocked" notice.
+//
+// App Check on the web runs on reCAPTCHA. A browser that blocks it (an ad
+// blocker, a privacy browser, a locked-down work network) or that reCAPTCHA
+// scores as a bot gets no valid token, and every service that enforces App
+// Check then refuses it - which looks like a page loading forever. Probing for
+// a token once at start-up lets the console SAY so instead.
+//
+// 'blocked' is only reported while the browser is online: offline, every call
+// fails for a reason the console already handles, and blaming the security
+// check would send the user chasing the wrong fix.
+// ----------------------------------------------------------------------------
+
+export type AppCheckStatus = 'checking' | 'ok' | 'blocked';
+
+let appCheckStatus: AppCheckStatus = 'checking';
+const appCheckListeners = new Set<() => void>();
+
+function setAppCheckStatus(next: AppCheckStatus): void {
+  if (next === appCheckStatus) {
+    return;
+  }
+  appCheckStatus = next;
+  appCheckListeners.forEach((listener) => listener());
+}
+
+export function getAppCheckStatus(): AppCheckStatus {
+  return appCheckStatus;
+}
+
+export function subscribeAppCheckStatus(listener: () => void): () => void {
+  appCheckListeners.add(listener);
+  return () => {
+    appCheckListeners.delete(listener);
+  };
+}
+
+function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+/** Ask for a token and record whether one could be had. */
+function probeAppCheck(instance: AppCheck): void {
+  getAppCheckToken(instance, false)
+    .then(() => setAppCheckStatus('ok'))
+    .catch((error: unknown) => {
+      if (isOffline()) {
+        // Try again once the connection is back, rather than blaming the check.
+        window.addEventListener('online', () => probeAppCheck(instance), { once: true });
+        return;
+      }
+      console.error('[Safentia] App Check token unavailable', error);
+      setAppCheckStatus('blocked');
+    });
+}
 
 function app(): FirebaseApp {
   return getApps().length ? getApp() : initializeApp(firebaseConfig);
@@ -88,12 +147,21 @@ function initAppCheck(): void {
     );
     return;
   }
-  appCheckInstance = initializeAppCheck(app(), {
+  const instance = initializeAppCheck(app(), {
     provider: new ReCaptchaV3Provider(webConfig.recaptchaV3SiteKey),
     // Refresh automatically so a long console session never drops below an
     // attested state mid-edit.
     isTokenAutoRefreshEnabled: true,
   });
+  appCheckInstance = instance;
+  // A token arriving later (the blocker was switched off, a retry succeeded)
+  // clears the notice on its own.
+  onAppCheckTokenChanged(
+    instance,
+    () => setAppCheckStatus('ok'),
+    () => undefined,
+  );
+  probeAppCheck(instance);
 }
 
 function wireEmulators(): void {
