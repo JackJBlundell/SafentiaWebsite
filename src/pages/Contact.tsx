@@ -113,7 +113,7 @@ export function ContactPage() {
       <Section spacing="tight" labelledBy="contact-title">
         <Container prose>
           <h1 id="contact-title" className={styles.title}>
-            Book a demonstration
+            Book a demonstration or request support
           </h1>
           <p className={styles.lede}>
             Tell us a little about your organisation and we will arrange a
