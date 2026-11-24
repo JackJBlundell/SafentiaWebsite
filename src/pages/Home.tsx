@@ -120,7 +120,7 @@ export function HomePage() {
                 report they can act on.
               </p>
               <div className={styles.heroActions}>
-                <Button to="/login" variant="primary" size="lg">
+                <Button to="/signup" variant="primary" size="lg">
                   Get started
                 </Button>
                 <Button to="/contact" variant="secondary" size="lg">

@@ -407,3 +407,120 @@
   color: var(--color-text);
   text-decoration: underline;
 }
+
+/* --------------------------------------------------------------------------
+ * Sign-up additions: label row with the show/hide toggle, the password
+ * strength meter, the bot honeypot and the switch-to-sign-in prompt.
+ * -------------------------------------------------------------------------- */
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.revealToggle {
+  min-height: 32px;
+  padding: 0 var(--space-sm);
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+
+.revealToggle:hover:not(:disabled) {
+  color: var(--color-text);
+}
+
+.revealToggle:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 1px;
+}
+
+.strength {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs, 4px);
+}
+
+.strengthBar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  --meter: var(--color-border-strong);
+}
+
+.strengthBar[data-level='0'],
+.strengthBar[data-level='1'] {
+  --meter: var(--status-error);
+}
+
+.strengthBar[data-level='2'] {
+  --meter: var(--status-warning);
+}
+
+.strengthBar[data-level='3'],
+.strengthBar[data-level='4'] {
+  --meter: var(--status-success);
+}
+
+.strengthSegment {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+  transition: background var(--motion-fast) var(--easing);
+}
+
+.strengthSegment[data-on] {
+  background: var(--meter);
+}
+
+.strengthLabel {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.strengthHints {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* Off-screen rather than display:none: some bots skip display:none fields. */
+.honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.fineprint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.fineprint a {
+  color: var(--color-text-secondary);
+}
+
+.switchPrompt {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.switchLink {
+  color: var(--color-text);
+  font-weight: 600;
+}

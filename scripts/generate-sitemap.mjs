@@ -22,7 +22,7 @@ const SITE_ORIGIN = "https://safentia.co.uk";
 const DIST = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
 
 /** Route prefixes that must never appear in the sitemap (all noindex). */
-const EXCLUDED_ROUTES = ["/app", "/login", "/forgot-password", "/404"];
+const EXCLUDED_ROUTES = ["/app", "/login", "/signup", "/forgot-password", "/404"];
 
 /** Recursively collect every .html file under dir. */
 function htmlFiles(dir) {

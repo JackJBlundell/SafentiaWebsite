@@ -21,6 +21,7 @@ import { Button } from '../../components/Button';
 import { Seo } from '../../seo/Seo';
 import { AuthLayout } from './AuthLayout';
 import styles from './AuthLayout.module.css';
+import { GoogleMark } from './GoogleMark';
 
 /**
  * Open-redirect guard for ?returnTo=. A sign-in page that forwards an untrusted
@@ -198,22 +199,16 @@ function LoginScreen() {
           disabled={disabled}
           onClick={handleGoogle}
         >
-          {/* The G mark drawn in currentColor: no external asset, no request,
-              and it follows the theme like every other glyph on the site. */}
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path
-              fill="currentColor"
-              d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.4zM12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22zM6.4 14a6 6 0 0 1 0-4V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14zM12 6c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.1 7.4L6.4 10c.8-2.3 3-4 5.6-4z"
-            />
-          </svg>
+          <GoogleMark />
           Continue with Google
         </Button>
+
+        <p className={styles.switchPrompt}>
+          New to Safentia?{' '}
+          <Link to="/signup" className={styles.switchLink}>
+            Create an account
+          </Link>
+        </p>
       </div>
     </AuthLayout>
   );

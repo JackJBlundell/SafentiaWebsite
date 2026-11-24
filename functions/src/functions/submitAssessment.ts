@@ -3,7 +3,7 @@
 //
 // The assessor submits a completed assessment for validation. The server is the
 // authority: it RE-VALIDATES required answers, mandatory photos and the
-// service-schedule step (the same checks the app shows), so an incomplete
+// service-schedule confirmation (the same checks the app shows), so an incomplete
 // assessment can never reach an auditor even from a tampered or offline-synced
 // client (brief 18.4). On success it sets status readyForValidation, writes the
 // activity + log-book trail, and notifies the org's auditors. Direct client status
@@ -28,7 +28,10 @@ import {
 } from '../lib/guards';
 import { assertObject, requireDbKey, TEXT_LIMITS } from '../lib/validate';
 import { assertRateLimit } from '../lib/rateLimit';
-import { findMissingForSubmission } from '../lib/assessmentChecks';
+import {
+  findMissingForSubmission,
+  isServiceConfirmationFor,
+} from '../lib/assessmentChecks';
 import { appendActivity } from '../lib/events';
 import { sendNotification } from '../lib/notifications';
 import type {
@@ -36,8 +39,8 @@ import type {
   SubmitAssessmentResult,
   Assessment,
   AssessmentAnswer,
-  Building,
   Job,
+  LogBookEntry,
   OrgMember,
   Keyed,
 } from '../shared/types';
@@ -106,23 +109,36 @@ export const submitAssessment = onCall<SubmitAssessmentInput>(
           );
         }
 
-        // 3. Re-validate completeness server-side. We need the answers and the
-        // building (for the service-schedule check).
+        // 3. Re-validate completeness server-side: the answers, and whether this
+        // assessment's service step has been confirmed (assessmentChecks.ts
+        // explains why that is the confirmation entry, not seven building dates).
         const answersSnap = await db
           .ref(paths.db.assessmentAnswers(orgId, assessmentId))
           .get();
         const answers = answersSnap.val() as Keyed<AssessmentAnswer> | null;
 
-        // The building sits under its site; the job carries the site id.
-        const buildingSnap = await db
-          .ref(paths.db.building(orgId, job.siteId, assessment.buildingId))
-          .get();
-        const building = buildingSnap.val() as Building | null;
+        // A resubmit is not gated on the service step, exactly as in the app.
+        let serviceStepSatisfied = assessment.status === 'infoRequired';
+        if (!serviceStepSatisfied) {
+          // Indexed on `type` (database.rules.json), so this reads only the
+          // building's service confirmations, not its whole log book. Keyed by
+          // the job's building, as the app writes it and the mirror reads it.
+          const entriesSnap = await db
+            .ref(paths.db.logBook(orgId, job.buildingId))
+            .orderByChild('type')
+            .equalTo('serviceConfirmed')
+            .get();
+          const entries =
+            (entriesSnap.val() as Keyed<LogBookEntry> | null) ?? {};
+          serviceStepSatisfied = Object.values(entries).some((entry) =>
+            isServiceConfirmationFor(entry, assessmentId, assessment.conductedBy),
+          );
+        }
 
         const missing = findMissingForSubmission(
           assessment.templateSnapshot,
           answers,
-          building,
+          serviceStepSatisfied,
         );
         if (missing.length > 0) {
           // Structured so the UI can list exactly what is outstanding (1049 AC).

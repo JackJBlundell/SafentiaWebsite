@@ -10,17 +10,29 @@
 // Three classes of requirement, mirroring the runner (1049 AC):
 //   - Required questions answered (template `required` flag).
 //   - Mandatory photos present (a question that requires photos must have >=1).
-//   - The service-schedule step completed (every statutory service has a nextDue).
+//   - The service-schedule step CONFIRMED for this assessment (see below).
+//
+// THE SERVICE STEP IS A CONFIRMATION, NOT SEVEN DATES. The app's service screen
+// lets the assessor leave any date blank ("leave blank if it is not known" -
+// many premises have no PAT regime or fire marshals), and the app's gate clears
+// on the confirmation alone. This gate used to demand a nextDue on all seven
+// keys of building.serviceSchedule instead, which made the server STRICTER than
+// the app: an assessor saved the step with a blank, was shown "Nothing missing",
+// tapped Submit and was refused with no way to see why. It was also racy - that
+// schedule is written by the onLogBookEntryCreated mirror AFTER the entry
+// lands, so a submit could beat its own dates. The server now reads the same
+// fact the app does: a `serviceConfirmed` log book entry for this assessment,
+// by the assessor who conducted it. That entry is a critical outbox write, so
+// the submit queue already guarantees it lands before the callable fires.
 // ============================================================================
 
 import {
-  SERVICE_SCHEDULE_KEYS,
   SEVERITIES,
   type Template,
   type TemplateQuestion,
   type MatrixAnswer,
   type AssessmentAnswer,
-  type Building,
+  type LogBookEntry,
   type Keyed,
 } from '../shared/types';
 
@@ -92,7 +104,7 @@ export function isEffectiveNotApplicable(
 /** A single unmet requirement, named so the UI can point the assessor at it. */
 export interface MissingItem {
   kind: 'answer' | 'photo' | 'service';
-  /** Question id, or the service key for a service gap. */
+  /** Question id, or 'serviceSchedule' for the service step. */
   ref: string;
   /** Human-readable British-English label for the missing item. */
   label: string;
@@ -172,16 +184,41 @@ function hasPhoto(answer: AssessmentAnswer | undefined): boolean {
 }
 
 /**
+ * Whether a log book entry is the service-step confirmation for THIS assessment,
+ * written by the assessor who conducted it. The byUid match matters: the log book
+ * rule lets any active assessor append to any building in the org, so without it
+ * someone else's entry naming this assessment would satisfy the gate. Dates are
+ * deliberately NOT inspected - a confirmation with every date blank is a valid
+ * confirmation (see the header note).
+ */
+export function isServiceConfirmationFor(
+  entry: LogBookEntry | null | undefined,
+  assessmentId: string,
+  conductedBy: string,
+): boolean {
+  return (
+    entry?.type === 'serviceConfirmed' &&
+    entry.byUid === conductedBy &&
+    (entry.payload as { assessmentId?: unknown } | undefined)?.assessmentId ===
+      assessmentId
+  );
+}
+
+/**
  * Compute every unmet submission requirement. An empty result means the assessment
- * is complete and may be submitted. The building is needed for the service-schedule
- * check (the statutory dates live on the building, story 1047).
+ * is complete and may be submitted.
+ *
+ * `serviceStepSatisfied` is resolved by the caller (it needs I/O): true when the
+ * assessment's service step has been confirmed, OR when this is a resubmit in the
+ * info-required loop - the app does not gate a resubmit on the service step (it
+ * is about clearing the auditor's flags, not redoing the finish steps), so the
+ * server must not either.
  */
 export function findMissingForSubmission(
   template: Template,
   answers: Keyed<AssessmentAnswer> | null | undefined,
-  building: Building | null | undefined,
-): MissingItem[] {
-  const missing: MissingItem[] = [];
+  serviceStepSatisfied: boolean,
+): MissingItem[] {  const missing: MissingItem[] = [];
   const answerMap = answers ?? {};
 
   // 1. Required questions + mandatory photos, walking the pinned snapshot so the
@@ -268,18 +305,13 @@ export function findMissingForSubmission(
     }
   }
 
-  // 2. Service-schedule step: every statutory service must carry a next-due date,
-  // since the report's service section depends on it (story 1047 / 1049).
-  const schedule = building?.serviceSchedule;
-  for (const key of SERVICE_SCHEDULE_KEYS) {
-    const item = schedule?.[key];
-    if (!item || typeof item.nextDue !== 'number') {
-      missing.push({
-        kind: 'service',
-        ref: key,
-        label: `Service schedule incomplete: ${key}`,
-      });
-    }
+  // 2. Service-schedule step: confirmed for this assessment (see header note).
+  if (!serviceStepSatisfied) {
+    missing.push({
+      kind: 'service',
+      ref: 'serviceSchedule',
+      label: 'Service schedule not confirmed',
+    });
   }
 
   return missing;

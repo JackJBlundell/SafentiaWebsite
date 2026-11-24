@@ -53,3 +53,31 @@ function extractCode(error: unknown): string | undefined {
   }
   return undefined;
 }
+
+/** Sign-up copy. Unlike sign-in, a malformed address is the visitor's own
+ *  input and is named plainly; an address already registered points at the
+ *  sign-in and reset doors rather than confirming anything else about it. */
+const SIGNUP_MESSAGES: Record<string, string> = {
+  'auth/invalid-email': 'Enter a valid email address.',
+  'auth/email-already-in-use':
+    'We could not create an account with that email address. If you already have one, sign in or reset your password.',
+  'auth/weak-password':
+    'Choose a stronger password. Use at least 10 characters with a mix of letters and numbers or symbols.',
+  'auth/password-does-not-meet-requirements':
+    'Choose a stronger password. Use at least 10 characters with a mix of letters and numbers or symbols.',
+  'auth/operation-not-allowed':
+    'Email sign-up is not available right now. Please continue with Google or contact us.',
+  'auth/too-many-requests':
+    'Too many attempts. Please wait a few minutes and try again.',
+  'auth/network-request-failed':
+    'No connection. Check your signal and try again.',
+};
+
+/** Map a sign-up failure to safe, user-facing copy. */
+export function signUpErrorMessage(error: unknown): string {
+  const code = extractCode(error);
+  if (code && SIGNUP_MESSAGES[code]) {
+    return SIGNUP_MESSAGES[code];
+  }
+  return 'Something went wrong creating your account. Please try again.';
+}

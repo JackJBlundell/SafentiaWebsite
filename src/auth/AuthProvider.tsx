@@ -37,10 +37,12 @@ import React, {
 import {
   EmailAuthProvider,
   GoogleAuthProvider,
+  createUserWithEmailAndPassword,
   getIdTokenResult,
   onIdTokenChanged,
   reauthenticateWithCredential,
   reload,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithCustomToken as fbSignInWithCustomToken,
   signInWithEmailAndPassword,
@@ -57,7 +59,7 @@ import { forEnv } from '../paths';
 import type { EnvPaths } from '../paths';
 import { queryClient } from '../query/queryClient';
 import { resetRtdbSubscriptions } from '../query/useRtdbQuery';
-import { authErrorMessage } from './errors';
+import { authErrorMessage, signUpErrorMessage } from './errors';
 import { resolveClaims, type SessionClaims } from './claims';
 import { forgetSpaceChoice } from './spaceChoice';
 
@@ -82,6 +84,16 @@ export interface AuthContextValue {
   paths: EnvPaths | null;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  /** Self-serve sign-up: create the email/password account, record the full
+   *  name and send the confirmation email. The new session then lands on the
+   *  console's email-verification gate until the link is opened. */
+  signUpWithEmail: (
+    name: string,
+    email: string,
+    password: string,
+  ) => Promise<void>;
+  /** Re-send the confirmation email to the signed-in, unconfirmed account. */
+  resendVerificationEmail: () => Promise<void>;
   /** Exchange a server-minted custom token for a session. Used by /invite: the
    *  accept callable mints one for the account it just created, so a new member
    *  lands inside the console without retyping the password they just chose. */
@@ -111,6 +123,14 @@ export interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+/** Where the confirmation link returns the visitor once Firebase has marked
+ *  the address verified: straight back into the console, whose gate re-reads
+ *  the account on mount. Built from the current origin so staging and live
+ *  each link to themselves (the origin must be an authorised Auth domain). */
+function verificationLinkSettings() {
+  return { url: `${window.location.origin}/app` };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('initialising');
@@ -209,6 +229,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ) {
         return;
       }
+      throw new Error(authErrorMessage(error));
+    }
+  }, []);
+
+  const signUpWithEmail = useCallback(
+    async (name: string, email: string, password: string) => {
+      let created: User;
+      try {
+        const credential = await createUserWithEmailAndPassword(
+          firebase.auth(),
+          email.trim(),
+          password,
+        );
+        created = credential.user;
+      } catch (error) {
+        throw new Error(signUpErrorMessage(error));
+      }
+      // The account exists from here on. A failure naming it or sending the
+      // email must not read as "sign-up failed" (a retry would hit
+      // email-already-in-use), so both are logged and recoverable: the name
+      // from Account settings, the email from the verification screen's resend.
+      try {
+        await updateProfile(created, { displayName: name.trim() });
+        setUser(firebase.auth().currentUser);
+      } catch (error) {
+        console.error('[Safentia auth] signUp displayName', error);
+      }
+      try {
+        await sendEmailVerification(created, verificationLinkSettings());
+      } catch (error) {
+        console.error('[Safentia auth] signUp verification email', error);
+      }
+    },
+    [],
+  );
+
+  const resendVerificationEmail = useCallback(async () => {
+    const current = firebase.auth().currentUser;
+    if (!current) {
+      throw new Error('You need to be signed in to resend the email.');
+    }
+    try {
+      await sendEmailVerification(current, verificationLinkSettings());
+    } catch (error) {
       throw new Error(authErrorMessage(error));
     }
   }, []);
@@ -444,6 +508,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       paths,
       signInWithEmail,
       signInWithGoogle,
+      signUpWithEmail,
+      resendVerificationEmail,
       signInWithCustomToken,
       sendReset,
       changePassword,
@@ -460,6 +526,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       paths,
       signInWithEmail,
       signInWithGoogle,
+      signUpWithEmail,
+      resendVerificationEmail,
       signInWithCustomToken,
       sendReset,
       changePassword,

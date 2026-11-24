@@ -68,6 +68,11 @@ export const routes: RouteRecord[] = [
     entry: 'src/features/auth/LoginRoute.tsx',
   },
   {
+    path: 'signup',
+    lazy: () => import('./features/auth/SignupRoute'),
+    entry: 'src/features/auth/SignupRoute.tsx',
+  },
+  {
     path: 'forgot-password',
     lazy: () => import('./features/auth/ForgotPasswordRoute'),
     entry: 'src/features/auth/ForgotPasswordRoute.tsx',

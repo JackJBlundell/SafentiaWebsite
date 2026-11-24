@@ -29,7 +29,7 @@ export function CtaBand({
             <p className={styles.body}>{body}</p>
           </div>
           <div className={styles.actions}>
-            <Button to="/login" variant="primary" size="lg">
+            <Button to="/signup" variant="primary" size="lg">
               Get started
             </Button>
             <Button to="/contact" variant="secondary" size="lg">

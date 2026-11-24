@@ -36,6 +36,8 @@ vi.mock('../../auth/AuthProvider', () => ({
       paths: null,
       signInWithEmail: mocks.signInWithEmail,
       signInWithGoogle: mocks.signInWithGoogle,
+      signUpWithEmail: vi.fn(),
+      resendVerificationEmail: vi.fn(),
       signInWithCustomToken: vi.fn(),
       sendReset: vi.fn(),
       changePassword: vi.fn(),

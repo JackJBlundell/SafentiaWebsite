@@ -85,7 +85,7 @@ export function SiteHeader() {
             </Button>
           </span>
           <span className={styles.desktopOnly}>
-            <Button to="/login" variant="primary">
+            <Button to="/signup" variant="primary">
               Get started
             </Button>
           </span>
@@ -126,7 +126,7 @@ export function SiteHeader() {
           <Button to="/login" variant="secondary" block>
             Sign in
           </Button>
-          <Button to="/login" variant="primary" block>
+          <Button to="/signup" variant="primary" block>
             Get started
           </Button>
         </div>
